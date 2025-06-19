@@ -4,6 +4,7 @@ const { query, getRow, getRows } = require('../database/config');
 const { asyncHandler, AppError } = require('../middleware/errorHandler');
 const { authenticateToken, authorizeSponsor, authorizeOwnerOrAdmin } = require('../middleware/auth');
 const { v4: uuidv4 } = require('uuid');
+const transporter = require('../mailer');
 
 const router = express.Router();
 
@@ -438,6 +439,62 @@ router.get('/:id/stats', authenticateToken, authorizeOwnerOrAdmin('sponsorships'
       month: stat.month,
       studentsEnrolled: parseInt(stat.students_enrolled)
     }))
+  });
+}));
+
+// Send sponsorship details via email
+router.post('/:id/email', authenticateToken, authorizeOwnerOrAdmin('sponsorships'), asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const { recipientEmail, isForRecipient, customMessage } = req.body;
+
+  if (!recipientEmail) {
+    throw new AppError('Recipient email is required', 400, 'Validation Error');
+  }
+
+  // Get sponsorship details
+  const sponsorship = await getRow(
+    `SELECT s.*, c.title as course_title, c.description as course_description, c.price as course_price
+     FROM sponsorships s
+     JOIN courses c ON s.course_id = c.id
+     WHERE s.id = $1`,
+    [id]
+  );
+
+  if (!sponsorship) {
+    throw new AppError('Sponsorship not found', 404, 'Sponsorship Not Found');
+  }
+
+  // Compose email
+  const subject = isForRecipient
+    ? `You've received a sponsorship for ${sponsorship.course_title}!`
+    : `Sponsorship details for ${sponsorship.course_title}`;
+
+  const message = `
+    <h2>${subject}</h2>
+    <p>${customMessage || ''}</p>
+    <ul>
+      <li><strong>Course:</strong> ${sponsorship.course_title}</li>
+      <li><strong>Description:</strong> ${sponsorship.course_description}</li>
+      <li><strong>Discount Code:</strong> ${sponsorship.discount_code}</li>
+      <li><strong>Discount Type:</strong> ${sponsorship.discount_type}</li>
+      <li><strong>Discount Value:</strong> ${sponsorship.discount_value}</li>
+      <li><strong>Max Students:</strong> ${sponsorship.max_students}</li>
+      <li><strong>Valid Until:</strong> ${new Date(sponsorship.end_date).toLocaleDateString()}</li>
+    </ul>
+    <p>To use this sponsorship, enroll in the course and enter the discount code above.</p>
+  `;
+
+  // Send email
+  await transporter.sendMail({
+    from: process.env.EMAIL_FROM_ADDRESS,
+    to: recipientEmail,
+    subject,
+    html: message,
+  });
+
+  res.json({
+    success: true,
+    message: 'Sponsorship details sent successfully'
   });
 }));
 
