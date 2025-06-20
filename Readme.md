@@ -2,39 +2,6 @@
 
 A comprehensive Learning Management System (LMS) backend API built with Node.js, Express, and PostgreSQL. This API supports course management, user authentication, sponsorship programs, testing systems, and more.
 
-## Features
-
-### Core Features
-- **User Management**: Registration, authentication, role-based access control
-- **Course Management**: Create, update, delete courses with lessons and tests
-- **Class Management**: Schedule-based learning with limited slots
-- **Sponsorship System**: Discount codes and funding opportunities
-- **Testing System**: Multiple choice, true/false, and short answer questions
-- **Discussion Forums**: Course and class-specific discussions
-- **Certification System**: Digital certificates with verification codes
-- **User Settings**: Personalized preferences and notifications
-
-### Key Highlights
-- **JWT Authentication**: Secure token-based authentication
-- **Role-Based Access**: Student, Instructor, Sponsor, Admin roles
-- **Comprehensive Testing**: Full test creation, taking, and scoring system
-- **Sponsorship Tracking**: Detailed analytics and usage statistics
-- **Database Optimization**: Proper indexing and efficient queries
-- **Input Validation**: Comprehensive request validation
-- **Error Handling**: Consistent error responses
-- **Rate Limiting**: API protection against abuse
-
-## Tech Stack
-
-- **Runtime**: Node.js 18+
-- **Framework**: Express.js
-- **Database**: PostgreSQL
-- **Authentication**: JWT (JSON Web Tokens)
-- **Password Hashing**: bcryptjs
-- **Validation**: express-validator
-- **Security**: helmet, cors, rate-limiting
-- **Containerization**: Docker
-
 ## Quick Start
 
 ### Option 1: Docker (Recommended)
@@ -42,7 +9,7 @@ A comprehensive Learning Management System (LMS) backend API built with Node.js,
 #### Local Development
 ```bash
 # Start development environment
-docker-compose up --build
+docker-compose -f docker-compose.dev.yml up --build
 
 # The API will be available at http://localhost:3000
 # Database will be available at localhost:5432
@@ -116,7 +83,7 @@ docker run -d \
 
 ### Development Environment
 
-The `docker-compose.yml` file sets up a complete development environment:
+The `docker-compose.dev.yml` file sets up a complete development environment:
 
 - **Backend**: Node.js application with hot reload
 - **Database**: PostgreSQL with persistent data
@@ -125,13 +92,13 @@ The `docker-compose.yml` file sets up a complete development environment:
 
 ```bash
 # Start development environment
-docker-compose up --build
+docker-compose -f docker-compose.dev.yml up --build
 
 # Stop environment
-docker-compose down
+docker-compose -f docker-compose.dev.yml down
 
 # View logs
-docker-compose logs -f backend
+docker-compose -f docker-compose.dev.yml logs -f backend
 ```
 
 ### Production Deployment
@@ -285,37 +252,6 @@ DOCKERHUB_USERNAME=your-username
 - `GET /api/settings` - Get user settings
 - `PUT /api/settings` - Update user settings
 
-## Database Schema
-
-The API uses a comprehensive PostgreSQL database with the following main tables:
-
-- **users** - User accounts and profiles
-- **courses** - Course information and metadata
-- **classes** - Scheduled learning sessions
-- **lessons** - Course content and materials
-- **tests** - Assessment and quiz data
-- **test_questions** - Individual test questions
-- **test_attempts** - Student test attempts
-- **sponsorships** - Discount and funding programs
-- **sponsorship_opportunities** - Funding opportunities
-- **enrollments** - Student course/class enrollments
-- **discussions** - Forum discussions
-- **certifications** - Digital certificates
-- **user_settings** - User preferences
-
-## Authentication
-
-The API uses JWT (JSON Web Tokens) for authentication. Include the token in the Authorization header:
-
-```
-Authorization: Bearer <your-jwt-token>
-```
-
-### User Roles
-- **student** - Can enroll in courses, take tests, participate in discussions
-- **instructor** - Can create and manage courses, tests, and classes
-- **sponsor** - Can create sponsorships and view analytics
-- **admin** - Full system access and user management
 
 ## Development
 
@@ -325,7 +261,7 @@ Authorization: Bearer <your-jwt-token>
 npm test
 
 # Docker development
-docker-compose exec backend npm test
+docker-compose -f docker-compose.dev.yml exec backend npm test
 ```
 
 ### Database Migrations
@@ -334,7 +270,7 @@ docker-compose exec backend npm test
 npm run migrate
 
 # Docker development
-docker-compose exec backend npm run migrate
+docker-compose -f docker-compose.dev.yml exec backend npm run migrate
 ```
 
 ### Health Check
@@ -399,28 +335,3 @@ docker logs -f themobileprof-backend
 ```bash
 # For self-hosted PostgreSQL
 docker exec themobileprof-db pg_dump -U username database > backup.sql
-
-# For managed databases, use your provider's backup tools
-```
-
-## Security
-
-- JWT tokens for authentication
-- Password hashing with bcrypt
-- Input validation and sanitization
-- Rate limiting to prevent abuse
-- CORS configuration
-- Helmet.js for security headers
-- Non-root user in Docker containers
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Test locally using Docker
-5. Submit a pull request
-
-## License
-
-MIT License - see LICENSE file for details 

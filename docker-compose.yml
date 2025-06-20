@@ -3,41 +3,54 @@ version: '3.8'
 services:
   db:
     image: postgres:15
-    restart: always
     environment:
-      POSTGRES_DB: themobileprof
-      POSTGRES_USER: themobileprof
-      POSTGRES_PASSWORD: themobileprof
+      POSTGRES_DB: themobileprof_dev
+      POSTGRES_USER: devuser
+      POSTGRES_PASSWORD: devpass
     volumes:
       - db_data:/var/lib/postgresql/data
     ports:
       - "5432:5432"
+    networks:
+      - app-network
 
   backend:
     build: .
     depends_on:
       - db
     environment:
-      NODE_ENV: production
+      NODE_ENV: development
       PORT: 3000
-      DATABASE_URL: postgres://themobileprof:themobileprof@db:5432/themobileprof
-      JWT_SECRET: your-production-jwt-secret
+      DATABASE_URL: postgresql://devuser:devpass@db:5432/themobileprof_dev
+      JWT_SECRET: dev-jwt-secret-change-in-production
       JWT_EXPIRES_IN: 24h
-      BCRYPT_ROUNDS: 12
-      EMAIL_SERVICE_API_KEY: dummy
-      EMAIL_FROM_ADDRESS: noreply@themobileprof.com
-      SPONSORSHIP_CODE_LENGTH: 10
-      MAX_SPONSORSHIP_DURATION_MONTHS: 12
-      RATE_LIMIT_WINDOW_MS: 900000
-      RATE_LIMIT_MAX_REQUESTS: 100
-      MAX_FILE_SIZE: 5242880
+      BCRYPT_ROUNDS: 4
+      EMAIL_SERVICE_API_KEY: dev-key
+      EMAIL_FROM_ADDRESS: dev@example.com
+      EMAIL_HOST: smtp.gmail.com
+      EMAIL_PORT: 587
+      EMAIL_USER: dev@example.com
+      EMAIL_PASS: devpass
+      SPONSORSHIP_CODE_LENGTH: 6
+      MAX_SPONSORSHIP_DURATION_MONTHS: 1
+      RATE_LIMIT_WINDOW_MS: 60000
+      RATE_LIMIT_MAX_REQUESTS: 1000
+      MAX_FILE_SIZE: 1048576
       UPLOAD_PATH: ./uploads
     ports:
       - "3000:3000"
     volumes:
       - .:/app
-      - ./uploads:/app/uploads
-    command: npm start
+      - /app/node_modules
+      - uploads_data:/app/uploads
+    networks:
+      - app-network
+    command: npm run dev
 
 volumes:
-  db_data: 
+  db_data:
+  uploads_data:
+
+networks:
+  app-network:
+    driver: bridge 
