@@ -18,7 +18,8 @@ WORKDIR /app
 COPY package*.json ./
 
 # Install dependencies with production optimizations
-RUN npm ci --only=production --no-audit --no-fund && \
+# Using npm install with explicit flags for better CI compatibility
+RUN npm install --omit=dev --no-audit --no-fund --production --prefer-offline && \
     npm cache clean --force
 
 # Copy application code
