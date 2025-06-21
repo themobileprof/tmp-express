@@ -136,4 +136,5 @@ jobs:
           echo "Image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
         else
           echo "❌ Docker build failed"
-          exit 1 
+          exit 1
+        fi 
