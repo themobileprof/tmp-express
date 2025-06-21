@@ -72,7 +72,7 @@ Common HTTP status codes:
 #### Register User
 **POST** `/auth/register`
 
-Create a new user account.
+Register a new user with email and password.
 
 **Request Body:**
 ```json
@@ -103,7 +103,7 @@ Create a new user account.
 #### Login User
 **POST** `/auth/login`
 
-Authenticate user and receive JWT token.
+Authenticate user with email and password.
 
 **Request Body:**
 ```json
@@ -127,6 +127,43 @@ Authenticate user and receive JWT token.
 }
 ```
 
+#### Google OAuth Login/Signup
+**POST** `/auth/google`
+
+Authenticate or register user with Google OAuth.
+
+**Request Body:**
+```json
+{
+  "token": "google_id_token",
+  "firstName": "John",  // Optional, will use Google data if not provided
+  "lastName": "Doe",    // Optional, will use Google data if not provided
+  "role": "student"     // Optional, defaults to "student"
+}
+```
+
+**Response (200/201):**
+```json
+{
+  "user": {
+    "id": "uuid",
+    "email": "user@gmail.com",
+    "firstName": "John",
+    "lastName": "Doe",
+    "role": "student",
+    "createdAt": "2024-01-01T00:00:00.000Z"  // Only for new users
+  },
+  "token": "jwt-token"
+}
+```
+
+**Notes:**
+- If user exists with Google ID, logs them in
+- If user exists with email but different auth provider, links Google account
+- If user doesn't exist, creates new account
+- Google profile picture is automatically set as avatar
+- Email verification status is set based on Google's verification
+
 #### Get Current User
 **GET** `/auth/me`
 
@@ -149,6 +186,8 @@ Authorization: Bearer <jwt-token>
     "avatarUrl": "https://example.com/avatar.jpg",
     "bio": "User bio",
     "createdAt": "2024-01-01T00:00:00.000Z",
+    "authProvider": "local",  // "local" or "google"
+    "emailVerified": true,    // true for Google users, false for local users
     "settings": {
       "theme": "system",
       "language": "en",
@@ -185,7 +224,7 @@ Refresh JWT token.
 #### Change Password
 **POST** `/auth/change-password`
 
-Change user password.
+Change user password (only for local authentication users).
 
 **Headers:**
 ```
@@ -204,6 +243,14 @@ Authorization: Bearer <jwt-token>
 ```json
 {
   "message": "Password changed successfully"
+}
+```
+
+**Error Response (400) - Google OAuth users:**
+```json
+{
+  "error": "Password change not available for Google OAuth accounts",
+  "message": "Invalid Operation"
 }
 ```
 

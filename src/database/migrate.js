@@ -106,12 +106,16 @@ const createTables = async () => {
       CREATE TABLE IF NOT EXISTS users (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         email VARCHAR(255) UNIQUE NOT NULL,
-        password_hash VARCHAR(255) NOT NULL,
+        password_hash VARCHAR(255),
         first_name VARCHAR(100) NOT NULL,
         last_name VARCHAR(100) NOT NULL,
         role user_role DEFAULT 'student',
         avatar_url TEXT,
         bio TEXT,
+        google_id VARCHAR(255) UNIQUE,
+        google_email VARCHAR(255),
+        auth_provider VARCHAR(20) DEFAULT 'local',
+        email_verified BOOLEAN DEFAULT false,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         is_active BOOLEAN DEFAULT true
