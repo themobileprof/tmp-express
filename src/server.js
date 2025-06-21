@@ -18,6 +18,7 @@ const discussionRoutes = require('./routes/discussions');
 const certificationRoutes = require('./routes/certifications');
 const settingsRoutes = require('./routes/settings');
 const paymentRoutes = require('./routes/payments');
+const adminRoutes = require('./routes/admin');
 
 const { errorHandler } = require('./middleware/errorHandler');
 const { authenticateToken } = require('./middleware/auth');
@@ -119,7 +120,8 @@ app.get('/', (req, res) => {
         sponsorships: '/api/sponsorships',
         payments: '/api/payments',
         discussions: '/api/discussions',
-        certifications: '/api/certifications'
+        certifications: '/api/certifications',
+        admin: '/api/admin'
       },
       documentation: 'https://github.com/your-username/themobileprof-backend',
       support: 'support@themobileprof.com'
@@ -201,12 +203,25 @@ app.get('/', (req, res) => {
           <div class="endpoint">GET /health - Health check</div>
           <div class="endpoint">POST /api/auth/register - User registration</div>
           <div class="endpoint">POST /api/auth/login - User login</div>
+          <div class="endpoint">POST /api/auth/admin/login - Admin login</div>
           <div class="endpoint">GET /api/courses - List courses</div>
           <div class="endpoint">GET /api/classes - List classes</div>
           <div class="endpoint">GET /api/sponsorships - List sponsorships</div>
           <div class="endpoint">POST /api/payments/initialize - Initialize payment</div>
           <div class="endpoint">GET /api/discussions - List discussions</div>
           <div class="endpoint">GET /api/certifications - List certifications</div>
+          <div class="endpoint">GET /api/admin/users - Admin: List users</div>
+          <div class="endpoint">GET /api/admin/courses - Admin: List courses</div>
+          <div class="endpoint">GET /api/admin/classes - Admin: List classes</div>
+          <div class="endpoint">GET /api/admin/sponsorships - Admin: List sponsorships</div>
+          <div class="endpoint">GET /api/admin/discussions - Admin: List discussions</div>
+          <div class="endpoint">GET /api/admin/certifications - Admin: List certifications</div>
+          <div class="endpoint">GET /api/admin/payments - Admin: Payment history</div>
+          <div class="endpoint">GET /api/admin/stats/overview - Admin: System overview</div>
+          <div class="endpoint">GET /api/admin/stats/users - Admin: User statistics</div>
+          <div class="endpoint">GET /api/admin/stats/courses - Admin: Course statistics</div>
+          <div class="endpoint">GET /api/admin/stats/revenue - Admin: Revenue statistics</div>
+          <div class="endpoint">GET /api/admin/settings - Admin: System settings</div>
         </div>
         
         <div class="info">
@@ -236,6 +251,7 @@ app.use('/api/discussions', discussionRoutes);
 app.use('/api/certifications', authenticateToken, certificationRoutes);
 app.use('/api/settings', authenticateToken, settingsRoutes);
 app.use('/api/payments', paymentRoutes);
+app.use('/api/admin', adminRoutes);
 
 // 404 handler
 app.use('*', (req, res) => {

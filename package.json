@@ -9,6 +9,7 @@
     "test": "jest",
     "migrate": "node src/database/migrate.js",
     "seed": "node src/database/seed.js",
+    "create-admin": "node scripts/create-admin.js",
     "test:production": "node scripts/test-production.js",
     "logs:view": "tail -f logs/app.log",
     "logs:errors": "grep -i error logs/app.log",

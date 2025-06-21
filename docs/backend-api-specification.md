@@ -1,3 +1,4 @@
+
 # TheMobileProf Backend API Specification
 
 ## Overview
@@ -37,7 +38,7 @@ CREATE TABLE courses (
     duration VARCHAR(50) NOT NULL,
     instructor_id UUID NOT NULL,
     image_url TEXT,
-    is_published BOOLEAN DEFAULT false,
+    status ENUM('published', 'draft', 'review', 'archived') DEFAULT 'draft',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (instructor_id) REFERENCES users(id) ON DELETE CASCADE
@@ -168,11 +169,13 @@ CREATE TABLE lessons (
     course_id UUID NOT NULL,
     title VARCHAR(255) NOT NULL,
     description TEXT,
+    description_type ENUM('text', 'link', 'html') DEFAULT 'text',
     content TEXT,
     video_url TEXT,
     duration_minutes INTEGER DEFAULT 0,
+    materials JSON, -- Array of material file names/URLs
     order_index INTEGER NOT NULL,
-    is_published BOOLEAN DEFAULT false,
+    status ENUM('published', 'draft', 'archived') DEFAULT 'draft',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE
@@ -183,6 +186,7 @@ CREATE TABLE lessons (
 ```sql
 CREATE TABLE tests (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    lesson_id UUID,
     course_id UUID NOT NULL,
     title VARCHAR(255) NOT NULL,
     description TEXT,
@@ -190,9 +194,10 @@ CREATE TABLE tests (
     passing_score INTEGER DEFAULT 70,
     max_attempts INTEGER DEFAULT 3,
     order_index INTEGER NOT NULL,
-    is_published BOOLEAN DEFAULT false,
+    status ENUM('active', 'draft', 'archived') DEFAULT 'draft',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (lesson_id) REFERENCES lessons(id) ON DELETE SET NULL,
     FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE
 );
 ```
@@ -203,10 +208,10 @@ CREATE TABLE test_questions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     test_id UUID NOT NULL,
     question TEXT NOT NULL,
-    question_type ENUM('multiple_choice', 'true_false', 'short_answer') DEFAULT 'multiple_choice',
+    question_type ENUM('multiple_choice', 'true_false') DEFAULT 'multiple_choice',
     options JSON, -- Array of options for multiple choice questions
     correct_answer INTEGER, -- Index of correct answer for multiple choice, or 0/1 for true/false
-    correct_answer_text TEXT, -- For short answer questions
+    image_url TEXT, -- Optional image for the question
     points INTEGER DEFAULT 1,
     order_index INTEGER NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -242,7 +247,6 @@ CREATE TABLE test_attempt_answers (
     attempt_id UUID NOT NULL,
     question_id UUID NOT NULL,
     selected_answer INTEGER, -- For multiple choice/true false
-    answer_text TEXT, -- For short answer questions
     is_correct BOOLEAN DEFAULT false,
     points_earned INTEGER DEFAULT 0,
     answered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -338,11 +342,24 @@ GET  /api/auth/me
 
 ### Users
 ```
+GET    /api/users
+POST   /api/users
 GET    /api/users/:id
 PUT    /api/users/:id
 DELETE /api/users/:id
 GET    /api/users/:id/enrollments
 GET    /api/users/:id/certifications
+```
+
+### Admin - Users Management
+```
+GET    /api/admin/users
+POST   /api/admin/users
+PUT    /api/admin/users/:id
+DELETE /api/admin/users/:id
+PUT    /api/admin/users/:id/role
+PUT    /api/admin/users/:id/status
+GET    /api/admin/users/stats
 ```
 
 ### Courses
@@ -358,6 +375,50 @@ GET    /api/courses/:id/tests
 POST   /api/courses/:id/tests
 GET    /api/courses/:id/enrollments
 POST   /api/courses/:id/enroll
+GET    /api/courses/:id/analytics
+```
+
+### Admin - Course Management
+```
+GET    /api/admin/courses
+POST   /api/admin/courses
+PUT    /api/admin/courses/:id
+DELETE /api/admin/courses/:id
+PUT    /api/admin/courses/:id/status
+GET    /api/admin/courses/:id/analytics
+POST   /api/admin/courses/:id/approve
+POST   /api/admin/courses/:id/reject
+POST   /api/admin/courses/:id/archive
+POST   /api/admin/courses/:id/duplicate
+GET    /api/admin/courses/stats
+```
+
+### Admin - Lesson Management
+```
+GET    /api/admin/courses/:courseId/lessons
+POST   /api/admin/courses/:courseId/lessons
+GET    /api/admin/lessons/:id
+PUT    /api/admin/lessons/:id
+DELETE /api/admin/lessons/:id
+PUT    /api/admin/lessons/:id/status
+POST   /api/admin/lessons/:id/duplicate
+GET    /api/admin/lessons/:id/tests
+POST   /api/admin/lessons/:id/tests
+```
+
+### Admin - Test Management
+```
+GET    /api/admin/tests/:id
+PUT    /api/admin/tests/:id
+DELETE /api/admin/tests/:id
+PUT    /api/admin/tests/:id/status
+POST   /api/admin/tests/:id/duplicate
+GET    /api/admin/tests/:id/questions
+POST   /api/admin/tests/:id/questions
+PUT    /api/admin/tests/:id/questions/:questionId
+DELETE /api/admin/tests/:id/questions/:questionId
+GET    /api/admin/tests/:id/results
+GET    /api/admin/tests/:id/analytics
 ```
 
 ### Sponsorships
@@ -372,6 +433,17 @@ POST   /api/sponsorships/:id/use
 GET    /api/sponsorships/code/:discountCode
 POST   /api/sponsorships/:id/email
 GET    /api/sponsorships/:id/stats
+```
+
+### Admin - Sponsorship Management
+```
+GET    /api/admin/sponsorships
+POST   /api/admin/sponsorships
+PUT    /api/admin/sponsorships/:id
+DELETE /api/admin/sponsorships/:id
+PUT    /api/admin/sponsorships/:id/status
+GET    /api/admin/sponsorships/stats
+GET    /api/admin/sponsorships/:id/usage
 ```
 
 ### Sponsorship Opportunities
@@ -399,6 +471,7 @@ POST   /api/classes/:id/enroll
 GET    /api/lessons/:id
 PUT    /api/lessons/:id
 DELETE /api/lessons/:id
+POST   /api/lessons/:id/materials/upload
 ```
 
 ### Tests & Quizzes
@@ -415,6 +488,7 @@ GET    /api/tests/:id/attempts/:attemptId
 PUT    /api/tests/:id/attempts/:attemptId/answer
 POST   /api/tests/:id/attempts/:attemptId/submit
 GET    /api/tests/:id/attempts/:attemptId/results
+POST   /api/tests/:id/questions/:questionId/image/upload
 ```
 
 ### Discussions
@@ -444,7 +518,302 @@ GET    /api/settings
 PUT    /api/settings
 ```
 
+### Admin - System Settings
+```
+GET    /api/admin/settings
+PUT    /api/admin/settings
+GET    /api/admin/stats/overview
+GET    /api/admin/stats/users
+GET    /api/admin/stats/courses
+GET    /api/admin/stats/revenue
+```
+
 ## Request/Response Examples
+
+### Admin - Create Course
+```json
+POST /api/admin/courses
+{
+  "title": "Linux Fundamentals",
+  "description": "Master the basics of Linux operating system",
+  "topic": "Linux",
+  "type": "online",
+  "certification": "Linux Professional Institute", 
+  "price": 299.00,
+  "duration": "6 weeks",
+  "instructorId": "uuid",
+  "status": "draft"
+}
+
+Response:
+{
+  "id": "uuid",
+  "title": "Linux Fundamentals",
+  "description": "Master the basics of Linux operating system",
+  "topic": "Linux", 
+  "type": "online",
+  "certification": "Linux Professional Institute",
+  "price": 299.00,
+  "duration": "6 weeks",
+  "instructorId": "uuid",
+  "status": "draft",
+  "createdAt": "2024-01-01T00:00:00Z"
+}
+```
+
+### Admin - Create Lesson with Rich Content
+```json
+POST /api/admin/courses/:courseId/lessons
+{
+  "title": "Introduction to Linux",
+  "description": "<h2>Welcome to Linux</h2><p>This lesson covers...</p>",
+  "descriptionType": "html",
+  "videoUrl": "https://example.com/video1",
+  "duration": 45,
+  "materials": ["slides.pdf", "notes.txt"],
+  "status": "published"
+}
+
+Response:
+{
+  "id": "uuid",
+  "courseId": "uuid",
+  "title": "Introduction to Linux",
+  "description": "<h2>Welcome to Linux</h2><p>This lesson covers...</p>",
+  "descriptionType": "html",
+  "videoUrl": "https://example.com/video1", 
+  "duration": 45,
+  "materials": ["slides.pdf", "notes.txt"],
+  "orderIndex": 1,
+  "status": "published",
+  "createdAt": "2024-01-01T00:00:00Z"
+}
+```
+
+### Admin - Create Test with Image Questions
+```json
+POST /api/admin/lessons/:lessonId/tests
+{
+  "title": "Linux Basics Quiz",
+  "description": "Test your knowledge of Linux fundamentals",
+  "durationMinutes": 30,
+  "passingScore": 70,
+  "maxAttempts": 3,
+  "questions": [
+    {
+      "question": "What does this Linux command do?",
+      "questionType": "multiple_choice",
+      "options": ["Lists files", "Changes directory", "Creates file", "Deletes file"],
+      "correctAnswer": 0,
+      "imageUrl": "https://example.com/command-screenshot.png",
+      "points": 2
+    },
+    {
+      "question": "Linux is an open-source operating system.",
+      "questionType": "true_false", 
+      "correctAnswer": 1,
+      "points": 1
+    }
+  ]
+}
+
+Response:
+{
+  "test": {
+    "id": "uuid",
+    "lessonId": "uuid",
+    "courseId": "uuid",
+    "title": "Linux Basics Quiz",
+    "description": "Test your knowledge of Linux fundamentals",
+    "durationMinutes": 30,
+    "passingScore": 70,
+    "maxAttempts": 3,
+    "status": "active",
+    "createdAt": "2024-01-01T00:00:00Z"
+  },
+  "questions": [
+    {
+      "id": "uuid",
+      "testId": "uuid",
+      "question": "What does this Linux command do?",
+      "questionType": "multiple_choice",
+      "options": ["Lists files", "Changes directory", "Creates file", "Deletes file"],
+      "correctAnswer": 0,
+      "imageUrl": "https://example.com/command-screenshot.png",
+      "points": 2,
+      "orderIndex": 1
+    }
+  ]
+}
+```
+
+### Admin - Get Test Results/Analytics
+```json
+GET /api/admin/tests/:id/results
+
+Response:
+{
+  "test": {
+    "id": "uuid",
+    "title": "Linux Basics Quiz",
+    "questions": 10,
+    "duration": 30,
+    "status": "active"
+  },
+  "overview": {
+    "totalAttempts": 245,
+    "averageScore": 78,
+    "passRate": 85,
+    "averageTime": 22
+  },
+  "studentResults": [
+    {
+      "id": "uuid",
+      "studentName": "John Doe",
+      "email": "john@example.com",
+      "score": 85,
+      "completedAt": "2024-01-15T10:30:00Z",
+      "timeTaken": 25,
+      "attempt": 1,
+      "status": "passed"
+    }
+  ],
+  "questionAnalytics": [
+    {
+      "questionId": "uuid",
+      "question": "What is the default shell in Linux?",
+      "correctRate": 92,
+      "totalAnswers": 245,
+      "correctAnswers": 225
+    }
+  ]
+}
+```
+
+### Admin - Get Course Analytics
+```json
+GET /api/admin/courses/:id/analytics
+
+Response:
+{
+  "course": {
+    "id": "uuid",
+    "title": "Linux Fundamentals",
+    "students": 245
+  },
+  "overview": {
+    "totalQuestions": 50,
+    "totalDuration": 120,
+    "totalAttempts": 735,
+    "averageScore": 78,
+    "completionRate": 82
+  },
+  "lessonAnalytics": [
+    {
+      "lessonId": "uuid",
+      "title": "Introduction to Linux", 
+      "completionRate": 95,
+      "averageScore": 85,
+      "tests": [
+        {
+          "testId": "uuid",
+          "title": "Linux Basics Quiz",
+          "attempts": 230,
+          "averageScore": 85,
+          "passRate": 90
+        }
+      ]
+    }
+  ],
+  "studentProgress": [
+    {
+      "studentId": "uuid",
+      "studentName": "John Doe",
+      "progress": 75,
+      "lessonsCompleted": 3,
+      "testsCompleted": 2,
+      "averageScore": 82
+    }
+  ]
+}
+```
+
+### Admin - Upload Question Image
+```json
+POST /api/tests/:id/questions/:questionId/image/upload
+Content-Type: multipart/form-data
+
+Form Data:
+- image: [binary file data]
+- alt: "Linux command screenshot"
+
+Response:
+{
+  "success": true,
+  "imageUrl": "https://example.com/uploads/question-images/uuid.png",
+  "message": "Image uploaded successfully"
+}
+```
+
+### Admin - Get System Stats
+```json
+GET /api/admin/stats/overview
+
+Response:
+{
+  "users": {
+    "total": 2542,
+    "students": 2245,
+    "instructors": 285,
+    "sponsors": 12,
+    "newThisMonth": 156
+  },
+  "courses": {
+    "total": 124,
+    "published": 98,
+    "draft": 15,
+    "review": 8,
+    "archived": 3
+  },
+  "tests": {
+    "total": 856,
+    "active": 734,
+    "totalAttempts": 15420,
+    "averageScore": 76
+  },
+  "revenue": {
+    "total": 125600.50,
+    "thisMonth": 12450.75,
+    "sponsorshipSavings": 45200.25
+  },
+  "engagement": {
+    "activeUsers": 1840,
+    "courseCompletions": 856,
+    "discussionPosts": 2341
+  }
+}
+```
+
+### Admin - Update User Role
+```json
+PUT /api/admin/users/:id/role
+{
+  "role": "instructor"
+}
+
+Response:
+{
+  "success": true,
+  "user": {
+    "id": "uuid",
+    "email": "user@example.com",
+    "firstName": "John",
+    "lastName": "Doe", 
+    "role": "instructor",
+    "updatedAt": "2024-01-01T00:00:00Z"
+  }
+}
+```
 
 ### Create Sponsorship
 ```json
@@ -624,6 +993,7 @@ Response:
       "question": "What is the default shell in most Linux distributions?",
       "question_type": "multiple_choice",
       "options": ["bash", "zsh", "fish", "csh"],
+      "imageUrl": null,
       "points": 1,
       "order_index": 1
     }
@@ -636,8 +1006,7 @@ Response:
 PUT /api/tests/:id/attempts/:attemptId/answer
 {
   "question_id": "uuid",
-  "selected_answer": 0,
-  "answer_text": null
+  "selected_answer": 0
 }
 
 Response:
@@ -687,88 +1056,8 @@ Response:
       "correct_answer": 0,
       "user_answer": 0,
       "is_correct": true,
-      "points_earned": 1
-    }
-  ]
-}
-```
-
-### Course Creation
-```json
-POST /api/courses
-{
-  "title": "Linux Fundamentals",
-  "description": "Master the basics of Linux operating system",
-  "topic": "Linux",
-  "type": "online",
-  "certification": "Linux Professional Institute",
-  "price": 299.00,
-  "duration": "6 weeks"
-}
-
-Response:
-{
-  "id": "uuid",
-  "title": "Linux Fundamentals",
-  "description": "Master the basics of Linux operating system",
-  "topic": "Linux",
-  "type": "online",
-  "certification": "Linux Professional Institute",
-  "price": 299.00,
-  "duration": "6 weeks",
-  "instructor_id": "uuid",
-  "created_at": "2024-01-01T00:00:00Z"
-}
-```
-
-### Create Test with Questions
-```json
-POST /api/courses/:id/tests
-{
-  "title": "Linux Basics Quiz",
-  "description": "Test your knowledge of Linux fundamentals",
-  "duration_minutes": 30,
-  "passing_score": 70,
-  "max_attempts": 3,
-  "questions": [
-    {
-      "question": "What is the default shell in most Linux distributions?",
-      "question_type": "multiple_choice",
-      "options": ["bash", "zsh", "fish", "csh"],
-      "correct_answer": 0,
-      "points": 1
-    },
-    {
-      "question": "Linux is an open-source operating system.",
-      "question_type": "true_false",
-      "correct_answer": 1,
-      "points": 1
-    }
-  ]
-}
-
-Response:
-{
-  "test": {
-    "id": "uuid",
-    "course_id": "uuid",
-    "title": "Linux Basics Quiz",
-    "description": "Test your knowledge of Linux fundamentals",
-    "duration_minutes": 30,
-    "passing_score": 70,
-    "max_attempts": 3,
-    "created_at": "2024-01-01T00:00:00Z"
-  },
-  "questions": [
-    {
-      "id": "uuid",
-      "test_id": "uuid",
-      "question": "What is the default shell in most Linux distributions?",
-      "question_type": "multiple_choice",
-      "options": ["bash", "zsh", "fish", "csh"],
-      "correct_answer": 0,
-      "points": 1,
-      "order_index": 1
+      "points_earned": 1,
+      "imageUrl": null
     }
   ]
 }
@@ -788,6 +1077,195 @@ interface User {
   createdAt: string;
   updatedAt: string;
   isActive: boolean;
+}
+
+interface Course {
+  id: string;
+  title: string;
+  description: string;
+  topic: string;
+  type: 'online' | 'offline';
+  certification?: string;
+  price: number;
+  rating: number;
+  studentCount: number;
+  duration: string;
+  instructorId: string;
+  imageUrl?: string;
+  status: 'published' | 'draft' | 'review' | 'archived';
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface Lesson {
+  id: string;
+  courseId: string;
+  title: string;
+  description?: string;
+  descriptionType: 'text' | 'link' | 'html';
+  content?: string;
+  videoUrl?: string;
+  durationMinutes: number;
+  materials: string[];
+  orderIndex: number;
+  status: 'published' | 'draft' | 'archived';
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface Test {
+  id: string;
+  lessonId?: string;
+  courseId: string;
+  title: string;
+  description?: string;
+  durationMinutes: number;
+  passingScore: number;
+  maxAttempts: number;
+  orderIndex: number;
+  status: 'active' | 'draft' | 'archived';
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface TestQuestion {
+  id: string;
+  testId: string;
+  question: string;
+  questionType: 'multiple_choice' | 'true_false';
+  options?: string[]; // For multiple choice questions
+  correctAnswer: number; // Index for multiple choice/true-false
+  imageUrl?: string; // Optional image for the question
+  points: number;
+  orderIndex: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface TestAttempt {
+  id: string;
+  testId: string;
+  userId: string;
+  attemptNumber: number;
+  score?: number; // Percentage
+  totalQuestions: number;
+  correctAnswers: number;
+  status: 'in_progress' | 'completed' | 'abandoned';
+  startedAt: string;
+  completedAt?: string;
+  timeTakenMinutes?: number;
+}
+
+interface TestAttemptAnswer {
+  id: string;
+  attemptId: string;
+  questionId: string;
+  selectedAnswer: number; // For multiple choice/true-false
+  isCorrect: boolean;
+  pointsEarned: number;
+  answeredAt: string;
+}
+
+interface TestResults {
+  test: {
+    id: string;
+    title: string;
+    questions: number;
+    duration: number;
+    status: string;
+  };
+  overview: {
+    totalAttempts: number;
+    averageScore: number;
+    passRate: number;
+    averageTime: number;
+  };
+  studentResults: {
+    id: string;
+    studentName: string;
+    email: string;
+    score: number;
+    completedAt: string;
+    timeTaken: number;
+    attempt: number;
+    status: 'passed' | 'failed';
+  }[];
+  questionAnalytics: {
+    questionId: string;
+    question: string;
+    correctRate: number;
+    totalAnswers: number;
+    correctAnswers: number;
+  }[];
+}
+
+interface CourseAnalytics {
+  course: {
+    id: string;
+    title: string;
+    students: number;
+  };
+  overview: {
+    totalQuestions: number;
+    totalDuration: number;
+    totalAttempts: number;
+    averageScore: number;
+    completionRate: number;
+  };
+  lessonAnalytics: {
+    lessonId: string;
+    title: string;
+    completionRate: number;
+    averageScore: number;
+    tests: {
+      testId: string;
+      title: string;
+      attempts: number;
+      averageScore: number;
+      passRate: number;
+    }[];
+  }[];
+  studentProgress: {
+    studentId: string;
+    studentName: string;
+    progress: number;
+    lessonsCompleted: number;
+    testsCompleted: number;
+    averageScore: number;
+  }[];
+}
+
+interface AdminStats {
+  users: {
+    total: number;
+    students: number;
+    instructors: number;
+    sponsors: number;
+    newThisMonth: number;
+  };
+  courses: {
+    total: number;
+    published: number;
+    draft: number;
+    review: number;
+    archived: number;
+  };
+  tests: {
+    total: number;
+    active: number;
+    totalAttempts: number;
+    averageScore: number;
+  };
+  revenue: {
+    total: number;
+    thisMonth: number;
+    sponsorshipSavings: number;
+  };
+  engagement: {
+    activeUsers: number;
+    courseCompletions: number;
+    discussionPosts: number;
+  };
 }
 
 interface Sponsorship {
@@ -830,77 +1308,6 @@ interface SponsorshipOpportunity {
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
-}
-
-interface Course {
-  id: string;
-  title: string;
-  description: string;
-  topic: string;
-  type: 'online' | 'offline';
-  certification?: string;
-  price: number;
-  rating: number;
-  studentCount: number;
-  duration: string;
-  instructorId: string;
-  imageUrl?: string;
-  isPublished: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
-
-interface Test {
-  id: string;
-  courseId: string;
-  title: string;
-  description?: string;
-  durationMinutes: number;
-  passingScore: number;
-  maxAttempts: number;
-  orderIndex: number;
-  isPublished: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
-
-interface TestQuestion {
-  id: string;
-  testId: string;
-  question: string;
-  questionType: 'multiple_choice' | 'true_false' | 'short_answer';
-  options?: string[]; // For multiple choice questions
-  correctAnswer?: number; // Index for multiple choice/true-false
-  correctAnswerText?: string; // For short answer questions
-  points: number;
-  orderIndex: number;
-  createdAt: string;
-  updatedAt: string;
-}
-
-interface TestAttempt {
-  id: string;
-  testId: string;
-  userId: string;
-  attemptNumber: number;
-  score?: number; // Percentage
-  totalQuestions: number;
-  correctAnswers: number;
-  status: 'in_progress' | 'completed' | 'abandoned';
-  startedAt: string;
-  completedAt?: string;
-  timeTakenMinutes?: number;
-}
-
-interface TestAttemptAnswer {
-  id: string;
-  attemptId: string;
-  questionId: string;
-  selectedAnswer?: number; // For multiple choice/true-false
-  answerText?: string; // For short answer
-  isCorrect: boolean;
-  pointsEarned: number;
-  answeredAt: string;
 }
 
 interface Class {
@@ -983,7 +1390,17 @@ interface Certification {
 - **Students**: Can view and enroll in courses/classes, take tests, participate in discussions, use sponsorship codes
 - **Instructors**: Can create and manage courses/classes/tests, view student progress and test results
 - **Sponsors**: Can create and manage sponsorships, view sponsorship analytics, send sponsorship codes
-- **Admins**: Full access to all resources
+- **Admins**: Full access to all resources, user management, system settings, analytics
+
+### Admin Permissions
+Admins have additional permissions for:
+- Managing all users (create, update, delete, change roles)
+- Managing all courses regardless of instructor
+- Approving/rejecting course submissions
+- Viewing comprehensive analytics across the platform
+- Managing system settings and configurations
+- Overriding sponsorship limits and rules
+- Accessing detailed test results and student data
 
 ## Implementation Notes
 
@@ -991,7 +1408,7 @@ interface Certification {
 2. Implement proper password hashing (bcrypt recommended)
 3. Add database indexes on frequently queried columns (user_id, course_id, test_id, sponsorship_id, discount_code, etc.)
 4. Implement rate limiting for API endpoints, especially test submission and sponsorship usage
-5. Add input validation and sanitization for all test answers and sponsorship data
+5. Add input validation and sanitization for all test answers, lesson content, and sponsorship data
 6. Use prepared statements to prevent SQL injection
 7. Implement proper error handling and logging
 8. Add API versioning for future updates
@@ -1002,6 +1419,38 @@ interface Certification {
 13. Implement email notification system for sponsorship sharing
 14. Add analytics tracking for sponsorship effectiveness
 15. Implement expiration handling for sponsorship codes
+16. Add file upload handling for lesson materials and question images
+17. Implement rich text content storage and sanitization for HTML lesson descriptions
+18. Add comprehensive admin audit logging for all administrative actions
+19. Implement data export functionality for analytics and reporting
+20. Add backup and restore functionality for critical data
+21. Implement proper pagination for large datasets
+22. Add search and filtering capabilities for admin interfaces
+23. Implement real-time notifications for admin actions
+24. Add comprehensive validation for all admin operations
+
+## File Upload Configuration
+
+### Supported File Types
+- **Lesson Materials**: PDF, DOC, DOCX, TXT, ZIP
+- **Question Images**: PNG, JPG, JPEG, GIF, SVG
+- **Course Images**: PNG, JPG, JPEG
+- **User Avatars**: PNG, JPG, JPEG
+
+### File Size Limits
+- **Images**: Maximum 5MB
+- **Documents**: Maximum 25MB
+- **Videos**: Maximum 500MB (if supporting video uploads)
+
+### Storage Structure
+```
+uploads/
+├── course-images/
+├── lesson-materials/
+├── question-images/
+├── user-avatars/
+└── certificates/
+```
 
 ## Sample Environment Variables
 ```
@@ -1016,6 +1465,11 @@ EMAIL_SERVICE_API_KEY=your-email-service-key
 EMAIL_FROM_ADDRESS=noreply@themobileprof.com
 SPONSORSHIP_CODE_LENGTH=10
 MAX_SPONSORSHIP_DURATION_MONTHS=12
+UPLOAD_MAX_FILE_SIZE=26214400
+UPLOAD_PATH=./uploads
+TINYMCE_API_KEY=your-tinymce-api-key
+ADMIN_DEFAULT_EMAIL=admin@themobileprof.com
+ADMIN_DEFAULT_PASSWORD=secure_admin_password
 ```
 
-This specification provides everything needed to build a complete backend API that supports all the functionality in your TheMobileProf frontend application, including the comprehensive testing and quiz system and the new sponsorship functionality.
+This specification provides everything needed to build a complete backend API that supports all the functionality in your TheMobileProf frontend application, including the comprehensive admin management system, enhanced lesson creation with rich content support, improved test creation with image uploads, and detailed analytics and reporting capabilities.

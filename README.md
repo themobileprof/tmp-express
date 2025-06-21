@@ -364,6 +364,23 @@ Authorization: Bearer <your-jwt-token>
 - **sponsor** - Can create sponsorships and view analytics
 - **admin** - Full system access and user management
 
+### Admin Setup
+Admin users have separate authentication and cannot register through the regular endpoint:
+
+```bash
+# Create admin user
+npm run create-admin
+
+# Admin login
+POST /api/auth/admin/login
+{
+  "email": "admin@themobileprof.com",
+  "password": "securepassword123"
+}
+```
+
+See [ADMIN_SETUP.md](ADMIN_SETUP.md) for complete admin documentation.
+
 ## Development
 
 ### Running Tests

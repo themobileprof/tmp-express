@@ -417,4 +417,139 @@ router.post('/change-password', [
   });
 }));
 
+// Admin login (separate from regular user login)
+router.post('/admin/login', [
+  body('email').isEmail().normalizeEmail().withMessage('Please provide a valid email'),
+  body('password').notEmpty().withMessage('Password is required')
+], asyncHandler(async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    throw new AppError('Validation failed', 400, 'Validation Error');
+  }
+
+  const { email, password } = req.body;
+
+  // Find admin user
+  const user = await getRow(
+    'SELECT id, email, password_hash, first_name, last_name, role, is_active, auth_provider FROM users WHERE email = $1 AND role = $2',
+    [email, 'admin']
+  );
+
+  if (!user || !user.is_active) {
+    throw new AppError('Invalid admin credentials', 401, 'Authentication Failed');
+  }
+
+  // Check if user is using Google OAuth
+  if (user.auth_provider === 'google') {
+    throw new AppError('Please use Google login for this admin account', 401, 'Authentication Failed');
+  }
+
+  // Check password
+  const isValidPassword = await bcrypt.compare(password, user.password_hash);
+  if (!isValidPassword) {
+    throw new AppError('Invalid admin credentials', 401, 'Authentication Failed');
+  }
+
+  // Generate admin token
+  const token = generateToken(user.id, user.email, user.role);
+
+  res.json({
+    user: {
+      id: user.id,
+      email: user.email,
+      firstName: user.first_name,
+      lastName: user.last_name,
+      role: user.role
+    },
+    token
+  });
+}));
+
+// Admin Google OAuth login (for admin accounts that use Google)
+router.post('/admin/google', [
+  body('token').notEmpty().withMessage('Google token is required')
+], asyncHandler(async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    throw new AppError('Validation failed', 400, 'Validation Error');
+  }
+
+  const { token } = req.body;
+
+  // Verify Google token
+  const googlePayload = await verifyGoogleToken(token);
+  
+  const {
+    sub: googleId,
+    email: googleEmail,
+    given_name: googleFirstName,
+    family_name: googleLastName,
+    picture: googlePicture,
+    email_verified: googleEmailVerified
+  } = googlePayload;
+
+  // Check if admin user exists with Google ID
+  let user = await getRow(
+    'SELECT id, email, first_name, last_name, role, is_active, auth_provider FROM users WHERE google_id = $1 AND role = $2',
+    [googleId, 'admin']
+  );
+
+  if (user) {
+    // Admin exists with Google OAuth
+    if (!user.is_active) {
+      throw new AppError('Admin account is deactivated', 401, 'Account Deactivated');
+    }
+
+    // Generate token for existing admin
+    const jwtToken = generateToken(user.id, user.email, user.role);
+
+    return res.json({
+      user: {
+        id: user.id,
+        email: user.email,
+        firstName: user.first_name,
+        lastName: user.last_name,
+        role: user.role
+      },
+      token: jwtToken
+    });
+  }
+
+  // Check if admin exists with email but different auth provider
+  user = await getRow(
+    'SELECT id, email, first_name, last_name, role, is_active, auth_provider FROM users WHERE email = $1 AND role = $2',
+    [googleEmail, 'admin']
+  );
+
+  if (user) {
+    if (user.auth_provider === 'local') {
+      // Admin exists with email/password, link Google account
+      await query(
+        `UPDATE users 
+         SET google_id = $1, google_email = $2, auth_provider = 'google', email_verified = $3, updated_at = CURRENT_TIMESTAMP
+         WHERE id = $4`,
+        [googleId, googleEmail, googleEmailVerified, user.id]
+      );
+
+      const jwtToken = generateToken(user.id, user.email, user.role);
+
+      return res.json({
+        user: {
+          id: user.id,
+          email: user.email,
+          firstName: user.first_name,
+          lastName: user.last_name,
+          role: user.role
+        },
+        token: jwtToken
+      });
+    } else {
+      throw new AppError('Email already associated with another Google account', 409, 'Account Conflict');
+    }
+  }
+
+  // Admin not found - don't allow creation of admin accounts via Google OAuth
+  throw new AppError('Admin account not found. Please contact system administrator.', 401, 'Admin Not Found');
+}));
+
 module.exports = router; 
