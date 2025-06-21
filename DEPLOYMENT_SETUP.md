@@ -1,0 +1,153 @@
+# Deployment Setup Guide
+
+This guide helps you set up the required GitHub secrets for automated deployment.
+
+## Required GitHub Secrets
+
+Go to your GitHub repository → Settings → Secrets and variables → Actions, then add these secrets:
+
+### Server Connection
+- `SERVER_HOST`: Your server's IP address or domain
+- `SERVER_USER`: SSH username (usually `root` or `ubuntu`)
+- `SERVER_PORT`: SSH port (usually `22`)
+- `SERVER_SSH_KEY`: Your private SSH key for server access
+
+### Docker Hub
+- `DOCKERHUB_USERNAME`: Your Docker Hub username
+- `DOCKERHUB_TOKEN`: Docker Hub access token
+
+### Application Environment Variables
+- `DATABASE_URL`: PostgreSQL connection string
+- `JWT_SECRET`: Secret key for JWT tokens
+- `JWT_EXPIRES_IN`: JWT expiration time (e.g., `24h`)
+- `BCRYPT_ROUNDS`: Password hashing rounds (e.g., `12`)
+
+### Email Configuration
+- `EMAIL_SERVICE_API_KEY`: Email service API key (if using external service)
+- `EMAIL_FROM_ADDRESS`: Sender email address
+- `EMAIL_HOST`: SMTP host (e.g., `smtp.gmail.com`)
+- `EMAIL_PORT`: SMTP port (e.g., `587`)
+- `EMAIL_USER`: SMTP username
+- `EMAIL_PASS`: SMTP password
+
+### Application Settings
+- `SPONSORSHIP_CODE_LENGTH`: Length of sponsorship codes (e.g., `8`)
+- `MAX_SPONSORSHIP_DURATION_MONTHS`: Max sponsorship duration (e.g., `12`)
+- `RATE_LIMIT_WINDOW_MS`: Rate limit window (e.g., `900000`)
+- `RATE_LIMIT_MAX_REQUESTS`: Max requests per window (e.g., `100`)
+- `MAX_FILE_SIZE`: Max file upload size in bytes (e.g., `10485760`)
+- `UPLOAD_PATH`: Upload directory path (e.g., `/app/uploads`)
+
+## Server Setup
+
+### 1. Install Docker
+```bash
+# Ubuntu/Debian
+curl -fsSL https://get.docker.com -o get-docker.sh
+sudo sh get-docker.sh
+sudo usermod -aG docker $USER
+
+# CentOS/RHEL
+sudo yum install -y docker
+sudo systemctl start docker
+sudo systemctl enable docker
+sudo usermod -aG docker $USER
+```
+
+### 2. Configure SSH Access
+```bash
+# Generate SSH key pair (if you don't have one)
+ssh-keygen -t rsa -b 4096 -C "your-email@example.com"
+
+# Copy public key to server
+ssh-copy-id username@your-server-ip
+
+# Test connection
+ssh username@your-server-ip
+```
+
+### 3. Test Docker
+```bash
+# Test Docker installation
+docker --version
+docker run hello-world
+```
+
+## Troubleshooting
+
+### Common Issues
+
+1. **SSH Connection Failed**
+   - Verify server IP and SSH port
+   - Check SSH key format (should be private key)
+   - Ensure user has SSH access
+
+2. **Docker Permission Denied**
+   - Add user to docker group: `sudo usermod -aG docker $USER`
+   - Log out and back in, or restart SSH session
+
+3. **Container Fails to Start**
+   - Check environment variables are set correctly
+   - Verify database connection string
+   - Check container logs: `docker logs themobileprof-backend`
+
+4. **Health Check Fails**
+   - Ensure port 3000 is open on server
+   - Check firewall settings
+   - Verify application is starting correctly
+
+### Debugging Commands
+
+```bash
+# Check if container is running
+docker ps
+
+# View container logs
+docker logs themobileprof-backend
+
+# Check container status
+docker inspect themobileprof-backend
+
+# Test health endpoint manually
+curl http://localhost:3000/health
+
+# Check uploads directory
+ls -la /var/www/themobileprof/uploads
+```
+
+## Manual Deployment (Fallback)
+
+If automated deployment fails, you can deploy manually:
+
+```bash
+# SSH to your server
+ssh username@your-server-ip
+
+# Pull latest image
+docker pull your-username/themobileprof-backend:latest
+
+# Stop existing container
+docker stop themobileprof-backend || true
+docker rm themobileprof-backend || true
+
+# Create uploads directory
+sudo mkdir -p /var/www/themobileprof/uploads
+sudo chown $USER:$USER /var/www/themobileprof/uploads
+
+# Run container
+docker run -d \
+  --name themobileprof-backend \
+  --restart unless-stopped \
+  -p 3000:3000 \
+  -v /var/www/themobileprof/uploads:/app/uploads \
+  --env-file .env \
+  your-username/themobileprof-backend:latest
+```
+
+## Security Notes
+
+- Use strong, unique secrets for production
+- Rotate secrets regularly
+- Keep SSH keys secure
+- Use HTTPS in production
+- Consider using a reverse proxy (Nginx) for SSL termination 

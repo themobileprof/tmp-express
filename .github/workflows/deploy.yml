@@ -141,47 +141,99 @@ jobs:
         key: ${{ secrets.SERVER_SSH_KEY }}
         port: ${{ secrets.SERVER_PORT }}
         script: |
+          set -e
+          
+          echo "🚀 Starting deployment..."
+          
+          # Check if Docker is installed
+          if ! command -v docker &> /dev/null; then
+            echo "❌ Docker is not installed on the server"
+            exit 1
+          fi
+          
+          # Check Docker permissions
+          if ! docker info &> /dev/null; then
+            echo "❌ Docker permission denied. User may not be in docker group"
+            exit 1
+          fi
+          
+          echo "✅ Docker is available"
+          
           # Pull latest image
+          echo "📦 Pulling latest image..."
           docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
           
           # Stop and remove existing container
+          echo "🛑 Stopping existing container..."
           docker stop themobileprof-backend || true
           docker rm themobileprof-backend || true
           
           # Create uploads directory if it doesn't exist
+          echo "📁 Creating uploads directory..."
           sudo mkdir -p /var/www/themobileprof/uploads
           sudo chown $USER:$USER /var/www/themobileprof/uploads
           sudo chmod 755 /var/www/themobileprof/uploads
           
+          echo "✅ Uploads directory ready"
+          
           # Run new container with volume mapping
+          echo "🐳 Starting new container..."
           docker run -d \
             --name themobileprof-backend \
             --restart unless-stopped \
             -p 3000:3000 \
             -v /var/www/themobileprof/uploads:/app/uploads \
             -e NODE_ENV=production \
-            -e DATABASE_URL=${{ secrets.DATABASE_URL }} \
-            -e JWT_SECRET=${{ secrets.JWT_SECRET }} \
-            -e JWT_EXPIRES_IN=${{ secrets.JWT_EXPIRES_IN }} \
-            -e BCRYPT_ROUNDS=${{ secrets.BCRYPT_ROUNDS }} \
-            -e EMAIL_SERVICE_API_KEY=${{ secrets.EMAIL_SERVICE_API_KEY }} \
-            -e EMAIL_FROM_ADDRESS=${{ secrets.EMAIL_FROM_ADDRESS }} \
-            -e EMAIL_HOST=${{ secrets.EMAIL_HOST }} \
-            -e EMAIL_PORT=${{ secrets.EMAIL_PORT }} \
-            -e EMAIL_USER=${{ secrets.EMAIL_USER }} \
-            -e EMAIL_PASS=${{ secrets.EMAIL_PASS }} \
-            -e SPONSORSHIP_CODE_LENGTH=${{ secrets.SPONSORSHIP_CODE_LENGTH }} \
-            -e MAX_SPONSORSHIP_DURATION_MONTHS=${{ secrets.MAX_SPONSORSHIP_DURATION_MONTHS }} \
-            -e RATE_LIMIT_WINDOW_MS=${{ secrets.RATE_LIMIT_WINDOW_MS }} \
-            -e RATE_LIMIT_MAX_REQUESTS=${{ secrets.RATE_LIMIT_MAX_REQUESTS }} \
-            -e MAX_FILE_SIZE=${{ secrets.MAX_FILE_SIZE }} \
-            -e UPLOAD_PATH=${{ secrets.UPLOAD_PATH }} \
+            -e DATABASE_URL="${{ secrets.DATABASE_URL }}" \
+            -e JWT_SECRET="${{ secrets.JWT_SECRET }}" \
+            -e JWT_EXPIRES_IN="${{ secrets.JWT_EXPIRES_IN }}" \
+            -e BCRYPT_ROUNDS="${{ secrets.BCRYPT_ROUNDS }}" \
+            -e EMAIL_SERVICE_API_KEY="${{ secrets.EMAIL_SERVICE_API_KEY }}" \
+            -e EMAIL_FROM_ADDRESS="${{ secrets.EMAIL_FROM_ADDRESS }}" \
+            -e EMAIL_HOST="${{ secrets.EMAIL_HOST }}" \
+            -e EMAIL_PORT="${{ secrets.EMAIL_PORT }}" \
+            -e EMAIL_USER="${{ secrets.EMAIL_USER }}" \
+            -e EMAIL_PASS="${{ secrets.EMAIL_PASS }}" \
+            -e SPONSORSHIP_CODE_LENGTH="${{ secrets.SPONSORSHIP_CODE_LENGTH }}" \
+            -e MAX_SPONSORSHIP_DURATION_MONTHS="${{ secrets.MAX_SPONSORSHIP_DURATION_MONTHS }}" \
+            -e RATE_LIMIT_WINDOW_MS="${{ secrets.RATE_LIMIT_WINDOW_MS }}" \
+            -e RATE_LIMIT_MAX_REQUESTS="${{ secrets.RATE_LIMIT_MAX_REQUESTS }}" \
+            -e MAX_FILE_SIZE="${{ secrets.MAX_FILE_SIZE }}" \
+            -e UPLOAD_PATH="${{ secrets.UPLOAD_PATH }}" \
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          
+          echo "✅ Container started successfully"
+          
+          # Check if container is running
+          if ! docker ps | grep -q themobileprof-backend; then
+            echo "❌ Container failed to start"
+            docker logs themobileprof-backend || true
+            exit 1
+          fi
+          
+          echo "✅ Container is running"
 
     - name: Health check
       run: |
-        sleep 10
-        curl -f http://${{ secrets.SERVER_HOST }}:3000/health || exit 1
+        echo "🏥 Performing health check..."
+        sleep 15
+        
+        # Try health check with retries
+        for i in {1..5}; do
+          echo "Health check attempt $i/5"
+          if curl -f http://${{ secrets.SERVER_HOST }}:3000/health; then
+            echo "✅ Health check passed"
+            exit 0
+          else
+            echo "❌ Health check failed, attempt $i"
+            if [ $i -lt 5 ]; then
+              sleep 10
+            fi
+          fi
+        done
+        
+        echo "❌ Health check failed after 5 attempts"
+        exit 1
 
   notify:
     runs-on: ubuntu-latest
