@@ -170,11 +170,22 @@ jobs:
           
           # Create uploads directory if it doesn't exist
           echo "📁 Creating uploads directory..."
-          sudo mkdir -p /var/www/themobileprof/uploads
-          sudo chown $USER:$USER /var/www/themobileprof/uploads
-          sudo chmod 755 /var/www/themobileprof/uploads
+          UPLOADS_DIR="/var/www/tmp-root/uploads"
           
-          echo "✅ Uploads directory ready"
+          # Try to create directory without sudo first
+          if mkdir -p "$UPLOADS_DIR" 2>/dev/null; then
+            echo "✅ Created uploads directory without sudo"
+          else
+            # If that fails, use home directory instead
+            echo "⚠️  Cannot create /var/www/tmp-root/uploads, using home directory"
+            UPLOADS_DIR="$HOME/themobileprof-uploads"
+            mkdir -p "$UPLOADS_DIR"
+            echo "✅ Created uploads directory in home: $UPLOADS_DIR"
+          fi
+          
+          # Set proper permissions
+          chmod 755 "$UPLOADS_DIR"
+          echo "✅ Uploads directory ready: $UPLOADS_DIR"
           
           # Create .env file from GitHub secret
           echo "📝 Creating .env file..."
@@ -188,7 +199,7 @@ jobs:
             --name themobileprof-backend \
             --restart unless-stopped \
             -p 3000:3000 \
-            -v /var/www/themobileprof/uploads:/app/uploads \
+            -v "$UPLOADS_DIR:/app/uploads" \
             --env-file .env \
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
           

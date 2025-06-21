@@ -97,7 +97,7 @@ console.log('FLUTTERWAVE_PUBLIC_KEY:', process.env.FLUTTERWAVE_PUBLIC_KEY ? '✅
 ### 3. Check File Permissions
 ```bash
 # Check uploads directory
-ls -la /var/www/themobileprof/uploads
+ls -la /var/www/tmp-root/uploads
 
 # Check application directory
 docker exec themobileprof-backend ls -la /app
@@ -238,11 +238,11 @@ console.log('Secret Hash:', process.env.FLUTTERWAVE_SECRET_HASH ? '✅ Set' : '�
 ### 4. File Upload Issues
 ```bash
 # Check uploads directory permissions
-ls -la /var/www/themobileprof/uploads
+ls -la /var/www/tmp-root/uploads
 
 # Fix permissions if needed
-sudo chown -R $USER:$USER /var/www/themobileprof/uploads
-sudo chmod -R 755 /var/www/themobileprof/uploads
+sudo chown -R $USER:$USER /var/www/tmp-root/uploads
+sudo chmod -R 755 /var/www/tmp-root/uploads
 ```
 
 ## 📋 Monitoring Checklist

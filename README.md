@@ -52,7 +52,7 @@ volumes:
 Uploads are mapped to a host directory for persistence:
 ```bash
 # In GitHub Actions deployment
--v /var/www/themobileprof/uploads:/app/uploads
+-v /var/www/tmp-root/uploads:/app/uploads
 ```
 
 #### **Manual Docker Run**
@@ -61,7 +61,7 @@ When running the container manually, always include volume mapping:
 docker run -d \
   --name themobileprof-backend \
   -p 3000:3000 \
-  -v /var/www/themobileprof/uploads:/app/uploads \
+  -v /var/www/tmp-root/uploads:/app/uploads \
   your-image:latest
 ```
 
@@ -70,7 +70,7 @@ docker run -d \
 To backup uploaded files:
 ```bash
 # Backup uploads directory
-tar -czf uploads-backup-$(date +%Y%m%d).tar.gz /var/www/themobileprof/uploads
+tar -czf uploads-backup-$(date +%Y%m%d).tar.gz /var/www/tmp-root/uploads
 
 # Restore uploads
 tar -xzf uploads-backup-20241201.tar.gz -C /
@@ -201,7 +201,7 @@ docker-compose logs -f backend
      --name themobileprof-backend \
      --restart unless-stopped \
      -p 3000:3000 \
-     -v uploads:/app/uploads \
+     -v /var/www/tmp-root/uploads:/app/uploads \
      --env-file .env \
      your-username/themobileprof-backend:latest
    ```
@@ -216,7 +216,7 @@ docker run -d \
   --name themobileprof-backend \
   --restart unless-stopped \
   -p 3000:3000 \
-  -v uploads:/app/uploads \
+  -v /var/www/tmp-root/uploads:/app/uploads \
   --env-file .env \
   themobileprof-backend
 ```
@@ -410,64 +410,7 @@ docker run -d \
   --name themobileprof-backend \
   --restart unless-stopped \
   -p 3000:3000 \
-  -v uploads:/app/uploads \
+  -v /var/www/tmp-root/uploads:/app/uploads \
   --env-file .env \
   your-username/themobileprof-backend:latest
 ```
-
-### Scaling
-
-Run multiple instances behind a load balancer:
-
-```bash
-# Instance 1
-docker run -d --name themobileprof-backend-1 -p 3001:3000 --env-file .env your-username/themobileprof-backend:latest
-
-# Instance 2
-docker run -d --name themobileprof-backend-2 -p 3002:3000 --env-file .env your-username/themobileprof-backend:latest
-```
-
-## Monitoring
-
-### Health Checks
-- Application: `GET /health`
-- Docker health checks configured in Dockerfile
-
-### Logs
-```bash
-# View application logs
-docker logs themobileprof-backend
-
-# Follow logs
-docker logs -f themobileprof-backend
-```
-
-### Database Backup
-```bash
-# For self-hosted PostgreSQL
-docker exec themobileprof-db pg_dump -U username database > backup.sql
-
-# For managed databases, use your provider's backup tools
-```
-
-## Security
-
-- JWT tokens for authentication
-- Password hashing with bcrypt
-- Input validation and sanitization
-- Rate limiting to prevent abuse
-- CORS configuration
-- Helmet.js for security headers
-- Non-root user in Docker containers
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Test locally using Docker
-5. Submit a pull request
-
-## License
-
-MIT License - see LICENSE file for details 
