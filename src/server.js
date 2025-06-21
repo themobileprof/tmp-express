@@ -52,6 +52,40 @@ app.use(compression());
 // Logging middleware
 app.use(morgan('combined'));
 
+// Enhanced error logging middleware
+app.use((err, req, res, next) => {
+  console.error('🚨 Error occurred:', {
+    timestamp: new Date().toISOString(),
+    method: req.method,
+    url: req.url,
+    userAgent: req.get('User-Agent'),
+    ip: req.ip,
+    userId: req.user?.id,
+    error: {
+      message: err.message,
+      stack: err.stack,
+      code: err.code,
+      status: err.status
+    }
+  });
+  next(err);
+});
+
+// Request logging for debugging
+app.use((req, res, next) => {
+  if (process.env.NODE_ENV === 'production') {
+    console.log('📝 Request:', {
+      timestamp: new Date().toISOString(),
+      method: req.method,
+      url: req.url,
+      ip: req.ip,
+      userAgent: req.get('User-Agent'),
+      userId: req.user?.id
+    });
+  }
+  next();
+});
+
 // Health check endpoint
 app.get('/health', (req, res) => {
   res.status(200).json({
