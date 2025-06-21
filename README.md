@@ -35,7 +35,54 @@ A comprehensive Learning Management System (LMS) backend API built with Node.js,
 - **Security**: helmet, cors, rate-limiting
 - **Containerization**: Docker
 
-## Quick Start
+## 📁 File Uploads and Persistence
+
+### Uploads Directory Persistence
+
+The application handles file uploads (avatars, course images, etc.) and ensures they persist across container recreations:
+
+#### **Local Development**
+Uploads are automatically persisted using Docker volumes:
+```yaml
+volumes:
+  - uploads_data:/app/uploads  # Named volume for persistence
+```
+
+#### **Production Deployment**
+Uploads are mapped to a host directory for persistence:
+```bash
+# In GitHub Actions deployment
+-v /var/www/themobileprof/uploads:/app/uploads
+```
+
+#### **Manual Docker Run**
+When running the container manually, always include volume mapping:
+```bash
+docker run -d \
+  --name themobileprof-backend \
+  -p 3000:3000 \
+  -v /var/www/themobileprof/uploads:/app/uploads \
+  your-image:latest
+```
+
+### Backup Strategy
+
+To backup uploaded files:
+```bash
+# Backup uploads directory
+tar -czf uploads-backup-$(date +%Y%m%d).tar.gz /var/www/themobileprof/uploads
+
+# Restore uploads
+tar -xzf uploads-backup-20241201.tar.gz -C /
+```
+
+### File Storage Configuration
+
+- **Max file size**: 10MB (configurable via `MAX_FILE_SIZE`)
+- **Upload path**: `/app/uploads` (configurable via `UPLOAD_PATH`)
+- **Supported formats**: Images (JPG, PNG), Documents (PDF), etc.
+
+## 🚀 Quick Start
 
 ### Option 1: Docker (Recommended)
 
