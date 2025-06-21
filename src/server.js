@@ -95,6 +95,134 @@ app.get('/health', (req, res) => {
   });
 });
 
+// API landing page
+app.get('/', (req, res) => {
+  // Check if request wants JSON (API client) or HTML (browser)
+  const wantsJson = req.headers.accept && req.headers.accept.includes('application/json');
+  
+  if (wantsJson) {
+    // Return JSON for API clients
+    res.status(200).json({
+      name: 'TheMobileProf LMS API',
+      version: '1.0.0',
+      description: 'Learning Management System Backend API',
+      status: 'running',
+      timestamp: new Date().toISOString(),
+      endpoints: {
+        health: '/health',
+        api: '/api',
+        auth: '/api/auth',
+        users: '/api/users',
+        courses: '/api/courses',
+        classes: '/api/classes',
+        tests: '/api/tests',
+        sponsorships: '/api/sponsorships',
+        payments: '/api/payments',
+        discussions: '/api/discussions',
+        certifications: '/api/certifications'
+      },
+      documentation: 'https://github.com/your-username/themobileprof-backend',
+      support: 'support@themobileprof.com'
+    });
+  } else {
+    // Return HTML for browser requests
+    res.status(200).send(`
+      <!DOCTYPE html>
+      <html lang="en">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>TheMobileProf LMS API</title>
+        <style>
+          body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 2rem;
+            line-height: 1.6;
+            color: #333;
+          }
+          .header {
+            text-align: center;
+            margin-bottom: 3rem;
+            padding-bottom: 2rem;
+            border-bottom: 2px solid #e1e5e9;
+          }
+          .status {
+            display: inline-block;
+            background: #28a745;
+            color: white;
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.875rem;
+            font-weight: 500;
+          }
+          .endpoints {
+            background: #f8f9fa;
+            padding: 1.5rem;
+            border-radius: 8px;
+            margin: 2rem 0;
+          }
+          .endpoint {
+            margin: 0.5rem 0;
+            font-family: 'Monaco', 'Menlo', monospace;
+            color: #0066cc;
+          }
+          .info {
+            background: #e7f3ff;
+            padding: 1rem;
+            border-radius: 6px;
+            border-left: 4px solid #0066cc;
+            margin: 1rem 0;
+          }
+          .footer {
+            margin-top: 3rem;
+            padding-top: 2rem;
+            border-top: 1px solid #e1e5e9;
+            text-align: center;
+            color: #666;
+            font-size: 0.875rem;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <h1>🚀 TheMobileProf LMS API</h1>
+          <p>Learning Management System Backend API</p>
+          <span class="status">Running</span>
+        </div>
+        
+        <div class="info">
+          <strong>API Status:</strong> The API is running successfully. Use the endpoints below to interact with the system.
+        </div>
+        
+        <h2>Available Endpoints</h2>
+        <div class="endpoints">
+          <div class="endpoint">GET /health - Health check</div>
+          <div class="endpoint">POST /api/auth/register - User registration</div>
+          <div class="endpoint">POST /api/auth/login - User login</div>
+          <div class="endpoint">GET /api/courses - List courses</div>
+          <div class="endpoint">GET /api/classes - List classes</div>
+          <div class="endpoint">GET /api/sponsorships - List sponsorships</div>
+          <div class="endpoint">POST /api/payments/initialize - Initialize payment</div>
+          <div class="endpoint">GET /api/discussions - List discussions</div>
+          <div class="endpoint">GET /api/certifications - List certifications</div>
+        </div>
+        
+        <div class="info">
+          <strong>Authentication:</strong> Most endpoints require JWT authentication. Include your token in the Authorization header: <code>Authorization: Bearer YOUR_TOKEN</code>
+        </div>
+        
+        <div class="footer">
+          <p>Version 1.0.0 | <a href="https://github.com/your-username/themobileprof-backend">Documentation</a> | <a href="mailto:support@themobileprof.com">Support</a></p>
+          <p>Last updated: ${new Date().toLocaleString()}</p>
+        </div>
+      </body>
+      </html>
+    `);
+  }
+});
+
 // API routes
 app.use('/api/auth', authRoutes);
 app.use('/api/users', authenticateToken, userRoutes);

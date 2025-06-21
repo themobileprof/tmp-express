@@ -112,7 +112,7 @@ router.post('/initialize', authenticateToken, validatePaymentInitiation, asyncHa
     customizations: {
       title: 'TheMobileProf LMS',
       description: itemDescription,
-      logo: process.env.LOGO_URL || 'https://themobileprof.com/logo.png'
+      logo: process.env.LOGO_URL || 'https://themobileprof.com/assets/logo.jpg'
     },
     meta: {
       payment_id: payment.id,
