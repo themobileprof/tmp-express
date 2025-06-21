@@ -2,86 +2,6 @@
 
 A comprehensive Learning Management System (LMS) backend API built with Node.js, Express, and PostgreSQL. This API supports course management, user authentication, sponsorship programs, testing systems, and more.
 
-## Features
-
-### Core Features
-- **User Management**: Registration, authentication, role-based access control
-- **Course Management**: Create, update, delete courses with lessons and tests
-- **Class Management**: Schedule-based learning with limited slots
-- **Sponsorship System**: Discount codes and funding opportunities
-- **Testing System**: Multiple choice, true/false, and short answer questions
-- **Discussion Forums**: Course and class-specific discussions
-- **Certification System**: Digital certificates with verification codes
-- **User Settings**: Personalized preferences and notifications
-
-### Key Highlights
-- **JWT Authentication**: Secure token-based authentication
-- **Role-Based Access**: Student, Instructor, Sponsor, Admin roles
-- **Comprehensive Testing**: Full test creation, taking, and scoring system
-- **Sponsorship Tracking**: Detailed analytics and usage statistics
-- **Database Optimization**: Proper indexing and efficient queries
-- **Input Validation**: Comprehensive request validation
-- **Error Handling**: Consistent error responses
-- **Rate Limiting**: API protection against abuse
-
-## Tech Stack
-
-- **Runtime**: Node.js 18+
-- **Framework**: Express.js
-- **Database**: PostgreSQL
-- **Authentication**: JWT (JSON Web Tokens)
-- **Password Hashing**: bcryptjs
-- **Validation**: express-validator
-- **Security**: helmet, cors, rate-limiting
-- **Containerization**: Docker
-
-## 📁 File Uploads and Persistence
-
-### Uploads Directory Persistence
-
-The application handles file uploads (avatars, course images, etc.) and ensures they persist across container recreations:
-
-#### **Local Development**
-Uploads are automatically persisted using Docker volumes:
-```yaml
-volumes:
-  - uploads_data:/app/uploads  # Named volume for persistence
-```
-
-#### **Production Deployment**
-Uploads are mapped to a host directory for persistence:
-```bash
-# In GitHub Actions deployment
--v /var/www/tmp-root/uploads:/app/uploads
-```
-
-#### **Manual Docker Run**
-When running the container manually, always include volume mapping:
-```bash
-docker run -d \
-  --name themobileprof-backend \
-  -p 3000:3000 \
-  -v /var/www/tmp-root/uploads:/app/uploads \
-  your-image:latest
-```
-
-### Backup Strategy
-
-To backup uploaded files:
-```bash
-# Backup uploads directory
-tar -czf uploads-backup-$(date +%Y%m%d).tar.gz /var/www/tmp-root/uploads
-
-# Restore uploads
-tar -xzf uploads-backup-20241201.tar.gz -C /
-```
-
-### File Storage Configuration
-
-- **Max file size**: 10MB (configurable via `MAX_FILE_SIZE`)
-- **Upload path**: `/app/uploads` (configurable via `UPLOAD_PATH`)
-- **Supported formats**: Images (JPG, PNG), Documents (PDF), etc.
-
 ## 🚀 Quick Start
 
 ### Option 1: Docker (Recommended)
@@ -104,6 +24,7 @@ docker build -t themobileprof-backend .
 docker run -d \
   --name themobileprof-backend \
   -p 3000:3000 \
+  -v /var/www/tmp-root/uploads:/app/uploads \
   --env-file .env \
   themobileprof-backend
 ```
@@ -159,7 +80,107 @@ docker run -d \
    npm start
    ```
 
-## Docker Setup
+## 📚 API Documentation
+
+For detailed API documentation, see our comprehensive guides:
+
+### Core Documentation
+- **[API Overview & Setup](docs/README.md)** - Complete API documentation and setup guides
+- **[Authentication & Users](docs/auth-users.md)** - User registration, login, profiles, and authentication flows
+- **[Courses & Classes](docs/courses-classes.md)** - Course and class management, enrollment, and content organization
+- **[Lessons & Tests](docs/lessons-tests.md)** - Educational content, lessons, tests, and assessments
+- **[Sponsorships](docs/sponsorships.md)** - Sponsorship system, discount codes, and funding opportunities
+- **[Payments](docs/payments.md)** - Payment processing, Flutterwave integration, and transaction management
+
+### Quick Reference
+- **[API Reference](docs/api-reference.md)** - Complete endpoint reference (condensed)
+- **[Error Codes](docs/error-codes.md)** - Comprehensive error code reference
+- **[Rate Limits](docs/rate-limits.md)** - Rate limiting policies and headers
+
+## 🔗 API Base URL
+
+- **Development**: `http://localhost:3000/api`
+- **Production**: `https://your-domain.com/api`
+
+## 🔐 Authentication
+
+The API uses JWT (JSON Web Tokens) for authentication. Include the token in the Authorization header:
+
+```
+Authorization: Bearer <your-jwt-token>
+```
+
+### User Roles
+- **student** - Can enroll in courses, take tests, participate in discussions
+- **instructor** - Can create and manage courses, tests, and classes
+- **sponsor** - Can create and manage sponsorships
+- **admin** - Full system access
+
+### Admin Setup
+Admin users have separate authentication and cannot register through the regular endpoint:
+
+```bash
+# Create admin user
+npm run create-admin
+
+# Admin login
+POST /api/auth/admin/login
+{
+  "email": "admin@themobileprof.com",
+  "password": "securepassword123"
+}
+```
+
+See [ADMIN_SETUP.md](ADMIN_SETUP.md) for complete admin documentation.
+
+## 🛠️ Tech Stack
+
+- **Runtime**: Node.js 18+
+- **Framework**: Express.js
+- **Database**: PostgreSQL
+- **Authentication**: JWT (JSON Web Tokens)
+- **Password Hashing**: bcryptjs
+- **Validation**: express-validator
+- **Security**: helmet, cors, rate-limiting
+- **Containerization**: Docker
+
+## 📁 File Uploads and Persistence
+
+### Uploads Directory Persistence
+
+The application handles file uploads (avatars, course images, etc.) and ensures they persist across container recreations:
+
+#### **Local Development**
+Uploads are automatically persisted using Docker volumes:
+```yaml
+volumes:
+  - uploads_data:/app/uploads  # Named volume for persistence
+```
+
+#### **Production Deployment**
+Uploads are mapped to a host directory for persistence:
+```bash
+# In GitHub Actions deployment
+-v /var/www/tmp-root/uploads:/app/uploads
+```
+
+#### **Manual Docker Run**
+When running the container manually, always include volume mapping:
+```bash
+docker run -d \
+  --name themobileprof-backend \
+  -p 3000:3000 \
+  -v /var/www/tmp-root/uploads:/app/uploads \
+  your-image:latest
+```
+
+### File Storage Configuration
+
+- **Max file size**: 10MB (configurable via `MAX_FILE_SIZE`)
+- **Upload path**: `/app/uploads` (configurable via `UPLOAD_PATH`)
+- **Supported formats**: Images (JPG, PNG), Documents (PDF), etc.
+
+## 🚀 Docker Setup
 
 ### Development Environment
 
@@ -221,7 +242,7 @@ docker run -d \
   themobileprof-backend
 ```
 
-### Environment Variables
+## ⚙️ Environment Variables
 
 Create a `.env` file with the following variables:
 
@@ -248,140 +269,29 @@ PORT=3000
 DOCKERHUB_USERNAME=your-username
 ```
 
-## API Endpoints
+## 📊 API Features
 
-### Authentication
-- `POST /api/auth/register` - User registration
-- `POST /api/auth/login` - User login
-- `POST /api/auth/refresh` - Refresh JWT token
-- `GET /api/auth/me` - Get current user
-- `POST /api/auth/logout` - User logout
+### Core Features
+- **User Management**: Registration, authentication, role-based access control
+- **Course Management**: Create, update, delete courses with lessons and tests
+- **Class Management**: Schedule-based learning with limited slots
+- **Sponsorship System**: Discount codes and funding opportunities
+- **Testing System**: Multiple choice, true/false, and short answer questions
+- **Discussion Forums**: Course and class-specific discussions
+- **Certification System**: Digital certificates with verification codes
+- **User Settings**: Personalized preferences and notifications
 
-### Users
-- `GET /api/users/:id` - Get user profile
-- `PUT /api/users/:id` - Update user profile
-- `DELETE /api/users/:id` - Delete user (admin only)
-- `GET /api/users/:id/enrollments` - Get user enrollments
-- `GET /api/users/:id/certifications` - Get user certifications
+### Key Highlights
+- **JWT Authentication**: Secure token-based authentication
+- **Role-Based Access**: Student, Instructor, Sponsor, Admin roles
+- **Comprehensive Testing**: Full test creation, taking, and scoring system
+- **Sponsorship Tracking**: Detailed analytics and usage statistics
+- **Database Optimization**: Proper indexing and efficient queries
+- **Input Validation**: Comprehensive request validation
+- **Error Handling**: Consistent error responses
+- **Rate Limiting**: API protection against abuse
 
-### Courses
-- `GET /api/courses` - List all courses
-- `POST /api/courses` - Create new course
-- `GET /api/courses/:id` - Get course details
-- `PUT /api/courses/:id` - Update course
-- `DELETE /api/courses/:id` - Delete course
-- `GET /api/courses/:id/lessons` - Get course lessons
-- `GET /api/courses/:id/tests` - Get course tests
-- `POST /api/courses/:id/enroll` - Enroll in course
-
-### Sponsorships
-- `GET /api/sponsorships` - List sponsorships
-- `POST /api/sponsorships` - Create sponsorship
-- `GET /api/sponsorships/:id` - Get sponsorship details
-- `PUT /api/sponsorships/:id` - Update sponsorship
-- `DELETE /api/sponsorships/:id` - Delete sponsorship
-- `POST /api/sponsorships/:id/use` - Use sponsorship code
-- `GET /api/sponsorships/code/:discountCode` - Validate discount code
-- `GET /api/sponsorships/:id/stats` - Get sponsorship statistics
-
-### Sponsorship Opportunities
-- `GET /api/sponsorship-opportunities` - List opportunities
-- `POST /api/sponsorship-opportunities` - Create opportunity
-- `GET /api/sponsorship-opportunities/:id` - Get opportunity details
-- `PUT /api/sponsorship-opportunities/:id` - Update opportunity
-- `DELETE /api/sponsorship-opportunities/:id` - Delete opportunity
-- `POST /api/sponsorship-opportunities/:id/contribute` - Contribute to opportunity
-
-### Classes
-- `GET /api/classes` - List all classes
-- `POST /api/classes` - Create new class
-- `GET /api/classes/:id` - Get class details
-- `PUT /api/classes/:id` - Update class
-- `DELETE /api/classes/:id` - Delete class
-- `POST /api/classes/:id/enroll` - Enroll in class
-
-### Tests
-- `GET /api/tests/:id` - Get test details
-- `PUT /api/tests/:id` - Update test
-- `DELETE /api/tests/:id` - Delete test
-- `GET /api/tests/:id/questions` - Get test questions
-- `POST /api/tests/:id/questions` - Add question to test
-- `POST /api/tests/:id/start` - Start test attempt
-- `PUT /api/tests/:id/attempts/:attemptId/answer` - Submit answer
-- `POST /api/tests/:id/attempts/:attemptId/submit` - Submit test
-- `GET /api/tests/:id/attempts/:attemptId/results` - Get test results
-
-### Discussions
-- `GET /api/discussions` - List discussions
-- `POST /api/discussions` - Create discussion
-- `GET /api/discussions/:id` - Get discussion details
-- `PUT /api/discussions/:id` - Update discussion
-- `DELETE /api/discussions/:id` - Delete discussion
-- `GET /api/discussions/:id/replies` - Get discussion replies
-- `POST /api/discussions/:id/replies` - Add reply
-
-### Certifications
-- `GET /api/certifications` - List certifications
-- `POST /api/certifications` - Create certification
-- `GET /api/certifications/:id` - Get certification details
-- `PUT /api/certifications/:id` - Update certification
-- `DELETE /api/certifications/:id` - Delete certification
-- `GET /api/certifications/verify/:code` - Verify certification
-
-### Settings
-- `GET /api/settings` - Get user settings
-- `PUT /api/settings` - Update user settings
-
-## Database Schema
-
-The API uses a comprehensive PostgreSQL database with the following main tables:
-
-- **users** - User accounts and profiles
-- **courses** - Course information and metadata
-- **classes** - Scheduled learning sessions
-- **lessons** - Course content and materials
-- **tests** - Assessment and quiz data
-- **test_questions** - Individual test questions
-- **test_attempts** - Student test attempts
-- **sponsorships** - Discount and funding programs
-- **sponsorship_opportunities** - Funding opportunities
-- **enrollments** - Student course/class enrollments
-- **discussions** - Forum discussions
-- **certifications** - Digital certificates
-- **user_settings** - User preferences
-
-## Authentication
-
-The API uses JWT (JSON Web Tokens) for authentication. Include the token in the Authorization header:
-
-```
-Authorization: Bearer <your-jwt-token>
-```
-
-### User Roles
-- **student** - Can enroll in courses, take tests, participate in discussions
-- **instructor** - Can create and manage courses, tests, and classes
-- **sponsor** - Can create sponsorships and view analytics
-- **admin** - Full system access and user management
-
-### Admin Setup
-Admin users have separate authentication and cannot register through the regular endpoint:
-
-```bash
-# Create admin user
-npm run create-admin
-
-# Admin login
-POST /api/auth/admin/login
-{
-  "email": "admin@themobileprof.com",
-  "password": "securepassword123"
-}
-```
-
-See [ADMIN_SETUP.md](ADMIN_SETUP.md) for complete admin documentation.
-
-## Development
+## 🔧 Development
 
 ### Running Tests
 ```bash
@@ -406,28 +316,22 @@ docker-compose exec backend npm run migrate
 curl http://localhost:3000/health
 ```
 
-## Production Deployment
+## 📖 Additional Resources
 
-### Using Docker Hub (Recommended)
+- **[ADMIN_SETUP.md](ADMIN_SETUP.md)** - Admin user creation and management
+- **[FLUTTERWAVE_SETUP.md](FLUTTERWAVE_SETUP.md)** - Payment integration setup
+- **[GOOGLE_OAUTH_SETUP.md](GOOGLE_OAUTH_SETUP.md)** - Google OAuth configuration
+- **[DEPLOYMENT_SETUP.md](DEPLOYMENT_SETUP.md)** - Production deployment guide
+- **[PRODUCTION_MONITORING.md](PRODUCTION_MONITORING.md)** - Monitoring and troubleshooting
 
-1. **Set up GitHub Actions** (already configured)
-2. **Push to main branch** - automatically builds and pushes to Docker Hub
-3. **Deploy to your server**:
-   ```bash
-   docker pull your-username/themobileprof-backend:latest
-   docker run -d --name themobileprof-backend -p 3000:3000 --env-file .env your-username/themobileprof-backend:latest
-   ```
+## 🤝 Support
 
-### Using External Database
+- **Documentation Issues**: Create an issue in the repository
+- **API Support**: api-support@themobileprof.com
+- **Community Forum**: [community.themobileprof.com](https://community.themobileprof.com)
+- **Status Page**: [status.themobileprof.com](https://status.themobileprof.com)
 
-For production, it's recommended to use a managed PostgreSQL service:
+---
 
-```bash
-docker run -d \
-  --name themobileprof-backend \
-  --restart unless-stopped \
-  -p 3000:3000 \
-  -v /var/www/tmp-root/uploads:/app/uploads \
-  --env-file .env \
-  your-username/themobileprof-backend:latest
-```
+**Last Updated**: January 2024  
+**Version**: 1.0.0
