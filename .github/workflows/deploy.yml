@@ -57,7 +57,9 @@ jobs:
         platforms: linux/amd64
 
     - name: Image digest
-      run: echo ${{ steps.meta.outputs.tags }} was built and pushed
+      run: |
+        echo "Built and pushed images:"
+        echo "${{ steps.meta.outputs.tags }}"
 
   test:
     runs-on: ubuntu-latest
