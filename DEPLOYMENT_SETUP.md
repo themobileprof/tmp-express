@@ -43,6 +43,11 @@ MAX_FILE_SIZE=10485760
 UPLOAD_PATH=/app/uploads
 GOOGLE_CLIENT_ID=your-google-client-id
 GOOGLE_CLIENT_SECRET=your-google-client-secret
+FLUTTERWAVE_PUBLIC_KEY=FLWPUBK_TEST-b045d13e857debaf08f2d69daf60c15a-X
+FLUTTERWAVE_SECRET_KEY=FLWSECK_TEST-95b57f452a1bfa95e6fa7ac5e81560d6-X
+FLUTTERWAVE_SECRET_HASH=FLWSECK_TESTe6a38c0c9ba4
+FRONTEND_URL=https://your-frontend-domain.com
+LOGO_URL=https://your-domain.com/logo.png
 ```
 
 ## Server Setup

@@ -17,6 +17,7 @@ const testRoutes = require('./routes/tests');
 const discussionRoutes = require('./routes/discussions');
 const certificationRoutes = require('./routes/certifications');
 const settingsRoutes = require('./routes/settings');
+const paymentRoutes = require('./routes/payments');
 
 const { errorHandler } = require('./middleware/errorHandler');
 const { authenticateToken } = require('./middleware/auth');
@@ -72,6 +73,7 @@ app.use('/api/tests', authenticateToken, testRoutes);
 app.use('/api/discussions', discussionRoutes);
 app.use('/api/certifications', authenticateToken, certificationRoutes);
 app.use('/api/settings', authenticateToken, settingsRoutes);
+app.use('/api/payments', paymentRoutes);
 
 // 404 handler
 app.use('*', (req, res) => {

@@ -101,6 +101,30 @@ const createTables = async () => {
       END $$;
     `);
 
+    await query(`
+      DO $$ BEGIN
+        CREATE TYPE payment_status AS ENUM ('pending', 'successful', 'failed', 'cancelled', 'refunded');
+      EXCEPTION
+        WHEN duplicate_object THEN null;
+      END $$;
+    `);
+
+    await query(`
+      DO $$ BEGIN
+        CREATE TYPE payment_type AS ENUM ('course', 'class');
+      EXCEPTION
+        WHEN duplicate_object THEN null;
+      END $$;
+    `);
+
+    await query(`
+      DO $$ BEGIN
+        CREATE TYPE payment_method AS ENUM ('card', 'bank_transfer', 'ussd', 'mobile_money', 'qr_code');
+      EXCEPTION
+        WHEN duplicate_object THEN null;
+      END $$;
+    `);
+
     // Create Users table
     await query(`
       CREATE TABLE IF NOT EXISTS users (
@@ -425,6 +449,46 @@ const createTables = async () => {
       )
     `);
 
+    // Create Payments table
+    await query(`
+      CREATE TABLE IF NOT EXISTS payments (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id UUID NOT NULL,
+        course_id UUID,
+        class_id UUID,
+        payment_type payment_type NOT NULL,
+        amount DECIMAL(10,2) NOT NULL,
+        currency VARCHAR(3) DEFAULT 'NGN',
+        flutterwave_reference VARCHAR(255) UNIQUE NOT NULL,
+        flutterwave_transaction_id VARCHAR(255),
+        payment_method payment_method,
+        status payment_status DEFAULT 'pending',
+        metadata JSON,
+        error_message TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE SET NULL,
+        FOREIGN KEY (class_id) REFERENCES classes(id) ON DELETE SET NULL,
+        CHECK (
+          (payment_type = 'course' AND course_id IS NOT NULL AND class_id IS NULL) OR
+          (payment_type = 'class' AND class_id IS NOT NULL AND course_id IS NULL)
+        )
+      )
+    `);
+
+    // Create Payment_Webhooks table for webhook logging
+    await query(`
+      CREATE TABLE IF NOT EXISTS payment_webhooks (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        flutterwave_reference VARCHAR(255) NOT NULL,
+        webhook_data JSON NOT NULL,
+        processed BOOLEAN DEFAULT false,
+        processed_at TIMESTAMP NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
     // Create indexes for better performance
     await query('CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)');
     await query('CREATE INDEX IF NOT EXISTS idx_users_role ON users(role)');
@@ -438,6 +502,10 @@ const createTables = async () => {
     await query('CREATE INDEX IF NOT EXISTS idx_tests_course ON tests(course_id)');
     await query('CREATE INDEX IF NOT EXISTS idx_test_attempts_user ON test_attempts(user_id)');
     await query('CREATE INDEX IF NOT EXISTS idx_discussions_author ON discussions(author_id)');
+    await query('CREATE INDEX IF NOT EXISTS idx_payments_user ON payments(user_id)');
+    await query('CREATE INDEX IF NOT EXISTS idx_payments_reference ON payments(flutterwave_reference)');
+    await query('CREATE INDEX IF NOT EXISTS idx_payments_status ON payments(status)');
+    await query('CREATE INDEX IF NOT EXISTS idx_payment_webhooks_reference ON payment_webhooks(flutterwave_reference)');
 
     console.log('✅ Database migration completed successfully!');
     

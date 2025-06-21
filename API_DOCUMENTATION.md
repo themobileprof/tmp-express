@@ -1663,4 +1663,178 @@ For API support:
 - **Documentation**: [docs.themobileprof.com](https://docs.themobileprof.com)
 - **Status Page**: [status.themobileprof.com](https://status.themobileprof.com)
 - **Support Email**: api-support@themobileprof.com
-- **Community Forum**: [community.themobileprof.com](https://community.themobileprof.com) 
+- **Community Forum**: [community.themobileprof.com](https://community.themobileprof.com)
+
+### Settings
+- `GET /api/settings` - Get user settings
+- `PUT /api/settings` - Update user settings
+
+### Payments
+- `POST /api/payments/initialize` - Initialize payment for course or class
+- `GET /api/payments/verify/:reference` - Verify payment status
+- `POST /api/payments/webhook` - Flutterwave webhook handler
+- `GET /api/payments/user` - Get user payment history
+- `GET /api/payments/:id` - Get specific payment details
+
+#### Get Payment by ID
+**GET** `/payments/:id`
+
+Get specific payment details.
+
+**Headers:**
+```
+Authorization: Bearer <jwt-token>
+```
+
+**Response (200):**
+```json
+{
+  "id": "uuid",
+  "paymentType": "course",
+  "amount": 99.99,
+  "currency": "NGN",
+  "status": "successful",
+  "paymentMethod": "card",
+  "reference": "TMP_1234567890_ABC123",
+  "transactionId": "FLW123456789",
+  "course": {
+    "id": "uuid",
+    "title": "JavaScript Fundamentals",
+    "topic": "Programming"
+  },
+  "createdAt": "2024-01-01T00:00:00.000Z",
+  "updatedAt": "2024-01-01T00:00:00.000Z"
+}
+```
+
+---
+
+### Payment Endpoints
+
+#### Initialize Payment
+**POST** `/payments/initialize`
+
+Initialize a payment for a course or class.
+
+**Headers:**
+```
+Authorization: Bearer <jwt-token>
+```
+
+**Request Body:**
+```json
+{
+  "paymentType": "course",
+  "itemId": "uuid",
+  "paymentMethod": "card"
+}
+```
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "paymentId": "uuid",
+  "reference": "TMP_1234567890_ABC123",
+  "authorizationUrl": "https://checkout.flutterwave.com/v3/hosted/pay/...",
+  "paymentData": {
+    "link": "https://checkout.flutterwave.com/v3/hosted/pay/...",
+    "status": "pending"
+  }
+}
+```
+
+#### Verify Payment
+**GET** `/payments/verify/:reference`
+
+Verify payment status and complete enrollment.
+
+**Headers:**
+```
+Authorization: Bearer <jwt-token>
+```
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "message": "Payment verified and enrollment completed",
+  "payment": {
+    "id": "uuid",
+    "amount": 99.99,
+    "status": "successful",
+    "transactionId": "FLW123456789"
+  }
+}
+```
+
+#### Get User Payments
+**GET** `/payments/user`
+
+Get user's payment history.
+
+**Headers:**
+```
+Authorization: Bearer <jwt-token>
+```
+
+**Query Parameters:**
+- `limit` - Number of results (default: 20)
+- `offset` - Number to skip (default: 0)
+
+**Response (200):**
+```json
+{
+  "payments": [
+    {
+      "id": "uuid",
+      "paymentType": "course",
+      "amount": 99.99,
+      "currency": "NGN",
+      "status": "successful",
+      "paymentMethod": "card",
+      "reference": "TMP_1234567890_ABC123",
+      "transactionId": "FLW123456789",
+      "course": {
+        "id": "uuid",
+        "title": "JavaScript Fundamentals",
+        "topic": "Programming"
+      },
+      "createdAt": "2024-01-01T00:00:00.000Z"
+    }
+  ]
+}
+```
+
+#### Payment Webhook
+**POST** `/payments/webhook`
+
+Flutterwave webhook handler (no authentication required).
+
+**Headers:**
+```
+verif-hash: <webhook-signature>
+```
+
+**Request Body:**
+```json
+{
+  "event": "charge.completed",
+  "data": {
+    "tx_ref": "TMP_1234567890_ABC123",
+    "status": "successful",
+    "id": "FLW123456789"
+  }
+}
+```
+
+**Response (200):**
+```json
+{
+  "status": "success"
+}
+```
+
+---
+
+## Database Schema 
