@@ -176,6 +176,12 @@ jobs:
           
           echo "✅ Uploads directory ready"
           
+          # Create .env file from GitHub secret
+          echo "📝 Creating .env file..."
+          cat > .env << 'EOF'
+          ${{ secrets.ENV_FILE }}
+          EOF
+          
           # Run new container with volume mapping
           echo "🐳 Starting new container..."
           docker run -d \
@@ -183,23 +189,7 @@ jobs:
             --restart unless-stopped \
             -p 3000:3000 \
             -v /var/www/themobileprof/uploads:/app/uploads \
-            -e NODE_ENV=production \
-            -e DATABASE_URL="${{ secrets.DATABASE_URL }}" \
-            -e JWT_SECRET="${{ secrets.JWT_SECRET }}" \
-            -e JWT_EXPIRES_IN="${{ secrets.JWT_EXPIRES_IN }}" \
-            -e BCRYPT_ROUNDS="${{ secrets.BCRYPT_ROUNDS }}" \
-            -e EMAIL_SERVICE_API_KEY="${{ secrets.EMAIL_SERVICE_API_KEY }}" \
-            -e EMAIL_FROM_ADDRESS="${{ secrets.EMAIL_FROM_ADDRESS }}" \
-            -e EMAIL_HOST="${{ secrets.EMAIL_HOST }}" \
-            -e EMAIL_PORT="${{ secrets.EMAIL_PORT }}" \
-            -e EMAIL_USER="${{ secrets.EMAIL_USER }}" \
-            -e EMAIL_PASS="${{ secrets.EMAIL_PASS }}" \
-            -e SPONSORSHIP_CODE_LENGTH="${{ secrets.SPONSORSHIP_CODE_LENGTH }}" \
-            -e MAX_SPONSORSHIP_DURATION_MONTHS="${{ secrets.MAX_SPONSORSHIP_DURATION_MONTHS }}" \
-            -e RATE_LIMIT_WINDOW_MS="${{ secrets.RATE_LIMIT_WINDOW_MS }}" \
-            -e RATE_LIMIT_MAX_REQUESTS="${{ secrets.RATE_LIMIT_MAX_REQUESTS }}" \
-            -e MAX_FILE_SIZE="${{ secrets.MAX_FILE_SIZE }}" \
-            -e UPLOAD_PATH="${{ secrets.UPLOAD_PATH }}" \
+            --env-file .env \
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
           
           echo "✅ Container started successfully"
@@ -212,6 +202,9 @@ jobs:
           fi
           
           echo "✅ Container is running"
+          
+          # Clean up .env file
+          rm -f .env
 
     - name: Health check
       run: |

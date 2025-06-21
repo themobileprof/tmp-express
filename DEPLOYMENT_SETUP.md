@@ -16,27 +16,34 @@ Go to your GitHub repository → Settings → Secrets and variables → Actions,
 - `DOCKERHUB_USERNAME`: Your Docker Hub username
 - `DOCKERHUB_TOKEN`: Docker Hub access token
 
-### Application Environment Variables
-- `DATABASE_URL`: PostgreSQL connection string
-- `JWT_SECRET`: Secret key for JWT tokens
-- `JWT_EXPIRES_IN`: JWT expiration time (e.g., `24h`)
-- `BCRYPT_ROUNDS`: Password hashing rounds (e.g., `12`)
+### Environment Variables
+- `ENV_FILE`: Complete contents of your `.env` file (all environment variables in one secret)
 
-### Email Configuration
-- `EMAIL_SERVICE_API_KEY`: Email service API key (if using external service)
-- `EMAIL_FROM_ADDRESS`: Sender email address
-- `EMAIL_HOST`: SMTP host (e.g., `smtp.gmail.com`)
-- `EMAIL_PORT`: SMTP port (e.g., `587`)
-- `EMAIL_USER`: SMTP username
-- `EMAIL_PASS`: SMTP password
+## Environment Variables Format
 
-### Application Settings
-- `SPONSORSHIP_CODE_LENGTH`: Length of sponsorship codes (e.g., `8`)
-- `MAX_SPONSORSHIP_DURATION_MONTHS`: Max sponsorship duration (e.g., `12`)
-- `RATE_LIMIT_WINDOW_MS`: Rate limit window (e.g., `900000`)
-- `RATE_LIMIT_MAX_REQUESTS`: Max requests per window (e.g., `100`)
-- `MAX_FILE_SIZE`: Max file upload size in bytes (e.g., `10485760`)
-- `UPLOAD_PATH`: Upload directory path (e.g., `/app/uploads`)
+Your `ENV_FILE` secret should contain all your environment variables in the standard `.env` format:
+
+```
+NODE_ENV=production
+DATABASE_URL=postgresql://user:password@host:port/database
+JWT_SECRET=your-super-secure-jwt-secret
+JWT_EXPIRES_IN=24h
+BCRYPT_ROUNDS=12
+EMAIL_HOST=smtp.gmail.com
+EMAIL_PORT=587
+EMAIL_USER=your-email@gmail.com
+EMAIL_PASS=your-app-password
+EMAIL_FROM_ADDRESS=noreply@yourdomain.com
+EMAIL_SERVICE_API_KEY=your-email-service-key
+SPONSORSHIP_CODE_LENGTH=8
+MAX_SPONSORSHIP_DURATION_MONTHS=12
+RATE_LIMIT_WINDOW_MS=900000
+RATE_LIMIT_MAX_REQUESTS=100
+MAX_FILE_SIZE=10485760
+UPLOAD_PATH=/app/uploads
+GOOGLE_CLIENT_ID=your-google-client-id
+GOOGLE_CLIENT_SECRET=your-google-client-secret
+```
 
 ## Server Setup
 
@@ -87,7 +94,7 @@ docker run hello-world
    - Log out and back in, or restart SSH session
 
 3. **Container Fails to Start**
-   - Check environment variables are set correctly
+   - Check environment variables in ENV_FILE secret
    - Verify database connection string
    - Check container logs: `docker logs themobileprof-backend`
 
@@ -113,6 +120,9 @@ curl http://localhost:3000/health
 
 # Check uploads directory
 ls -la /var/www/themobileprof/uploads
+
+# Check environment variables in container
+docker exec themobileprof-backend env
 ```
 
 ## Manual Deployment (Fallback)
@@ -134,6 +144,14 @@ docker rm themobileprof-backend || true
 sudo mkdir -p /var/www/themobileprof/uploads
 sudo chown $USER:$USER /var/www/themobileprof/uploads
 
+# Create .env file (copy your environment variables here)
+cat > .env << 'EOF'
+NODE_ENV=production
+DATABASE_URL=your-database-url
+JWT_SECRET=your-jwt-secret
+# ... add all other environment variables
+EOF
+
 # Run container
 docker run -d \
   --name themobileprof-backend \
@@ -142,6 +160,9 @@ docker run -d \
   -v /var/www/themobileprof/uploads:/app/uploads \
   --env-file .env \
   your-username/themobileprof-backend:latest
+
+# Clean up .env file
+rm -f .env
 ```
 
 ## Security Notes
@@ -150,4 +171,5 @@ docker run -d \
 - Rotate secrets regularly
 - Keep SSH keys secure
 - Use HTTPS in production
-- Consider using a reverse proxy (Nginx) for SSL termination 
+- Consider using a reverse proxy (Nginx) for SSL termination
+- The .env file is created temporarily on the server and cleaned up after deployment 
