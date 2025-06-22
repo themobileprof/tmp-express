@@ -193,14 +193,13 @@ jobs:
           ${{ secrets.ENV_FILE }}
           EOF
           
-          # Run new container with volume mapping
-          echo "🐳 Starting new container..."
+          # Run new container with host networking
+          echo "🐳 Starting new container with host networking..."
           docker run -d \
             --name themobileprof-backend \
             --restart unless-stopped \
-            -p 3000:3000 \
+            --network host \
             -v "$UPLOADS_DIR:/app/uploads" \
-            --add-host host.docker.internal:host-gateway \
             --env-file .env \
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
           
