@@ -2,12 +2,17 @@ const { query } = require('./config');
 
 const createTables = async () => {
   try {
-    console.log('🔄 Starting database migration...');
+    console.log('📋 Creating database tables...');
 
-    // Create ENUM types first
+    // Enable pgcrypto extension for gen_random_uuid()
+    await query(`
+      CREATE EXTENSION IF NOT EXISTS pgcrypto;
+    `);
+
+    // Create custom types
     await query(`
       DO $$ BEGIN
-        CREATE TYPE user_role AS ENUM ('student', 'instructor', 'admin', 'sponsor');
+        CREATE TYPE user_role AS ENUM ('student', 'instructor', 'admin');
       EXCEPTION
         WHEN duplicate_object THEN null;
       END $$;
