@@ -4,7 +4,7 @@ const { query, getRow, getRows } = require('../database/config');
 const { asyncHandler, AppError } = require('../middleware/errorHandler');
 const { authenticateToken } = require('../middleware/auth');
 const { 
-  flw, 
+  getFlutterwave, 
   verifyWebhookSignature, 
   generateReference, 
   formatAmount, 
@@ -123,6 +123,11 @@ router.post('/initialize', authenticateToken, validatePaymentInitiation, asyncHa
   };
 
   try {
+    const flw = getFlutterwave();
+    if (!flw) {
+      throw new AppError('Payment service not configured', 503, 'Service Unavailable');
+    }
+    
     const response = await flw.Charge.card(paymentData);
     
     if (response.status === 'success') {
@@ -164,6 +169,11 @@ router.get('/verify/:reference', authenticateToken, asyncHandler(async (req, res
 
   // Verify with Flutterwave
   try {
+    const flw = getFlutterwave();
+    if (!flw) {
+      throw new AppError('Payment service not configured', 503, 'Service Unavailable');
+    }
+    
     const response = await flw.Transaction.verify({ tx_ref: reference });
     
     if (response.status === 'success' && response.data.status === 'successful') {

@@ -163,6 +163,17 @@ jobs:
           echo "📦 Pulling latest image..."
           docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
           
+          # Verify image was pulled
+          echo "🔍 Verifying image..."
+          if ! docker images | grep -q "${{ env.IMAGE_NAME }}"; then
+            echo "❌ Failed to pull image"
+            echo "📋 Available images:"
+            docker images || true
+            exit 1
+          fi
+          
+          echo "✅ Image pulled successfully"
+          
           # Stop and remove existing container
           echo "🛑 Stopping existing container..."
           docker stop themobileprof-backend || true
@@ -195,15 +206,26 @@ jobs:
           
           # Run new container with host networking
           echo "🐳 Starting new container with host networking..."
-          docker run -d \
+          echo "📋 Container command: docker run -d --name themobileprof-backend --restart unless-stopped --network host -v \"$UPLOADS_DIR:/app/uploads\" --env-file .env ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
+          
+          # Start container and capture the container ID
+          CONTAINER_ID=$(docker run -d \
             --name themobileprof-backend \
             --restart unless-stopped \
             --network host \
             -v "$UPLOADS_DIR:/app/uploads" \
             --env-file .env \
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest)
           
-          echo "✅ Container started successfully"
+          if [ -z "$CONTAINER_ID" ]; then
+            echo "❌ Failed to start container - no container ID returned"
+            exit 1
+          fi
+          
+          echo "✅ Container started with ID: $CONTAINER_ID"
+          
+          # Wait a moment and check container status
+          sleep 5
           
           # Check if container is running
           if ! docker ps | grep -q themobileprof-backend; then
@@ -212,6 +234,10 @@ jobs:
             docker logs themobileprof-backend || true
             echo "📋 Recent container status:"
             docker ps -a | grep themobileprof-backend || true
+            echo "📋 Docker system info:"
+            docker system df || true
+            echo "📋 Available images:"
+            docker images | grep ${{ env.IMAGE_NAME }} || true
             exit 1
           fi
           

@@ -45,4 +45,4 @@ ENV NODE_ENV=production
 ENV PORT=3000
 
 # Start the application with migration
-CMD ["scripts/start.sh"] 
+CMD ["sh", "-c", "node src/database/migrate.js && node src/server.js"] 

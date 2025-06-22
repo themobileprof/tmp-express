@@ -3,11 +3,14 @@ const { query } = require('./config');
 const createTables = async () => {
   try {
     console.log('📋 Creating database tables...');
+    console.log('🔗 Database URL:', process.env.DATABASE_URL ? 'Set' : 'Not set');
 
     // Enable pgcrypto extension for gen_random_uuid()
+    console.log('🔧 Enabling pgcrypto extension...');
     await query(`
       CREATE EXTENSION IF NOT EXISTS pgcrypto;
     `);
+    console.log('✅ pgcrypto extension enabled');
 
     // Create custom types
     await query(`
@@ -513,9 +516,11 @@ const createTables = async () => {
     await query('CREATE INDEX IF NOT EXISTS idx_payment_webhooks_reference ON payment_webhooks(flutterwave_reference)');
 
     console.log('✅ Database migration completed successfully!');
+    console.log('🎉 All tables created and ready!');
     
   } catch (error) {
     console.error('❌ Migration failed:', error);
+    console.error('💥 Error details:', error.message);
     process.exit(1);
   }
 };
