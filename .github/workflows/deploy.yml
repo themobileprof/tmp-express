@@ -200,6 +200,7 @@ jobs:
             --restart unless-stopped \
             -p 3000:3000 \
             -v "$UPLOADS_DIR:/app/uploads" \
+            --add-host host.docker.internal:host-gateway \
             --env-file .env \
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
           
