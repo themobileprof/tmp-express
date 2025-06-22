@@ -208,11 +208,18 @@ jobs:
           # Check if container is running
           if ! docker ps | grep -q themobileprof-backend; then
             echo "❌ Container failed to start"
+            echo "📋 Container logs:"
             docker logs themobileprof-backend || true
+            echo "📋 Recent container status:"
+            docker ps -a | grep themobileprof-backend || true
             exit 1
           fi
           
           echo "✅ Container is running"
+          
+          # Show container logs for debugging
+          echo "📋 Container logs:"
+          docker logs themobileprof-backend --tail 20 || true
           
           # Clean up .env file
           rm -f .env
@@ -220,23 +227,41 @@ jobs:
     - name: Health check
       run: |
         echo "🏥 Performing health check..."
-        sleep 15
+        sleep 30
+        
+        # Check if container is still running
+        echo "🔍 Checking container status..."
+        if ! docker ps | grep -q themobileprof-backend; then
+          echo "❌ Container is not running"
+          echo "📋 Container logs:"
+          docker logs themobileprof-backend --tail 50 || true
+          echo "📋 Container status:"
+          docker ps -a | grep themobileprof-backend || true
+          exit 1
+        fi
+        
+        echo "✅ Container is running"
         
         # Try health check with retries
         for i in {1..5}; do
           echo "Health check attempt $i/5"
-          if curl -f http://${{ secrets.SERVER_HOST }}:3000/health; then
+          if curl -f -m 30 http://${{ secrets.SERVER_HOST }}:3000/health; then
             echo "✅ Health check passed"
             exit 0
           else
             echo "❌ Health check failed, attempt $i"
+            echo "📋 Container logs (last 10 lines):"
+            docker logs themobileprof-backend --tail 10 || true
             if [ $i -lt 5 ]; then
+              echo "⏳ Waiting 10 seconds before retry..."
               sleep 10
             fi
           fi
         done
         
         echo "❌ Health check failed after 5 attempts"
+        echo "📋 Final container logs:"
+        docker logs themobileprof-backend --tail 50 || true
         exit 1
 
   notify:
