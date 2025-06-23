@@ -5,13 +5,6 @@ const createTables = async () => {
     console.log('📋 Creating database tables...');
     console.log('🔗 Database URL:', process.env.DATABASE_URL ? 'Set' : 'Not set');
 
-    // Enable pgcrypto extension for gen_random_uuid()
-    console.log('🔧 Enabling pgcrypto extension...');
-    await query(`
-      CREATE EXTENSION IF NOT EXISTS pgcrypto;
-    `);
-    console.log('✅ pgcrypto extension enabled');
-
     // Create custom types
     await query(`
       DO $$ BEGIN
