@@ -1,33 +1,16 @@
 const Flutterwave = require('flutterwave-node-v3');
 const crypto = require('crypto');
 
-// Lazy initialization of Flutterwave
-let flw = null;
-
-const getFlutterwave = () => {
-  if (!flw) {
-    const publicKey = process.env.FLUTTERWAVE_PUBLIC_KEY;
-    const secretKey = process.env.FLUTTERWAVE_SECRET_KEY;
-    
-    if (!publicKey || !secretKey) {
-      console.warn('⚠️  Flutterwave keys not configured - payment features will be disabled');
-      return null;
-    }
-    
-    flw = new Flutterwave(publicKey, secretKey);
-  }
-  return flw;
-};
+// Initialize Flutterwave
+const flw = new Flutterwave(
+  process.env.FLUTTERWAVE_PUBLIC_KEY,
+  process.env.FLUTTERWAVE_SECRET_KEY
+);
 
 // Verify webhook signature
 const verifyWebhookSignature = (payload, signature) => {
   try {
     const secretHash = process.env.FLUTTERWAVE_SECRET_HASH;
-    if (!secretHash) {
-      console.warn('⚠️  Flutterwave secret hash not configured');
-      return false;
-    }
-    
     const hash = crypto
       .createHmac('sha512', secretHash)
       .update(JSON.stringify(payload))
@@ -58,7 +41,7 @@ const parseAmount = (amount) => {
 };
 
 module.exports = {
-  getFlutterwave,
+  flw,
   verifyWebhookSignature,
   generateReference,
   formatAmount,
