@@ -4236,3 +4236,26 @@ X-RateLimit-Reset: 1640995200
 - `order` - Sort order (asc/desc)
 
 Example: `?sort=created_at&order=desc&status=published&topic=programming`
+
+### Upload Question Image
+**POST** `/tests/:id/questions/:questionId/image/upload`
+
+Upload an image for a test question.
+
+**Headers:**
+```
+Authorization: Bearer <jwt-token>
+Content-Type: multipart/form-data
+```
+
+**Form Data:**
+- `image` - Image file (PNG, JPG, JPEG, GIF, SVG)
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "imageUrl": "/uploads/question-images/<filename>",
+  "message": "Image uploaded successfully"
+}
+```

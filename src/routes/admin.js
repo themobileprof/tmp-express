@@ -2299,4 +2299,49 @@ router.get('/payments/stats', asyncHandler(async (req, res) => {
   });
 }));
 
+// Create a new test for a lesson (admin only)
+router.post('/lessons/:lessonId/tests', authenticateToken, authorizeAdmin, asyncHandler(async (req, res) => {
+  const { lessonId } = req.params;
+  const { title, description, durationMinutes, passingScore, maxAttempts, questions } = req.body;
+
+  // Validate required fields
+  if (!title || !durationMinutes || !passingScore || !maxAttempts || !Array.isArray(questions) || questions.length === 0) {
+    throw new AppError('Missing required fields', 400, 'VALIDATION_ERROR');
+  }
+
+  // Check that the lesson exists
+  const lesson = await getRow('SELECT id, course_id FROM lessons WHERE id = $1', [lessonId]);
+  if (!lesson) throw new AppError('Lesson not found', 404, 'Lesson Not Found');
+
+  // Insert the test
+  const testResult = await query(
+    `INSERT INTO tests (course_id, lesson_id, title, description, duration_minutes, passing_score, max_attempts, order_index, status)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+     RETURNING *`,
+    [lesson.course_id, lessonId, title, description, durationMinutes, passingScore, maxAttempts, 0, 'active']
+  );
+  const test = testResult.rows[0];
+
+  // Insert questions
+  const insertedQuestions = [];
+  for (let i = 0; i < questions.length; i++) {
+    const q = questions[i];
+    if (!q.question || !q.questionType || q.points === undefined || q.orderIndex === undefined) {
+      throw new AppError('Each question must have question, questionType, points, and orderIndex', 400, 'VALIDATION_ERROR');
+    }
+    const result = await query(
+      `INSERT INTO test_questions (test_id, question, question_type, options, correct_answer, points, order_index, image_url)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       RETURNING *`,
+      [test.id, q.question, q.questionType, q.options || null, q.correctAnswer, q.points, q.orderIndex, q.imageUrl || null]
+    );
+    insertedQuestions.push(result.rows[0]);
+  }
+
+  res.status(201).json({
+    test,
+    questions: insertedQuestions
+  });
+}));
+
 module.exports = router; 

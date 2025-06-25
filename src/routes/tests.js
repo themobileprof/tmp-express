@@ -3,6 +3,9 @@ const { body, validationResult } = require('express-validator');
 const { query, getRow, getRows } = require('../database/config');
 const { asyncHandler, AppError } = require('../middleware/errorHandler');
 const { authenticateToken, authorizeInstructor, authorizeOwnerOrAdmin } = require('../middleware/auth');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
 
 const router = express.Router();
 
@@ -28,6 +31,33 @@ const validateAnswer = [
   body('selectedAnswer').optional().isInt({ min: 0 }).withMessage('Selected answer must be a non-negative integer'),
   body('answerText').optional().isString().withMessage('Answer text must be a string')
 ];
+
+// Multer storage config for question images
+const questionImagesDir = path.join(process.env.UPLOAD_PATH || './uploads', 'question-images');
+if (!fs.existsSync(questionImagesDir)) {
+  fs.mkdirSync(questionImagesDir, { recursive: true });
+}
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, questionImagesDir);
+  },
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    const unique = `${req.params.questionId}-${Date.now()}${ext}`;
+    cb(null, unique);
+  }
+});
+const upload = multer({
+  storage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+  fileFilter: (req, file, cb) => {
+    const allowed = ['.png', '.jpg', '.jpeg', '.gif', '.svg'];
+    if (!allowed.includes(path.extname(file.originalname).toLowerCase())) {
+      return cb(new AppError('Only image files are allowed', 400, 'INVALID_FILE_TYPE'));
+    }
+    cb(null, true);
+  }
+});
 
 // Get test by ID
 router.get('/:id', authenticateToken, asyncHandler(async (req, res) => {
@@ -544,6 +574,34 @@ router.get('/:id/attempts/:attemptId/results', authenticateToken, asyncHandler(a
       pointsEarned: q.points_earned,
       points: q.points
     }))
+  });
+}));
+
+// Upload image for a test question
+router.post('/:id/questions/:questionId/image/upload', authenticateToken, upload.single('image'), asyncHandler(async (req, res) => {
+  const { id, questionId } = req.params;
+  if (!req.file) {
+    throw new AppError('No image file uploaded', 400, 'NO_FILE');
+  }
+
+  // Check if question exists and belongs to test
+  const question = await getRow('SELECT * FROM test_questions WHERE id = $1 AND test_id = $2', [questionId, id]);
+  if (!question) {
+    // Remove uploaded file if question not found
+    fs.unlinkSync(req.file.path);
+    throw new AppError('Question not found', 404, 'Question Not Found');
+  }
+
+  // Build image URL (assuming /uploads is served statically)
+  const imageUrl = `/uploads/question-images/${req.file.filename}`;
+
+  // Update question's image_url
+  await query('UPDATE test_questions SET image_url = $1 WHERE id = $2', [imageUrl, questionId]);
+
+  res.status(200).json({
+    success: true,
+    imageUrl,
+    message: 'Image uploaded successfully'
   });
 }));
 

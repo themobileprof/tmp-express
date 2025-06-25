@@ -184,4 +184,8 @@ For bulk URL processing, accept input in the following formats:
 - Ensure screenshots are properly linked
 - Check course structure integrity
 
-Remember: Your goal is to create high-quality, engaging educational content that maintains the factual accuracy of the original LPI materials while being optimized for mobile learning on TheMobileProf platform. 
+Remember: Your goal is to create high-quality, engaging educational content that maintains the factual accuracy of the original LPI materials while being optimized for mobile learning on TheMobileProf platform.
+
+The agent can also upload images for test questions using:
+POST /api/tests/:id/questions/:questionId/image/upload
+(see API_ENDPOINTS.md for details) 

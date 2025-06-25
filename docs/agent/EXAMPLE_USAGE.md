@@ -262,4 +262,144 @@ Use the provided `test-api.js` script to verify your API setup:
 node test-api.js
 ```
 
-This will test authentication, course creation, and lesson creation with proper error handling. 
+This will test authentication, course creation, and lesson creation with proper error handling.
+
+### Example: Uploading a Test Question Image
+
+```bash
+curl -X POST \
+  'https://api.themobileprof.com/api/tests/1234/questions/5678/image/upload' \
+  -H 'Authorization: Bearer <access_token>' \
+  -F 'image=@/path/to/image.png'
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "imageUrl": "/uploads/question-images/5678-1623456789012.png",
+  "message": "Image uploaded successfully"
+}
+```
+
+## Test Management Examples
+
+### Create Test for a Lesson (Admin)
+
+```bash
+curl -X POST \
+  'https://api.themobileprof.com/api/admin/lessons/abcd-lesson-uuid/tests' \
+  -H 'Authorization: Bearer <access_token>' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "title": "Linux Basics Quiz",
+    "description": "Test your knowledge of Linux basics",
+    "durationMinutes": 30,
+    "passingScore": 70,
+    "maxAttempts": 3,
+    "questions": [
+      {
+        "question": "What is Linux?",
+        "questionType": "multiple_choice",
+        "options": ["OS", "Browser", "Editor"],
+        "correctAnswer": 0,
+        "points": 1,
+        "orderIndex": 1
+      }
+    ]
+  }'
+```
+**Response:**
+```json
+{
+  "test": { "id": "test-uuid", ... },
+  "questions": [ { "id": "question-uuid", ... } ]
+}
+```
+
+### Get Tests for a Lesson (Admin)
+
+```bash
+curl -X GET \
+  'https://api.themobileprof.com/api/admin/lessons/abcd-lesson-uuid/tests' \
+  -H 'Authorization: Bearer <access_token>'
+```
+
+**Response:**
+```json
+{
+  "tests": [
+    {
+      "id": "test-uuid",
+      "title": "Linux Basics Quiz",
+      ...
+    }
+  ]
+}
+```
+
+### Get Test Details
+
+```bash
+curl -X GET \
+  'https://api.themobileprof.com/api/tests/test-uuid' \
+  -H 'Authorization: Bearer <access_token>'
+```
+
+**Response:**
+```json
+{
+  "id": "test-uuid",
+  "title": "Linux Basics Quiz",
+  "description": "Test your knowledge of Linux basics",
+  "durationMinutes": 30,
+  ...
+}
+```
+
+### Add Question to Test
+
+```bash
+curl -X POST \
+  'https://api.themobileprof.com/api/tests/test-uuid/questions' \
+  -H 'Authorization: Bearer <access_token>' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "question": "What is Bash?",
+    "questionType": "multiple_choice",
+    "options": ["Shell", "Kernel", "Editor"],
+    "correctAnswer": 0,
+    "points": 1,
+    "orderIndex": 2
+  }'
+```
+
+**Response:**
+```json
+{
+  "id": "question-uuid",
+  "question": "What is Bash?",
+  ...
+}
+```
+
+### Get Test Questions
+
+```bash
+curl -X GET \
+  'https://api.themobileprof.com/api/tests/test-uuid/questions' \
+  -H 'Authorization: Bearer <access_token>'
+```
+
+**Response:**
+```json
+{
+  "questions": [
+    {
+      "id": "question-uuid",
+      "question": "What is Bash?",
+      ...
+    }
+  ]
+}
+``` 

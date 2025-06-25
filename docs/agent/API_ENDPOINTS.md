@@ -72,6 +72,23 @@ Form Data:
 }
 ```
 
+### Upload Test Question Image
+```http
+POST /api/tests/:id/questions/:questionId/image/upload
+Authorization: Bearer <access_token>
+Content-Type: multipart/form-data
+
+Form Data:
+- image: <image_file> (PNG, JPG, JPEG, GIF, SVG, max 5MB)
+
+Response:
+{
+  "success": true,
+  "imageUrl": "/uploads/question-images/<filename>",
+  "message": "Image uploaded successfully"
+}
+```
+
 ## Course Management (Admin)
 
 ### Create Course (Admin)
@@ -258,4 +275,72 @@ Content-Type: application/json
 {
   "status": "published"
 }
+```
+
+### Test Management
+
+#### Create Test for a Lesson (Admin)
+```http
+POST /api/admin/lessons/:lessonId/tests
+Authorization: Bearer <access_token>
+Content-Type: application/json
+
+{
+  "title": "Quiz Title",
+  "description": "Quiz description",
+  "durationMinutes": 30,
+  "passingScore": 70,
+  "maxAttempts": 3,
+  "questions": [
+    {
+      "question": "What is Linux?",
+      "questionType": "multiple_choice",
+      "options": ["OS", "Browser", "Editor"],
+      "correctAnswer": 0,
+      "points": 1,
+      "orderIndex": 1
+    }
+  ]
+}
+```
+**Response:**
+```json
+{
+  "test": { ... },
+  "questions": [ ... ]
+}
+```
+
+#### Get Tests for a Lesson (Admin)
+```http
+GET /api/admin/lessons/:lessonId/tests
+Authorization: Bearer <access_token>
+```
+
+#### Get Test Details
+```http
+GET /api/tests/:id
+Authorization: Bearer <access_token>
+```
+
+#### Add Question to Test
+```http
+POST /api/tests/:id/questions
+Authorization: Bearer <access_token>
+Content-Type: application/json
+
+{
+  "question": "What is Bash?",
+  "questionType": "multiple_choice",
+  "options": ["Shell", "Kernel", "Editor"],
+  "correctAnswer": 0,
+  "points": 1,
+  "orderIndex": 2
+}
+```
+
+#### Get Test Questions
+```http
+GET /api/tests/:id/questions
+Authorization: Bearer <access_token>
 ```
