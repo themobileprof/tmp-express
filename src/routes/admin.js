@@ -425,10 +425,10 @@ router.put('/courses/:id', [
     params.push(imageUrl);
   }
 
-  if (typeof isPublished === 'boolean') {
+  if (status) {
     paramCount++;
     updates.push(`is_published = $${paramCount}`);
-    params.push(isPublished);
+    params.push(status === 'active');
   }
 
   if (updates.length === 0) {
@@ -705,8 +705,7 @@ router.post('/courses/:courseId/lessons', [
   body('title').trim().isLength({ min: 1 }).withMessage('Title is required and must not be empty'),
   body('description').trim().isLength({ min: 1 }).withMessage('Description is required and must not be empty'),
   body('content').trim().isLength({ min: 1 }).withMessage('Content is required and must not be empty'),
-  body('durationMinutes').isInt({ min: 1 }).withMessage('Duration must be a positive integer'),
-  body('status').optional().isIn(['published', 'draft']).withMessage('Status must be either "published" or "draft"')
+  body('durationMinutes').isInt({ min: 1 }).withMessage('Duration must be a positive integer')
 ], asyncHandler(async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
@@ -721,7 +720,7 @@ router.post('/courses/:courseId/lessons', [
   }
 
   const { courseId } = req.params;
-  const { title, description, content, durationMinutes, status } = req.body;
+  const { title, description, content, durationMinutes } = req.body;
 
   // Check if course exists
   const course = await getRow('SELECT id FROM courses WHERE id = $1', [courseId]);
@@ -737,10 +736,10 @@ router.post('/courses/:courseId/lessons', [
   const orderIndex = orderResult.rows[0].next_order;
 
   const result = await query(
-    `INSERT INTO lessons (course_id, title, description, content, duration_minutes, order_index, status)
+    `INSERT INTO lessons (course_id, title, description, content, duration_minutes, order_index, is_published)
      VALUES ($1, $2, $3, $4, $5, $6, $7)
      RETURNING *`,
-    [courseId, title, description, content, durationMinutes, orderIndex, status || 'published']
+    [courseId, title, description, content, durationMinutes, orderIndex, true]
   );
 
   res.status(201).json({
@@ -753,12 +752,9 @@ router.post('/courses/:courseId/lessons', [
 router.put('/lessons/:id', [
   body('title').optional().trim().isLength({ min: 1 }),
   body('description').optional().trim(),
-  body('descriptionType').optional().isIn(['text', 'link', 'html']),
   body('content').optional().trim(),
   body('videoUrl').optional().trim(),
-  body('durationMinutes').optional().isInt({ min: 0 }),
-  body('materials').optional().isArray(),
-  body('status').optional().isIn(['published', 'draft', 'archived'])
+  body('durationMinutes').optional().isInt({ min: 0 })
 ], asyncHandler(async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
@@ -766,7 +762,7 @@ router.put('/lessons/:id', [
   }
 
   const { id } = req.params;
-  const { title, description, descriptionType, content, videoUrl, durationMinutes, materials, status } = req.body;
+  const { title, description, content, videoUrl, durationMinutes } = req.body;
 
   // Check if lesson exists
   const existingLesson = await getRow('SELECT id FROM lessons WHERE id = $1', [id]);
@@ -791,12 +787,6 @@ router.put('/lessons/:id', [
     params.push(description);
   }
 
-  if (descriptionType) {
-    paramCount++;
-    updates.push(`description_type = $${paramCount}`);
-    params.push(descriptionType);
-  }
-
   if (content !== undefined) {
     paramCount++;
     updates.push(`content = $${paramCount}`);
@@ -813,18 +803,6 @@ router.put('/lessons/:id', [
     paramCount++;
     updates.push(`duration_minutes = $${paramCount}`);
     params.push(durationMinutes);
-  }
-
-  if (materials !== undefined) {
-    paramCount++;
-    updates.push(`materials = $${paramCount}`);
-    params.push(materials);
-  }
-
-  if (status) {
-    paramCount++;
-    updates.push(`status = $${paramCount}`);
-    params.push(status);
   }
 
   if (updates.length === 0) {
@@ -912,8 +890,7 @@ router.put('/tests/:id', [
   body('description').optional().trim(),
   body('durationMinutes').optional().isInt({ min: 1 }),
   body('passingScore').optional().isInt({ min: 0, max: 100 }),
-  body('maxAttempts').optional().isInt({ min: 1 }),
-  body('status').optional().isIn(['active', 'draft', 'archived'])
+  body('maxAttempts').optional().isInt({ min: 1 })
 ], asyncHandler(async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
@@ -921,7 +898,7 @@ router.put('/tests/:id', [
   }
 
   const { id } = req.params;
-  const { title, description, durationMinutes, passingScore, maxAttempts, status } = req.body;
+  const { title, description, durationMinutes, passingScore, maxAttempts } = req.body;
 
   // Check if test exists
   const existingTest = await getRow('SELECT id FROM tests WHERE id = $1', [id]);
@@ -962,12 +939,6 @@ router.put('/tests/:id', [
     paramCount++;
     updates.push(`max_attempts = $${paramCount}`);
     params.push(maxAttempts);
-  }
-
-  if (status) {
-    paramCount++;
-    updates.push(`status = $${paramCount}`);
-    params.push(status);
   }
 
   if (updates.length === 0) {
