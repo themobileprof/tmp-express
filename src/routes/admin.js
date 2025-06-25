@@ -308,7 +308,7 @@ router.post('/courses', [
   body('type').isIn(['online', 'offline']).withMessage('Type must be either "online" or "offline"'),
   body('price').isFloat({ min: 0 }).withMessage('Price must be a valid number greater than or equal to 0'),
   body('duration').trim().isLength({ min: 1 }).withMessage('Duration is required and must not be empty'),
-  body('instructorId').isUUID().withMessage('Instructor ID must be a valid UUID')
+  body('instructorId').optional().isUUID().withMessage('Instructor ID must be a valid UUID if provided')
 ], asyncHandler(async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
@@ -324,20 +324,22 @@ router.post('/courses', [
 
   const { title, description, topic, type, certification, price, duration, instructorId, imageUrl } = req.body;
 
-  // Check if instructor exists and is an instructor
-  const instructor = await getRow(
-    'SELECT id, role FROM users WHERE id = $1 AND role = $2',
-    [instructorId, 'instructor']
-  );
-  if (!instructor) {
-    throw new AppError('Instructor not found', 404, 'Instructor Not Found');
+  // If instructorId is provided, verify the instructor exists
+  if (instructorId) {
+    const instructor = await getRow(
+      'SELECT id, role FROM users WHERE id = $1 AND role = $2',
+      [instructorId, 'instructor']
+    );
+    if (!instructor) {
+      throw new AppError('Instructor not found', 404, 'Instructor Not Found');
+    }
   }
 
   const result = await query(
     `INSERT INTO courses (title, description, topic, type, certification, price, duration, instructor_id, image_url)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
      RETURNING *`,
-    [title, description, topic, type, certification, price, duration, instructorId, imageUrl]
+    [title, description, topic, type, certification, price, duration, instructorId || null, imageUrl]
   );
 
   res.status(201).json({

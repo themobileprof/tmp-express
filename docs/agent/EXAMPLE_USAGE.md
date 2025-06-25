@@ -74,7 +74,7 @@ const courseData = {
   topic: 'operating_systems',
   price: 0,
   duration: '8 weeks',
-  instructorId: '550e8400-e29b-41d4-a716-446655440000', // Replace with real instructor ID
+  // instructorId is optional - courses can exist without an instructor
   certification: 'LPI Linux Essentials'
 };
 

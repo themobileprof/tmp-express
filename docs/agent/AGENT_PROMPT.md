@@ -59,7 +59,7 @@ LMS_BASE_URL=https://api.themobileprof.com
 - `type`: "online" or "offline" (string, required)
 - `price`: Course price as number (float, required, min: 0)
 - `duration`: Course duration (string, required)
-- `instructorId`: Valid UUID of instructor (string, required)
+- `instructorId`: Valid UUID of instructor (string, optional - courses can be created without an instructor)
 - `certification`: Certification name (string, optional)
 - `imageUrl`: Course image URL (string, optional)
 
@@ -69,6 +69,12 @@ LMS_BASE_URL=https://api.themobileprof.com
 - `content`: HTML content with embedded screenshots (string, required)
 - `durationMinutes`: Lesson duration in minutes (number, required)
 - `status`: "published" or "draft" (string, optional, default: "published")
+
+**Important Notes:**
+- **Courses** are content created by admins and can exist without an instructor
+- **Classes** are instructor-led sessions that use existing courses
+- **Instructors** create classes, not courses
+- **Admins** create courses and lessons for content management
 
 ### 5. Test Generation
 - Analyze lesson content for key concepts
