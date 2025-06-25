@@ -1592,7 +1592,7 @@ router.put('/classes/:id', [
   body('maxStudents').optional().isInt({ min: 1 }),
   body('location').optional().trim(),
   body('meetingLink').optional().trim(),
-  body('status').optional().isIn(['scheduled', 'in_progress', 'completed', 'cancelled'])
+  body('isPublished').optional().isBoolean()
 ], asyncHandler(async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
@@ -1600,7 +1600,7 @@ router.put('/classes/:id', [
   }
 
   const { id } = req.params;
-  const { title, description, topic, type, price, duration, startDate, endDate, maxStudents, location, meetingLink, status } = req.body;
+  const { title, description, topic, type, price, duration, startDate, endDate, maxStudents, location, meetingLink, isPublished } = req.body;
 
   // Check if class exists
   const existingClass = await getRow('SELECT id FROM classes WHERE id = $1', [id]);
@@ -1679,10 +1679,10 @@ router.put('/classes/:id', [
     params.push(meetingLink);
   }
 
-  if (status) {
+  if (typeof isPublished === 'boolean') {
     paramCount++;
-    updates.push(`status = $${paramCount}`);
-    params.push(status);
+    updates.push(`is_published = $${paramCount}`);
+    params.push(isPublished);
   }
 
   if (updates.length === 0) {
@@ -2315,10 +2315,10 @@ router.post('/lessons/:lessonId/tests', asyncHandler(async (req, res) => {
 
   // Insert the test
   const testResult = await query(
-    `INSERT INTO tests (course_id, lesson_id, title, description, duration_minutes, passing_score, max_attempts, order_index, status)
+    `INSERT INTO tests (course_id, lesson_id, title, description, duration_minutes, passing_score, max_attempts, order_index, is_published)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
      RETURNING *`,
-    [lesson.course_id, lessonId, title, description, durationMinutes, passingScore, maxAttempts, 0, 'active']
+    [lesson.course_id, lessonId, title, description, durationMinutes, passingScore, maxAttempts, 0, true]
   );
   const test = testResult.rows[0];
 

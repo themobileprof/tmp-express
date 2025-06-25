@@ -83,6 +83,11 @@ LMS_BASE_URL=https://api.themobileprof.com
 - Include practical scenario-based questions
 - Upload tests via `/api/tests` endpoint
 
+> **Test Type Rule:**
+> - Only `lesson_id` is nullable in the tests table.
+> - If a test has both `course_id` and `lesson_id`, it is a **lesson test** (attached to a specific lesson).
+> - If a test has a `course_id` but no `lesson_id`, it is a **course test** (attached to the course as a whole).
+
 ## API Endpoints Reference
 
 ### Authentication

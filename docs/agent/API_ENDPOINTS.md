@@ -1,5 +1,10 @@
 # LMS API Endpoints Reference
 
+> **Test Type Rule:**
+> - Only `lesson_id` is nullable in the tests table.
+> - If a test has both `course_id` and `lesson_id`, it is a **lesson test** (attached to a specific lesson).
+> - If a test has a `course_id` but no `lesson_id`, it is a **course test** (attached to the course as a whole).
+
 This document provides detailed information about all API endpoints that the course scraping agent needs to interact with.
 
 ## Base URL
@@ -196,6 +201,145 @@ DELETE /api/admin/courses/:id
 Authorization: Bearer <access_token>
 ```
 
+## Class Management (Admin)
+
+### Get All Classes (Admin)
+```http
+GET /api/admin/classes
+Authorization: Bearer <access_token>
+```
+
+**Query Parameters:**
+- `page` - Page number (default: 1)
+- `limit` - Number of results (default: 20)
+- `isPublished` - Filter by publication status (true/false)
+- `instructor` - Filter by instructor name
+- `search` - Search by title or description
+
+**Response:**
+```json
+{
+  "classes": [
+    {
+      "id": "uuid",
+      "title": "JavaScript Workshop",
+      "description": "Hands-on JavaScript training",
+      "topic": "Programming",
+      "type": "offline",
+      "price": 199.99,
+      "duration": "4 hours",
+      "instructor_first_name": "John",
+      "instructor_last_name": "Doe",
+      "enrollment_count": 15,
+      "completion_count": 12,
+      "start_date": "2024-02-01",
+      "end_date": "2024-02-01",
+      "is_published": true,
+      "created_at": "2024-01-01T00:00:00.000Z"
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "limit": 20,
+    "total": 25,
+    "pages": 2
+  }
+}
+```
+
+### Create Class (Admin)
+```http
+POST /api/admin/classes
+Authorization: Bearer <access_token>
+Content-Type: application/json
+
+{
+  "title": "Advanced JavaScript Workshop",
+  "description": "Advanced JavaScript concepts workshop",
+  "topic": "Programming",
+  "type": "offline",
+  "price": 299.99,
+  "duration": "6 hours",
+  "instructorId": "uuid-of-instructor",
+  "startDate": "2024-03-01",
+  "endDate": "2024-03-01",
+  "maxStudents": 20,
+  "location": "Training Center"
+}
+```
+
+**Response:**
+```json
+{
+  "class": {
+    "id": "uuid",
+    "title": "Advanced JavaScript Workshop",
+    "description": "Advanced JavaScript concepts workshop",
+    "topic": "Programming",
+    "type": "offline",
+    "price": 299.99,
+    "duration": "6 hours",
+    "instructor_id": "uuid-of-instructor",
+    "start_date": "2024-03-01",
+    "end_date": "2024-03-01",
+    "max_students": 20,
+    "location": "Training Center",
+    "created_at": "2024-01-01T00:00:00.000Z"
+  }
+}
+```
+
+### Update Class (Admin)
+```http
+PUT /api/admin/classes/:id
+Authorization: Bearer <access_token>
+Content-Type: application/json
+
+{
+  "title": "Updated JavaScript Workshop",
+  "description": "Updated workshop description",
+  "topic": "Programming",
+  "type": "online",
+  "price": 249.99,
+  "duration": "8 hours",
+  "startDate": "2024-04-01",
+  "endDate": "2024-04-01",
+  "maxStudents": 25,
+  "location": "Online",
+  "meetingLink": "https://meet.google.com/abc-defg-hij",
+  "isPublished": true
+}
+```
+
+**Response:**
+```json
+{
+  "class": {
+    "id": "uuid",
+    "title": "Updated JavaScript Workshop",
+    "description": "Updated workshop description",
+    "topic": "Programming",
+    "type": "online",
+    "price": 249.99,
+    "duration": "8 hours",
+    "instructor_id": "uuid-of-instructor",
+    "start_date": "2024-04-01",
+    "end_date": "2024-04-01",
+    "max_students": 25,
+    "location": "Online",
+    "meeting_link": "https://meet.google.com/abc-defg-hij",
+    "is_published": true,
+    "updated_at": "2024-01-01T00:00:00.000Z"
+  }
+}
+```
+
+### Get Class Enrollments (Admin)
+```http
+GET /api/admin/classes/:id/enrollments
+Authorization: Bearer <access_token>
+```
+
 ## Lesson Management (Admin)
 
 ### Create Lesson (Admin)
@@ -278,6 +422,11 @@ Content-Type: application/json
 ```
 
 ### Test Management
+
+> **Test Type Rule:**
+> - Only `lesson_id` is nullable in the tests table.
+> - If a test has both `course_id` and `lesson_id`, it is a **lesson test** (attached to a specific lesson).
+> - If a test has a `course_id` but no `lesson_id`, it is a **course test** (attached to the course as a whole).
 
 #### Create Test for a Lesson (Admin)
 ```http

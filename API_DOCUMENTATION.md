@@ -3084,7 +3084,7 @@ Authorization: Bearer <jwt-token>
 **Query Parameters:**
 - `page` - Page number (default: 1)
 - `limit` - Number of results (default: 20)
-- `status` - Filter by status (scheduled, in_progress, completed, cancelled)
+- `isPublished` - Filter by publication status (true/false)
 - `instructor` - Filter by instructor name
 - `search` - Search by title or description
 
@@ -3106,7 +3106,7 @@ Authorization: Bearer <jwt-token>
       "completion_count": 12,
       "start_date": "2024-02-01",
       "end_date": "2024-02-01",
-      "status": "scheduled",
+      "is_published": true,
       "created_at": "2024-01-01T00:00:00.000Z"
     }
   ],
@@ -3163,6 +3163,57 @@ Authorization: Bearer <jwt-token>
     "max_students": 20,
     "location": "Training Center",
     "created_at": "2024-01-01T00:00:00.000Z"
+  }
+}
+```
+
+##### Update Class (Admin)
+**PUT** `/admin/classes/:id`
+
+Update an existing class.
+
+**Headers:**
+```
+Authorization: Bearer <jwt-token>
+```
+
+**Request Body:**
+```json
+{
+  "title": "Updated JavaScript Workshop",
+  "description": "Updated workshop description",
+  "topic": "Programming",
+  "type": "online",
+  "price": 249.99,
+  "duration": "8 hours",
+  "startDate": "2024-04-01",
+  "endDate": "2024-04-01",
+  "maxStudents": 25,
+  "location": "Online",
+  "meetingLink": "https://meet.google.com/abc-defg-hij",
+  "isPublished": true
+}
+```
+
+**Response (200):**
+```json
+{
+  "class": {
+    "id": "uuid",
+    "title": "Updated JavaScript Workshop",
+    "description": "Updated workshop description",
+    "topic": "Programming",
+    "type": "online",
+    "price": 249.99,
+    "duration": "8 hours",
+    "instructor_id": "uuid-of-instructor",
+    "start_date": "2024-04-01",
+    "end_date": "2024-04-01",
+    "max_students": 25,
+    "location": "Online",
+    "meeting_link": "https://meet.google.com/abc-defg-hij",
+    "is_published": true,
+    "updated_at": "2024-01-01T00:00:00.000Z"
   }
 }
 ```
@@ -4259,3 +4310,14 @@ Content-Type: multipart/form-data
   "message": "Image uploaded successfully"
 }
 ```
+
+---
+
+### Tests Endpoints
+
+> **Test Type Rule:**
+> - Only `lesson_id` is nullable in the tests table.
+> - If a test has both `course_id` and `lesson_id`, it is a **lesson test** (attached to a specific lesson).
+> - If a test has a `course_id` but no `lesson_id`, it is a **course test** (attached to the course as a whole).
+
+---
