@@ -32,6 +32,11 @@ router.post('/initialize', authenticateToken, validatePaymentInitiation, asyncHa
     throw new AppError('Validation failed', 400, 'Validation Error');
   }
 
+  // Check if Flutterwave is configured
+  if (!flw) {
+    throw new AppError('Payment processing is not configured', 503, 'Payment Service Unavailable');
+  }
+
   const { paymentType, itemId, paymentMethod } = req.body;
   const userId = req.user.id;
 
@@ -152,6 +157,11 @@ router.get('/verify/:reference', authenticateToken, asyncHandler(async (req, res
   const { reference } = req.params;
   const userId = req.user.id;
 
+  // Check if Flutterwave is configured
+  if (!flw) {
+    throw new AppError('Payment processing is not configured', 503, 'Payment Service Unavailable');
+  }
+
   // Get payment record
   const payment = await getRow(
     'SELECT * FROM payments WHERE flutterwave_reference = $1 AND user_id = $2',
@@ -242,6 +252,11 @@ router.post('/webhook', validateWebhook, asyncHandler(async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
     throw new AppError('Invalid webhook data', 400, 'Validation Error');
+  }
+
+  // Check if Flutterwave is configured
+  if (!flw) {
+    throw new AppError('Payment processing is not configured', 503, 'Payment Service Unavailable');
   }
 
   const { event, data } = req.body;

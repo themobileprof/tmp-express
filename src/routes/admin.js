@@ -90,7 +90,14 @@ router.post('/users', [
 ], asyncHandler(async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
-    throw new AppError('Validation failed', 400, 'Validation Error');
+    const errorDetails = errors.array().reduce((acc, error) => {
+      acc[error.path] = error.msg;
+      return acc;
+    }, {});
+    
+    const validationError = new AppError('Validation failed', 400, 'VALIDATION_ERROR');
+    validationError.details = errorDetails;
+    throw validationError;
   }
 
   const { email, password, firstName, lastName, role } = req.body;
@@ -295,17 +302,24 @@ router.get('/courses', asyncHandler(async (req, res) => {
 
 // Create course
 router.post('/courses', [
-  body('title').trim().isLength({ min: 1 }),
-  body('description').trim().isLength({ min: 1 }),
-  body('topic').trim().isLength({ min: 1 }),
-  body('type').isIn(['online', 'offline']),
-  body('price').isFloat({ min: 0 }),
-  body('duration').trim().isLength({ min: 1 }),
-  body('instructorId').isUUID()
+  body('title').trim().isLength({ min: 1 }).withMessage('Title is required and must not be empty'),
+  body('description').trim().isLength({ min: 1 }).withMessage('Description is required and must not be empty'),
+  body('topic').trim().isLength({ min: 1 }).withMessage('Topic is required and must not be empty'),
+  body('type').isIn(['online', 'offline']).withMessage('Type must be either "online" or "offline"'),
+  body('price').isFloat({ min: 0 }).withMessage('Price must be a valid number greater than or equal to 0'),
+  body('duration').trim().isLength({ min: 1 }).withMessage('Duration is required and must not be empty'),
+  body('instructorId').isUUID().withMessage('Instructor ID must be a valid UUID')
 ], asyncHandler(async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
-    throw new AppError('Validation failed', 400, 'Validation Error');
+    const errorDetails = errors.array().reduce((acc, error) => {
+      acc[error.path] = error.msg;
+      return acc;
+    }, {});
+    
+    const validationError = new AppError('Validation failed', 400, 'VALIDATION_ERROR');
+    validationError.details = errorDetails;
+    throw validationError;
   }
 
   const { title, description, topic, type, certification, price, duration, instructorId, imageUrl } = req.body;
@@ -327,6 +341,7 @@ router.post('/courses', [
   );
 
   res.status(201).json({
+    success: true,
     course: result.rows[0]
   });
 }));
@@ -685,22 +700,26 @@ router.get('/courses/:courseId/lessons', asyncHandler(async (req, res) => {
 
 // Create lesson
 router.post('/courses/:courseId/lessons', [
-  body('title').trim().isLength({ min: 1 }),
-  body('description').optional().trim(),
-  body('descriptionType').optional().isIn(['text', 'link', 'html']),
-  body('content').optional().trim(),
-  body('videoUrl').optional().trim(),
-  body('durationMinutes').optional().isInt({ min: 0 }),
-  body('materials').optional().isArray(),
-  body('status').optional().isIn(['published', 'draft', 'archived'])
+  body('title').trim().isLength({ min: 1 }).withMessage('Title is required and must not be empty'),
+  body('description').trim().isLength({ min: 1 }).withMessage('Description is required and must not be empty'),
+  body('content').trim().isLength({ min: 1 }).withMessage('Content is required and must not be empty'),
+  body('durationMinutes').isInt({ min: 1 }).withMessage('Duration must be a positive integer'),
+  body('status').optional().isIn(['published', 'draft']).withMessage('Status must be either "published" or "draft"')
 ], asyncHandler(async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
-    throw new AppError('Validation failed', 400, 'Validation Error');
+    const errorDetails = errors.array().reduce((acc, error) => {
+      acc[error.path] = error.msg;
+      return acc;
+    }, {});
+    
+    const validationError = new AppError('Validation failed', 400, 'VALIDATION_ERROR');
+    validationError.details = errorDetails;
+    throw validationError;
   }
 
   const { courseId } = req.params;
-  const { title, description, descriptionType, content, videoUrl, durationMinutes, materials, status } = req.body;
+  const { title, description, content, durationMinutes, status } = req.body;
 
   // Check if course exists
   const course = await getRow('SELECT id FROM courses WHERE id = $1', [courseId]);
@@ -716,13 +735,14 @@ router.post('/courses/:courseId/lessons', [
   const orderIndex = orderResult.rows[0].next_order;
 
   const result = await query(
-    `INSERT INTO lessons (course_id, title, description, description_type, content, video_url, duration_minutes, materials, order_index, status)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+    `INSERT INTO lessons (course_id, title, description, content, duration_minutes, order_index, status)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
      RETURNING *`,
-    [courseId, title, description, descriptionType || 'text', content, videoUrl, durationMinutes || 0, materials || [], orderIndex, status || 'draft']
+    [courseId, title, description, content, durationMinutes, orderIndex, status || 'published']
   );
 
   res.status(201).json({
+    success: true,
     lesson: result.rows[0]
   });
 }));

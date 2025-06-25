@@ -5,6 +5,7 @@ const errorHandler = (err, req, res, next) => {
   let statusCode = 500;
   let message = 'Internal server error';
   let error = 'Server Error';
+  let details = null;
 
   // Handle specific error types
   if (err.name === 'ValidationError') {
@@ -35,10 +36,15 @@ const errorHandler = (err, req, res, next) => {
     statusCode = 503;
     error = 'Service Unavailable';
     message = 'Database connection failed';
-  } else if (err.status) {
-    statusCode = err.status;
+  } else if (err.statusCode) {
+    statusCode = err.statusCode;
     error = err.error || 'Error';
     message = err.message || 'An error occurred';
+  }
+
+  // Handle validation errors with details
+  if (error === 'VALIDATION_ERROR' && err.details) {
+    details = err.details;
   }
 
   // Don't leak error details in production
@@ -46,11 +52,17 @@ const errorHandler = (err, req, res, next) => {
     message = 'Internal server error';
   }
 
-  res.status(statusCode).json({
-    error,
-    message,
-    ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
-  });
+  const response = {
+    success: false,
+    error: {
+      code: error,
+      message: message,
+      ...(details && { details }),
+      ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
+    }
+  };
+
+  res.status(statusCode).json(response);
 };
 
 // Custom error class
@@ -59,7 +71,6 @@ class AppError extends Error {
     super(message);
     this.statusCode = statusCode;
     this.error = error;
-    this.status = `${statusCode}`.startsWith('4') ? 'fail' : 'error';
     this.isOperational = true;
 
     Error.captureStackTrace(this, this.constructor);
