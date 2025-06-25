@@ -106,6 +106,14 @@ Content-Type: application/json
 - `certification` (string): Certification name
 - `imageUrl` (string): Course image URL
 
+**Important Notes:**
+- **Courses** are content created by admins and can exist without an instructor
+- **Classes** are instructor-led sessions that use existing courses
+- **Instructors** create classes, not courses
+- **Admins** create courses and lessons for content management
+- When `instructorId` is not provided, the course will be created without an instructor
+- Courses without instructors can still have lessons, tests, and enrollments
+
 **Response:**
 ```json
 {

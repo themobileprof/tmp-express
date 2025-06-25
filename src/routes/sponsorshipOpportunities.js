@@ -43,7 +43,7 @@ router.get('/', asyncHandler(async (req, res) => {
             u.avatar_url as instructor_avatar
      FROM sponsorship_opportunities so
      JOIN courses c ON so.course_id = c.id
-     JOIN users u ON c.instructor_id = u.id
+     LEFT JOIN users u ON c.instructor_id = u.id
      ${whereClause}
      ORDER BY so.urgency DESC, so.created_at DESC
      LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
@@ -58,7 +58,7 @@ router.get('/', asyncHandler(async (req, res) => {
       courseDescription: o.course_description,
       courseDuration: o.course_duration,
       courseTopic: o.course_topic,
-      instructor: `${o.instructor_first_name} ${o.instructor_last_name}`,
+      instructor: o.instructor_first_name ? `${o.instructor_first_name} ${o.instructor_last_name}` : null,
       instructorAvatar: o.instructor_avatar,
       targetStudents: o.target_students,
       fundingGoal: o.funding_goal,
@@ -83,14 +83,15 @@ router.post('/', authenticateToken, authorizeInstructor, validateOpportunity, as
 
   const { courseId, targetStudents, fundingGoal, urgency, demographics, impactDescription } = req.body;
 
-  // Verify course exists and belongs to user
-  const course = await getRow(
-    'SELECT * FROM courses WHERE id = $1 AND instructor_id = $2',
-    [courseId, req.user.id]
-  );
-
+  // Verify course exists
+  const course = await getRow('SELECT * FROM courses WHERE id = $1', [courseId]);
   if (!course) {
-    throw new AppError('Course not found or access denied', 404, 'Course Not Found');
+    throw new AppError('Course not found', 404, 'Course Not Found');
+  }
+
+  // Check if user is admin or the course instructor
+  if (req.user.role !== 'admin' && course.instructor_id !== req.user.id) {
+    throw new AppError('Access denied - only admins or course instructors can create sponsorship opportunities', 403, 'Access Denied');
   }
 
   // Check if opportunity already exists for this course
@@ -139,7 +140,7 @@ router.get('/:id', asyncHandler(async (req, res) => {
             u.avatar_url as instructor_avatar, u.bio as instructor_bio
      FROM sponsorship_opportunities so
      JOIN courses c ON so.course_id = c.id
-     JOIN users u ON c.instructor_id = u.id
+     LEFT JOIN users u ON c.instructor_id = u.id
      WHERE so.id = $1`,
     [id]
   );
@@ -156,7 +157,7 @@ router.get('/:id', asyncHandler(async (req, res) => {
     courseDuration: opportunity.course_duration,
     courseTopic: opportunity.course_topic,
     coursePrice: opportunity.course_price,
-    instructor: `${opportunity.instructor_first_name} ${opportunity.instructor_last_name}`,
+    instructor: opportunity.instructor_first_name ? `${opportunity.instructor_first_name} ${opportunity.instructor_last_name}` : null,
     instructorAvatar: opportunity.instructor_avatar,
     instructorBio: opportunity.instructor_bio,
     targetStudents: opportunity.target_students,

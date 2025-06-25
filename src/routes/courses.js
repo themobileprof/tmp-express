@@ -58,7 +58,7 @@ router.get('/', asyncHandler(async (req, res) => {
   const courses = await getRows(
     `SELECT c.*, u.first_name as instructor_first_name, u.last_name as instructor_last_name
      FROM courses c
-     JOIN users u ON c.instructor_id = u.id
+     LEFT JOIN users u ON c.instructor_id = u.id
      ${whereClause}
      ORDER BY c.created_at DESC
      LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
@@ -78,7 +78,7 @@ router.get('/', asyncHandler(async (req, res) => {
       studentCount: c.student_count,
       duration: c.duration,
       instructorId: c.instructor_id,
-      instructorName: `${c.instructor_first_name} ${c.instructor_last_name}`,
+      instructorName: c.instructor_id ? `${c.instructor_first_name} ${c.instructor_last_name}` : null,
       imageUrl: c.image_url,
       isPublished: c.is_published,
       createdAt: c.created_at,
@@ -134,7 +134,7 @@ router.get('/:id', asyncHandler(async (req, res) => {
     `SELECT c.*, u.first_name as instructor_first_name, u.last_name as instructor_last_name,
             u.avatar_url as instructor_avatar, u.bio as instructor_bio
      FROM courses c
-     JOIN users u ON c.instructor_id = u.id
+     LEFT JOIN users u ON c.instructor_id = u.id
      WHERE c.id = $1`,
     [id]
   );
@@ -155,7 +155,7 @@ router.get('/:id', asyncHandler(async (req, res) => {
     studentCount: course.student_count,
     duration: course.duration,
     instructorId: course.instructor_id,
-    instructorName: `${course.instructor_first_name} ${course.instructor_last_name}`,
+    instructorName: course.instructor_id ? `${course.instructor_first_name} ${course.instructor_last_name}` : null,
     instructorAvatar: course.instructor_avatar,
     instructorBio: course.instructor_bio,
     imageUrl: course.image_url,
