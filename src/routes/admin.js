@@ -2329,11 +2329,32 @@ router.post('/lessons/:lessonId/tests', asyncHandler(async (req, res) => {
     if (!q.question || !q.questionType || q.points === undefined || q.orderIndex === undefined) {
       throw new AppError('Each question must have question, questionType, points, and orderIndex', 400, 'VALIDATION_ERROR');
     }
+    
+    // Handle options JSON properly
+    let optionsJson = null;
+    if (q.options) {
+      try {
+        // If options is already an array, stringify it
+        if (Array.isArray(q.options)) {
+          optionsJson = JSON.stringify(q.options);
+        } else if (typeof q.options === 'string') {
+          // If it's a string, try to parse it to validate JSON
+          JSON.parse(q.options);
+          optionsJson = q.options;
+        } else {
+          // For any other type, stringify it
+          optionsJson = JSON.stringify(q.options);
+        }
+      } catch (error) {
+        throw new AppError(`Invalid JSON format for question ${i + 1} options: ${error.message}`, 400, 'VALIDATION_ERROR');
+      }
+    }
+    
     const result = await query(
       `INSERT INTO test_questions (test_id, question, question_type, options, correct_answer, points, order_index, image_url)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING *`,
-      [test.id, q.question, q.questionType, q.options || null, q.correctAnswer, q.points, q.orderIndex, q.imageUrl || null]
+      [test.id, q.question, q.questionType, optionsJson, q.correctAnswer, q.points, q.orderIndex, q.imageUrl || null]
     );
     insertedQuestions.push(result.rows[0]);
   }
