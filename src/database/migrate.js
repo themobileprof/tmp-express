@@ -334,11 +334,24 @@ const createTables = async () => {
         correct_answer_text TEXT,
         points INTEGER DEFAULT 1,
         order_index INTEGER NOT NULL,
+        image_url TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (test_id) REFERENCES tests(id) ON DELETE CASCADE
       )
     `);
+
+    // Add image_url column to existing test_questions table if it doesn't exist
+    try {
+      await query('ALTER TABLE test_questions ADD COLUMN image_url TEXT');
+      console.log('✅ Added image_url column to test_questions table');
+    } catch (error) {
+      if (error.code === '42701') { // Column already exists
+        console.log('ℹ️  image_url column already exists in test_questions table');
+      } else {
+        console.log('⚠️  Could not add image_url column:', error.message);
+      }
+    }
 
     // Create Test_Attempts table
     await query(`
