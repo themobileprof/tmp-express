@@ -14,7 +14,8 @@
     "logs:view": "tail -f logs/app.log",
     "logs:errors": "grep -i error logs/app.log",
     "logs:payments": "grep -i payment logs/app.log",
-    "logs:webhooks": "grep -i webhook logs/app.log"
+    "logs:webhooks": "grep -i webhook logs/app.log",
+    "purge": "node src/database/purge.js"
   },
   "keywords": [
     "lms",
