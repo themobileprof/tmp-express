@@ -34,11 +34,12 @@ CREATE TABLE scraped_urls (
 ```
 
 ### Status Values
-- **`pending`**: URL is queued for processing
-- **`in_progress`**: URL is currently being processed
-- **`completed`**: URL has been successfully processed
-- **`failed`**: URL processing failed (with error message)
-- **`skipped`**: URL was skipped (e.g., already exists in LMS)
+- **`pending`**: URL is queued for processing but not yet started
+- **`in_progress`**: URL is currently being processed by the agent
+- **`completed`**: URL has been successfully processed and content uploaded
+- **`failed`**: Processing failed (check error_message for details)
+- **`skipped`**: URL was intentionally skipped (e.g., not relevant content)
+- **`partial`**: URL was partially processed (some content extracted but not complete)
 
 ## API Endpoints
 

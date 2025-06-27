@@ -21,7 +21,7 @@ Authorization: Bearer <access_token>
 ```
 
 **Query Parameters:**
-- `status`: Filter by status (pending, in_progress, completed, failed, skipped)
+- `status`: Filter by status (pending, in_progress, completed, failed, skipped, partial)
 - `category`: Filter by category
 - `level`: Filter by level
 - `page`: Page number (default: 1)

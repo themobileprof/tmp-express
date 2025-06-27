@@ -128,7 +128,7 @@ const createTables = async () => {
 
     await query(`
       DO $$ BEGIN
-        CREATE TYPE scraping_status AS ENUM ('pending', 'in_progress', 'completed', 'failed', 'skipped');
+        CREATE TYPE scraping_status AS ENUM ('pending', 'in_progress', 'completed', 'failed', 'skipped', 'partial');
       EXCEPTION
         WHEN duplicate_object THEN null;
       END $$;

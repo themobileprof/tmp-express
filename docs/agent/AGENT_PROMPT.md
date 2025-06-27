@@ -36,6 +36,7 @@ LMS_BASE_URL=https://api.themobileprof.com
   - Set to `completed` when successfully processed
   - Set to `failed` if processing fails (with error message)
   - Set to `skipped` if URL should be skipped
+  - Set to `partial` if some content was extracted but processing was incomplete
 
 ### 2. Course Discovery & Scraping
 - Accept course URLs or bulk URL input
