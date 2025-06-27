@@ -149,11 +149,31 @@ const authorizeOwnerOrAdmin = (tableName, idField = 'id') => {
   };
 };
 
+// Generic requireRole middleware for compatibility
+function requireRole(roles) {
+  return (req, res, next) => {
+    if (!req.user) {
+      return res.status(401).json({
+        error: 'Authentication required',
+        message: 'Please log in to access this resource'
+      });
+    }
+    if (!roles.includes(req.user.role)) {
+      return res.status(403).json({
+        error: 'Access denied',
+        message: 'You do not have permission to access this resource'
+      });
+    }
+    next();
+  };
+}
+
 module.exports = {
   authenticateToken,
   authorizeRoles,
   authorizeInstructor,
   authorizeSponsor,
   authorizeAdmin,
-  authorizeOwnerOrAdmin
+  authorizeOwnerOrAdmin,
+  requireRole
 }; 

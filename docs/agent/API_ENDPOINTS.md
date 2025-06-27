@@ -12,6 +12,197 @@ This document provides detailed information about all API endpoints that the cou
 https://api.themobileprof.com
 ```
 
+## Scraping Management
+
+### Get Scraped URLs
+```http
+GET /api/scraping/urls
+Authorization: Bearer <access_token>
+```
+
+**Query Parameters:**
+- `status`: Filter by status (pending, in_progress, completed, failed, skipped)
+- `category`: Filter by category
+- `level`: Filter by level
+- `page`: Page number (default: 1)
+- `limit`: Items per page (default: 20)
+- `search`: Search in URL or title
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "urls": [
+      {
+        "id": "uuid",
+        "url": "https://learning.lpi.org/en/learning-materials/010-160/",
+        "status": "pending",
+        "title": "Linux Essentials",
+        "description": "Introduction to Linux fundamentals",
+        "category": "programming",
+        "level": "beginner",
+        "metadata": {},
+        "error_message": null,
+        "retry_count": 0,
+        "last_attempt_at": null,
+        "completed_at": null,
+        "created_at": "2024-01-15T10:30:00Z",
+        "updated_at": "2024-01-15T10:30:00Z"
+      }
+    ],
+    "pagination": {
+      "page": 1,
+      "limit": 20,
+      "total": 50,
+      "pages": 3
+    }
+  }
+}
+```
+
+### Add URL to Scraping Queue
+```http
+POST /api/scraping/urls
+Authorization: Bearer <access_token>
+Content-Type: application/json
+
+{
+  "url": "https://learning.lpi.org/en/learning-materials/010-160/",
+  "title": "Linux Essentials",
+  "description": "Introduction to Linux fundamentals",
+  "category": "programming",
+  "level": "beginner",
+  "metadata": {
+    "source": "lpi",
+    "certification": "LPI Linux Essentials"
+  }
+}
+```
+
+### Add Multiple URLs to Scraping Queue
+```http
+POST /api/scraping/urls/bulk
+Authorization: Bearer <access_token>
+Content-Type: application/json
+
+{
+  "urls": [
+    {
+      "url": "https://learning.lpi.org/en/learning-materials/010-160/",
+      "title": "Linux Essentials",
+      "category": "programming",
+      "level": "beginner"
+    },
+    {
+      "url": "https://learning.lpi.org/en/learning-materials/010-161/",
+      "title": "System Administration",
+      "category": "programming",
+      "level": "intermediate"
+    }
+  ]
+}
+```
+
+### Get Pending URLs
+```http
+GET /api/scraping/urls/pending
+Authorization: Bearer <access_token>
+```
+
+**Query Parameters:**
+- `limit`: Number of URLs to fetch (default: 10)
+
+### Update URL Status
+```http
+PUT /api/scraping/urls/:id/status
+Authorization: Bearer <access_token>
+Content-Type: application/json
+
+{
+  "status": "in_progress",
+  "title": "Linux Essentials",
+  "description": "Introduction to Linux fundamentals",
+  "category": "programming",
+  "level": "beginner",
+  "metadata": {
+    "lessons_count": 15,
+    "estimated_duration": "6 weeks"
+  }
+}
+```
+
+**Status Values:**
+- `pending`: URL is queued for processing
+- `in_progress`: URL is currently being processed
+- `completed`: URL has been successfully processed
+- `failed`: URL processing failed
+- `skipped`: URL was skipped (e.g., already exists)
+
+### Get Scraping Statistics
+```http
+GET /api/scraping/stats
+Authorization: Bearer <access_token>
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "stats": {
+      "total": 150,
+      "by_status": {
+        "pending": 25,
+        "in_progress": 5,
+        "completed": 100,
+        "failed": 15,
+        "skipped": 5
+      },
+      "summary": {
+        "pending": 25,
+        "in_progress": 5,
+        "completed": 100,
+        "failed": 15,
+        "skipped": 5
+      }
+    },
+    "recent_activity": [
+      {
+        "id": "uuid",
+        "url": "https://learning.lpi.org/en/learning-materials/010-160/",
+        "status": "completed",
+        "title": "Linux Essentials",
+        "updated_at": "2024-01-15T10:30:00Z"
+      }
+    ]
+  }
+}
+```
+
+### Reset Failed URLs
+```http
+POST /api/scraping/urls/reset-failed
+Authorization: Bearer <access_token>
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "reset_count": 15,
+    "message": "Reset 15 failed URLs to pending status"
+  }
+}
+```
+
+### Delete Scraped URL
+```http
+DELETE /api/scraping/urls/:id
+Authorization: Bearer <access_token>
+```
+
 ## Authentication
 
 ### Login

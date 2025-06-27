@@ -126,6 +126,14 @@ const createTables = async () => {
       END $$;
     `);
 
+    await query(`
+      DO $$ BEGIN
+        CREATE TYPE scraping_status AS ENUM ('pending', 'in_progress', 'completed', 'failed', 'skipped');
+      EXCEPTION
+        WHEN duplicate_object THEN null;
+      END $$;
+    `);
+
     // Create Users table
     await query(`
       CREATE TABLE IF NOT EXISTS users (
@@ -503,6 +511,26 @@ const createTables = async () => {
       )
     `);
 
+    // Create Scraped_URLs table for tracking scraping progress
+    await query(`
+      CREATE TABLE IF NOT EXISTS scraped_urls (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        url TEXT NOT NULL UNIQUE,
+        status scraping_status DEFAULT 'pending',
+        title VARCHAR(255),
+        description TEXT,
+        category VARCHAR(100),
+        level VARCHAR(50),
+        metadata JSON,
+        error_message TEXT,
+        retry_count INTEGER DEFAULT 0,
+        last_attempt_at TIMESTAMP NULL,
+        completed_at TIMESTAMP NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
     // Create indexes for better performance
     await query('CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)');
     await query('CREATE INDEX IF NOT EXISTS idx_users_role ON users(role)');
@@ -520,6 +548,9 @@ const createTables = async () => {
     await query('CREATE INDEX IF NOT EXISTS idx_payments_reference ON payments(flutterwave_reference)');
     await query('CREATE INDEX IF NOT EXISTS idx_payments_status ON payments(status)');
     await query('CREATE INDEX IF NOT EXISTS idx_payment_webhooks_reference ON payment_webhooks(flutterwave_reference)');
+    await query('CREATE INDEX IF NOT EXISTS idx_scraped_urls_url ON scraped_urls(url)');
+    await query('CREATE INDEX IF NOT EXISTS idx_scraped_urls_status ON scraped_urls(status)');
+    await query('CREATE INDEX IF NOT EXISTS idx_scraped_urls_created_at ON scraped_urls(created_at)');
 
     console.log('✅ Database migration completed successfully!');
     console.log('🎉 All tables created and ready!');

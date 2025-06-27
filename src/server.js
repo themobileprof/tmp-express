@@ -19,6 +19,7 @@ const certificationRoutes = require('./routes/certifications');
 const settingsRoutes = require('./routes/settings');
 const paymentRoutes = require('./routes/payments');
 const adminRoutes = require('./routes/admin');
+const scrapingRoutes = require('./routes/scraping');
 
 const { errorHandler } = require('./middleware/errorHandler');
 const { authenticateToken } = require('./middleware/auth');
@@ -121,7 +122,8 @@ app.get('/', (req, res) => {
         payments: '/api/payments',
         discussions: '/api/discussions',
         certifications: '/api/certifications',
-        admin: '/api/admin'
+        admin: '/api/admin',
+        scraping: '/api/scraping'
       },
       documentation: 'https://github.com/your-username/themobileprof-backend',
       support: 'support@themobileprof.com'
@@ -252,6 +254,7 @@ app.use('/api/certifications', authenticateToken, certificationRoutes);
 app.use('/api/settings', authenticateToken, settingsRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/scraping', scrapingRoutes);
 
 // 404 handler
 app.use('*', (req, res) => {

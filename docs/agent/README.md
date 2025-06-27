@@ -6,11 +6,12 @@ This directory contains comprehensive documentation for creating a course scrapi
 
 The course scraping agent is designed to:
 1. **Scrape** course content from LPI learning materials (e.g., https://learning.lpi.org/en/learning-materials/010-160/)
-2. **Customize** content into engaging, mobile-friendly HTML
-3. **Generate** Termux-style screenshots for visual content
-4. **Upload** content to TheMobileProf LMS API
-5. **Create** tests and quizzes based on lesson content
-6. **Leverage LLMs and Image Generation APIs** for content rewriting and screenshot/image creation
+2. **Track URLs** to prevent duplicate processing and manage scraping progress
+3. **Customize** content into engaging, mobile-friendly HTML
+4. **Generate** Termux-style screenshots for visual content
+5. **Upload** content to TheMobileProf LMS API
+6. **Create** tests and quizzes based on lesson content
+7. **Leverage LLMs and Image Generation APIs** for content rewriting and screenshot/image creation
 
 ## Documentation Structure
 
@@ -21,6 +22,7 @@ The course scraping agent is designed to:
 - **[SCREENSHOT_GUIDELINES.md](SCREENSHOT_GUIDELINES.md)** - Guidelines for Termux-style screenshot generation
 - **[TEST_GENERATION.md](TEST_GENERATION.md)** - Guidelines for creating tests and quizzes
 - **[BULK_PROCESSING.md](BULK_PROCESSING.md)** - Guidelines for bulk URL processing
+- **[URL_TRACKING_GUIDE.md](URL_TRACKING_GUIDE.md)** - Guide for URL tracking and queue management
 
 ## Quick Start
 

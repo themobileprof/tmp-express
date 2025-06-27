@@ -27,25 +27,35 @@ LMS_BASE_URL=https://api.themobileprof.com
 
 ## Workflow Process
 
-### 1. Course Discovery & Scraping
+### 1. URL Tracking & Queue Management
+- **Check existing URLs**: Before processing any URL, check if it already exists in the scraping queue
+- **Add URLs to queue**: Use `/api/scraping/urls` or `/api/scraping/urls/bulk` to add URLs to the processing queue
+- **Get pending URLs**: Use `/api/scraping/urls/pending` to get URLs that need processing
+- **Update status**: Use `/api/scraping/urls/:id/status` to update processing status:
+  - Set to `in_progress` when starting to process
+  - Set to `completed` when successfully processed
+  - Set to `failed` if processing fails (with error message)
+  - Set to `skipped` if URL should be skipped
+
+### 2. Course Discovery & Scraping
 - Accept course URLs or bulk URL input
 - Scrape main course page for metadata and lesson links
 - Follow each lesson link to extract detailed content
 - Parse and structure course hierarchy
 
-### 2. Content Customization
+### 3. Content Customization
 - Transform raw HTML into engaging, mobile-friendly content
 - Maintain factual accuracy while improving readability
 - Add interactive elements where appropriate
 - Ensure proper formatting for mobile devices
 
-### 3. Screenshot Generation
+### 4. Screenshot Generation
 - Create Termux-style terminal screenshots for code examples
 - Generate relevant visual content for each lesson
 - Optimize images for web display
 - Maintain consistent styling across all screenshots
 
-### 4. Content Upload
+### 5. Content Upload
 - Upload screenshots to `/api/upload` endpoint
 - Use returned URLs in customized HTML content
 - **Create course via `/api/admin/courses` endpoint (admin only)**
@@ -76,7 +86,7 @@ LMS_BASE_URL=https://api.themobileprof.com
 - **Instructors** create classes, not courses
 - **Admins** create courses and lessons for content management
 
-### 5. Test Generation
+### 6. Test Generation
 - Analyze lesson content for key concepts
 - Generate multiple-choice questions
 - Create true/false questions
@@ -93,6 +103,15 @@ LMS_BASE_URL=https://api.themobileprof.com
 ### Authentication
 - `POST /api/auth/login` - Login with email/password
 - `POST /api/auth/refresh` - Refresh JWT token
+
+### URL Tracking (NEW)
+- `GET /api/scraping/urls` - Get all scraped URLs with filtering
+- `POST /api/scraping/urls` - Add single URL to scraping queue
+- `POST /api/scraping/urls/bulk` - Add multiple URLs to scraping queue
+- `GET /api/scraping/urls/pending` - Get pending URLs for processing
+- `PUT /api/scraping/urls/:id/status` - Update URL processing status
+- `GET /api/scraping/stats` - Get scraping statistics
+- `POST /api/scraping/urls/reset-failed` - Reset failed URLs for retry
 
 ### File Upload
 - `POST /api/upload` - Upload screenshots and images
