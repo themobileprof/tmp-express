@@ -168,12 +168,12 @@ const createTables = async () => {
         rating DECIMAL(3,2) DEFAULT 0,
         student_count INTEGER DEFAULT 0,
         duration VARCHAR(50) NOT NULL,
-        instructor_id UUID NOT NULL,
+        instructor_id UUID,
         image_url TEXT,
         is_published BOOLEAN DEFAULT false,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (instructor_id) REFERENCES users(id) ON DELETE CASCADE
+        FOREIGN KEY (instructor_id) REFERENCES users(id) ON DELETE SET NULL
       )
     `);
 
@@ -317,6 +317,7 @@ const createTables = async () => {
       CREATE TABLE IF NOT EXISTS tests (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         course_id UUID NOT NULL,
+        lesson_id UUID,
         title VARCHAR(255) NOT NULL,
         description TEXT,
         duration_minutes INTEGER NOT NULL,
@@ -326,7 +327,8 @@ const createTables = async () => {
         is_published BOOLEAN DEFAULT false,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE
+        FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE,
+        FOREIGN KEY (lesson_id) REFERENCES lessons(id) ON DELETE SET NULL
       )
     `);
 
@@ -348,18 +350,6 @@ const createTables = async () => {
         FOREIGN KEY (test_id) REFERENCES tests(id) ON DELETE CASCADE
       )
     `);
-
-    // Add image_url column to existing test_questions table if it doesn't exist
-    try {
-      await query('ALTER TABLE test_questions ADD COLUMN image_url TEXT');
-      console.log('✅ Added image_url column to test_questions table');
-    } catch (error) {
-      if (error.code === '42701') { // Column already exists
-        console.log('ℹ️  image_url column already exists in test_questions table');
-      } else {
-        console.log('⚠️  Could not add image_url column:', error.message);
-      }
-    }
 
     // Create Test_Attempts table
     await query(`
@@ -542,6 +532,7 @@ const createTables = async () => {
     await query('CREATE INDEX IF NOT EXISTS idx_enrollments_course ON enrollments(course_id)');
     await query('CREATE INDEX IF NOT EXISTS idx_lessons_course ON lessons(course_id)');
     await query('CREATE INDEX IF NOT EXISTS idx_tests_course ON tests(course_id)');
+    await query('CREATE INDEX IF NOT EXISTS idx_tests_lesson ON tests(lesson_id)');
     await query('CREATE INDEX IF NOT EXISTS idx_test_attempts_user ON test_attempts(user_id)');
     await query('CREATE INDEX IF NOT EXISTS idx_discussions_author ON discussions(author_id)');
     await query('CREATE INDEX IF NOT EXISTS idx_payments_user ON payments(user_id)');
