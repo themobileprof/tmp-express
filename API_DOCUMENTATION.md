@@ -1,5 +1,10 @@
 # TheMobileProf API Documentation
 
+> **Test Type Rule:**
+> - Only `lesson_id` is nullable in the tests table.
+> - If a test has both `course_id` and `lesson_id`, it is a **lesson test** (attached to a specific lesson).
+> - If a test has a `course_id` but no `lesson_id`, it is a **course test** (attached to the course as a whole).
+
 ## Table of Contents
 1. [Overview](#overview)
 2. [Authentication](#authentication)
@@ -19,12 +24,13 @@
    - [Settings](#settings-endpoints)
    - [Payments](#payments-endpoints)
    - [Admin](#admin-endpoints)
+   - [Scraping Management](#scraping-management)
 
 ## Overview
 
 The TheMobileProf API is a RESTful API for a Learning Management System (LMS) that supports course management, user authentication, sponsorship programs, testing systems, and more.
 
-**Base URL**: `http://localhost:3000/api`
+**Base URL**: `https://api.themobileprof.com`
 
 ## Authentication
 
@@ -103,7 +109,7 @@ Register a new user with email and password.
 ```
 
 #### Login User
-**POST** `/auth/login`
+**POST** `/api/auth/login`
 
 Authenticate user with email and password.
 
@@ -118,14 +124,19 @@ Authenticate user with email and password.
 **Response (200):**
 ```json
 {
-  "user": {
-    "id": "uuid",
-    "email": "user@example.com",
-    "firstName": "John",
-    "lastName": "Doe",
-    "role": "student"
-  },
-  "token": "jwt-token"
+  "success": true,
+  "data": {
+    "user": {
+      "id": 1,
+      "email": "user@example.com",
+      "name": "User Name",
+      "role": "admin"
+    },
+    "tokens": {
+      "access": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+      "refresh": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+    }
+  }
 }
 ```
 
@@ -2166,41 +2177,83 @@ Authorization: Bearer <jwt-token>
 ```
 
 ##### Create Course (Admin)
-**POST** `/admin/courses`
+**POST** `/api/admin/courses`
 
 Create a new course (admin only).
 
 **Headers:**
 ```
-Authorization: Bearer <jwt-token>
+Authorization: Bearer <access_token>
+Content-Type: application/json
 ```
 
 **Request Body:**
 ```json
 {
-  "title": "Advanced JavaScript",
-  "description": "Master advanced JavaScript concepts",
-  "topic": "Programming",
+  "title": "Course Title",
+  "description": "Course description",
+  "topic": "programming",
   "type": "online",
-  "price": 149.99,
-  "duration": "10 weeks",
-  "instructorId": "uuid-of-instructor"
+  "certification": "Certification Name",
+  "price": 0,
+  "duration": "6 weeks",
+  "instructorId": "uuid",
+  "status": "published"
 }
 ```
 
-**Response (201):**
+**Required Fields:**
+- `title` (string): Course title - must not be empty
+- `description` (string): Course description - must not be empty
+- `topic` (string): Course topic/category - must not be empty
+- `type` (string): Must be either "online" or "offline"
+- `price` (number): Course price - must be >= 0
+- `duration` (string): Course duration - must not be empty
+
+**Optional Fields:**
+- `instructorId` (string): Valid UUID of instructor (courses can exist without an instructor)
+- `certification` (string): Certification name
+- `imageUrl` (string): Course image URL
+
+**Important Notes:**
+- **Courses** are content created by admins and can exist without an instructor
+- **Classes** are instructor-led sessions that use existing courses
+- **Instructors** create classes, not courses
+- **Admins** create courses and lessons for content management
+- When `instructorId` is not provided, the course will be created without an instructor
+- Courses without instructors can still have lessons, tests, and enrollments
+
+**Response:**
 ```json
 {
+  "success": true,
   "course": {
     "id": "uuid",
-    "title": "Advanced JavaScript",
-    "description": "Master advanced JavaScript concepts",
-    "topic": "Programming",
+    "title": "Course Title",
+    "description": "Course description",
+    "topic": "programming",
     "type": "online",
-    "price": 149.99,
-    "duration": "10 weeks",
-    "instructor_id": "uuid-of-instructor",
+    "certification": "Certification Name",
+    "price": 0,
+    "duration": "6 weeks",
+    "instructorId": "uuid",
+    "status": "published",
     "created_at": "2024-01-01T00:00:00.000Z"
+  }
+}
+```
+
+**Validation Error Response:**
+```json
+{
+  "success": false,
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Validation failed",
+    "details": {
+      "title": "Title is required and must not be empty",
+      "instructorId": "Instructor ID must be a valid UUID"
+    }
   }
 }
 ```
@@ -2218,8 +2271,9 @@ Authorization: Bearer <jwt-token>
 **Request Body:**
 ```json
 {
-  "title": "Advanced JavaScript Mastery",
-  "price": 179.99,
+  "title": "Updated JavaScript Fundamentals",
+  "description": "Updated description",
+  "price": 89.99,
   "isPublished": true
 }
 ```
@@ -2227,13 +2281,17 @@ Authorization: Bearer <jwt-token>
 **Response (200):**
 ```json
 {
-  "course": {
-    "id": "uuid",
-    "title": "Advanced JavaScript Mastery",
-    "price": 179.99,
-    "is_published": true,
-    "updated_at": "2024-01-01T00:00:00.000Z"
-  }
+  "id": "uuid",
+  "title": "Updated JavaScript Fundamentals",
+  "description": "Updated description",
+  "topic": "Programming",
+  "type": "online",
+  "certification": "JavaScript Developer",
+  "price": 89.99,
+  "duration": "8 weeks",
+  "imageUrl": "https://example.com/course.jpg",
+  "isPublished": true,
+  "updatedAt": "2024-01-01T00:00:00.000Z"
 }
 ```
 
@@ -2528,36 +2586,47 @@ Authorization: Bearer <jwt-token>
 ```
 
 ##### Create Lesson (Admin)
-**POST** `/admin/courses/:courseId/lessons`
+**POST** `/api/admin/courses/:courseId/lessons`
 
 Create a new lesson for a course.
 
 **Headers:**
 ```
-Authorization: Bearer <jwt-token>
+Authorization: Bearer <access_token>
+Content-Type: application/json
 ```
 
 **Request Body:**
 ```json
 {
-  "title": "JavaScript Variables",
-  "description": "Understanding variables in JavaScript",
-  "content": "Variables are containers for storing data...",
+  "title": "Lesson Title",
+  "description": "Lesson description",
+  "content": "<html>Lesson content with embedded screenshots</html>",
   "durationMinutes": 30,
   "status": "published"
 }
 ```
 
-**Response (201):**
+**Required Fields:**
+- `title` (string): Lesson title - must not be empty
+- `description` (string): Lesson description - must not be empty
+- `content` (string): HTML content with embedded screenshots - must not be empty
+- `durationMinutes` (number): Lesson duration in minutes - must be > 0
+
+**Optional Fields:**
+- `status` (string): "published" or "draft" (default: "published")
+
+**Response:**
 ```json
 {
+  "success": true,
   "lesson": {
     "id": "uuid",
-    "title": "JavaScript Variables",
-    "description": "Understanding variables in JavaScript",
-    "content": "Variables are containers for storing data...",
+    "title": "Lesson Title",
+    "description": "Lesson description",
+    "content": "<html>Lesson content with embedded screenshots</html>",
     "duration_minutes": 30,
-    "order_index": 2,
+    "order_index": 1,
     "status": "published",
     "created_at": "2024-01-01T00:00:00.000Z"
   }
@@ -2706,61 +2775,42 @@ Authorization: Bearer <jwt-token>
 ```
 
 ##### Create Lesson Test (Admin)
-**POST** `/admin/lessons/:id/tests`
+**POST** `/api/admin/lessons/:lessonId/tests`
 
 Create a new test for a lesson.
 
 **Headers:**
 ```
-Authorization: Bearer <jwt-token>
+Authorization: Bearer <access_token>
+Content-Type: application/json
 ```
 
 **Request Body:**
 ```json
 {
-  "title": "JavaScript Variables Quiz",
-  "description": "Test your knowledge of variables",
+  "title": "Quiz Title",
+  "description": "Quiz description",
   "durationMinutes": 30,
   "passingScore": 70,
   "maxAttempts": 3,
   "questions": [
     {
-      "question": "What keyword is used to declare a variable in JavaScript?",
+      "question": "What is Linux?",
       "questionType": "multiple_choice",
-      "options": ["var", "let", "const", "All of the above"],
-      "correctAnswer": 3,
-      "points": 5
+      "options": ["OS", "Browser", "Editor"],
+      "correctAnswer": 0,
+      "points": 1,
+      "orderIndex": 1
     }
   ]
 }
 ```
 
-**Response (201):**
+**Response:**
 ```json
 {
-  "success": true,
-  "message": "Test created successfully",
-  "test": {
-    "id": "uuid",
-    "title": "JavaScript Variables Quiz",
-    "description": "Test your knowledge of variables",
-    "durationMinutes": 30,
-    "passingScore": 70,
-    "maxAttempts": 3,
-    "status": "active",
-    "createdAt": "2024-01-01T00:00:00.000Z"
-  },
-  "questions": [
-    {
-      "id": "uuid",
-      "question": "What keyword is used to declare a variable in JavaScript?",
-      "questionType": "multiple_choice",
-      "options": ["var", "let", "const", "All of the above"],
-      "correctAnswer": 3,
-      "points": 5,
-      "orderIndex": 1
-    }
-  ]
+  "test": { ... },
+  "questions": [ ... ]
 }
 ```
 
@@ -4000,6 +4050,54 @@ For API support:
 
 ## File Upload Endpoints
 
+### Upload Screenshots/Images
+**POST** `/api/upload`
+
+**Headers:**
+```
+Authorization: Bearer <access_token>
+Content-Type: multipart/form-data
+```
+
+**Form Data:**
+- `file`: Image file
+- `type`: "screenshot" | "image"
+- `lesson_id`: Optional lesson ID
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "url": "https://api.themobileprof.com/uploads/screenshots/abc123.png",
+    "filename": "screenshot_001.png",
+    "size": 24576,
+    "mime_type": "image/png"
+  }
+}
+```
+
+### Upload Test Question Image
+**POST** `/api/tests/:id/questions/:questionId/image/upload`
+
+**Headers:**
+```
+Authorization: Bearer <access_token>
+Content-Type: multipart/form-data
+```
+
+**Form Data:**
+- `image`: Image file (PNG, JPG, JPEG, GIF, SVG, max 5MB)
+
+**Response:**
+```json
+{
+  "success": true,
+  "imageUrl": "/uploads/question-images/<filename>",
+  "message": "Image uploaded successfully"
+}
+```
+
 ### Upload Course Image
 **POST** `/uploads/course-image`
 
@@ -4288,29 +4386,6 @@ X-RateLimit-Reset: 1640995200
 
 Example: `?sort=created_at&order=desc&status=published&topic=programming`
 
-### Upload Question Image
-**POST** `/tests/:id/questions/:questionId/image/upload`
-
-Upload an image for a test question.
-
-**Headers:**
-```
-Authorization: Bearer <jwt-token>
-Content-Type: multipart/form-data
-```
-
-**Form Data:**
-- `image` - Image file (PNG, JPG, JPEG, GIF, SVG)
-
-**Response (200):**
-```json
-{
-  "success": true,
-  "imageUrl": "/uploads/question-images/<filename>",
-  "message": "Image uploaded successfully"
-}
-```
-
 ---
 
 ### Tests Endpoints
@@ -4321,3 +4396,219 @@ Content-Type: multipart/form-data
 > - If a test has a `course_id` but no `lesson_id`, it is a **course test** (attached to the course as a whole).
 
 ---
+
+## Scraping Management
+
+### Get Scraped URLs
+**GET** `/api/scraping/urls`
+
+**Headers:**
+```
+Authorization: Bearer <access_token>
+```
+
+**Query Parameters:**
+- `status`: Filter by status (pending, in_progress, completed, failed, skipped, partial)
+- `category`: Filter by category
+- `level`: Filter by level
+- `page`: Page number (default: 1)
+- `limit`: Items per page (default: 20)
+- `search`: Search in URL or title
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "urls": [
+      {
+        "id": "uuid",
+        "url": "https://learning.lpi.org/en/learning-materials/010-160/",
+        "status": "pending",
+        "title": "Linux Essentials",
+        "description": "Introduction to Linux fundamentals",
+        "category": "programming",
+        "level": "beginner",
+        "metadata": {},
+        "error_message": null,
+        "retry_count": 0,
+        "last_attempt_at": null,
+        "completed_at": null,
+        "created_at": "2024-01-15T10:30:00Z",
+        "updated_at": "2024-01-15T10:30:00Z"
+      }
+    ],
+    "pagination": {
+      "page": 1,
+      "limit": 20,
+      "total": 50,
+      "pages": 3
+    }
+  }
+}
+```
+
+### Add URL to Scraping Queue
+**POST** `/api/scraping/urls`
+
+**Headers:**
+```
+Authorization: Bearer <access_token>
+Content-Type: application/json
+```
+
+**Request Body:**
+```json
+{
+  "url": "https://learning.lpi.org/en/learning-materials/010-160/",
+  "title": "Linux Essentials",
+  "description": "Introduction to Linux fundamentals",
+  "category": "programming",
+  "level": "beginner",
+  "metadata": {
+    "source": "lpi",
+    "certification": "LPI Linux Essentials"
+  }
+}
+```
+
+### Add Multiple URLs to Scraping Queue
+**POST** `/api/scraping/urls/bulk`
+
+**Headers:**
+```
+Authorization: Bearer <access_token>
+Content-Type: application/json
+```
+
+**Request Body:**
+```json
+{
+  "urls": [
+    {
+      "url": "https://learning.lpi.org/en/learning-materials/010-160/",
+      "title": "Linux Essentials",
+      "category": "programming",
+      "level": "beginner"
+    },
+    {
+      "url": "https://learning.lpi.org/en/learning-materials/010-161/",
+      "title": "System Administration",
+      "category": "programming",
+      "level": "intermediate"
+    }
+  ]
+}
+```
+
+### Get Pending URLs
+**GET** `/api/scraping/urls/pending`
+
+**Headers:**
+```
+Authorization: Bearer <access_token>
+```
+
+**Query Parameters:**
+- `limit`: Number of URLs to fetch (default: 10)
+
+### Update URL Status
+**PUT** `/api/scraping/urls/:id/status`
+
+**Headers:**
+```
+Authorization: Bearer <access_token>
+Content-Type: application/json
+```
+
+**Request Body:**
+```json
+{
+  "status": "in_progress",
+  "title": "Linux Essentials",
+  "description": "Introduction to Linux fundamentals",
+  "category": "programming",
+  "level": "beginner",
+  "metadata": {
+    "lessons_count": 15,
+    "estimated_duration": "6 weeks"
+  }
+}
+```
+
+**Status Values:**
+- `pending`: URL is queued for processing
+- `in_progress`: URL is currently being processed
+- `completed`: URL has been successfully processed
+- `failed`: URL processing failed
+- `skipped`: URL was skipped (e.g., already exists)
+
+### Get Scraping Statistics
+**GET** `/api/scraping/stats`
+
+**Headers:**
+```
+Authorization: Bearer <access_token>
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "stats": {
+      "total": 150,
+      "by_status": {
+        "pending": 25,
+        "in_progress": 5,
+        "completed": 100,
+        "failed": 15,
+        "skipped": 5
+      },
+      "summary": {
+        "pending": 25,
+        "in_progress": 5,
+        "completed": 100,
+        "failed": 15,
+        "skipped": 5
+      }
+    },
+    "recent_activity": [
+      {
+        "id": "uuid",
+        "url": "https://learning.lpi.org/en/learning-materials/010-160/",
+        "status": "completed",
+        "title": "Linux Essentials",
+        "updated_at": "2024-01-15T10:30:00Z"
+      }
+    ]
+  }
+}
+```
+
+### Reset Failed URLs
+**POST** `/api/scraping/urls/reset-failed`
+
+**Headers:**
+```
+Authorization: Bearer <access_token>
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "reset_count": 15,
+    "message": "Reset 15 failed URLs to pending status"
+  }
+}
+```
+
+### Delete Scraped URL
+**DELETE** `/api/scraping/urls/:id`
+
+**Headers:**
+```
+Authorization: Bearer <access_token>
+```
