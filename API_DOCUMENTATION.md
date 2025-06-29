@@ -1,6 +1,6 @@
 # TheMobileProf API Documentation
 
-> **Test Type Rule:**
+> **Test Type Rule that determines which test is a course test and which is a lesson test:**
 > - Only `lesson_id` is nullable in the tests table.
 > - If a test has both `course_id` and `lesson_id`, it is a **lesson test** (attached to a specific lesson).
 > - If a test has a `course_id` but no `lesson_id`, it is a **course test** (attached to the course as a whole).
