@@ -135,7 +135,6 @@ const validateCourse = [
 ];
 
 const validateEnrollment = [
-  body('userId').isUUID().withMessage('Valid user ID is required'),
   body('sponsorshipId').optional().isUUID().withMessage('Valid sponsorship ID is required')
 ];
 
