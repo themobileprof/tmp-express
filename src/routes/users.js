@@ -303,4 +303,248 @@ router.get('/:id/discussions', authenticateToken, asyncHandler(async (req, res) 
   });
 }));
 
+// Get user dashboard stats
+router.get('/:id/dashboard-stats', authenticateToken, asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const currentUserId = req.user.id;
+
+  // Users can only view their own stats unless they're admin
+  if (currentUserId !== id && req.user.role !== 'admin') {
+    throw new AppError('Access denied', 403, 'Access Denied');
+  }
+
+  // Get enrollment counts
+  const enrollmentStats = await getRow(
+    `SELECT 
+       COUNT(CASE WHEN enrollment_type = 'course' THEN 1 END) as total_enrolled_courses,
+       COUNT(CASE WHEN enrollment_type = 'class' THEN 1 END) as total_enrolled_classes,
+       COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed_enrollments
+     FROM enrollments 
+     WHERE user_id = $1`,
+    [id]
+  );
+
+  // Get lesson completion stats
+  const lessonStats = await getRow(
+    `SELECT 
+       COUNT(DISTINCT l.id) as total_lessons,
+       COUNT(DISTINCT CASE WHEN lp.user_id = $1 THEN l.id END) as completed_lessons
+     FROM lessons l
+     JOIN courses c ON l.course_id = c.id
+     JOIN enrollments e ON c.id = e.course_id
+     LEFT JOIN lesson_progress lp ON l.id = lp.lesson_id AND lp.user_id = $1
+     WHERE e.user_id = $1 AND l.is_published = true`,
+    [id]
+  );
+
+  // Get study time for current month (mock data for now, would need study_time table)
+  const studyTimeThisMonth = 18; // Mock value - would be calculated from study sessions
+
+  res.json({
+    totalEnrolledCourses: parseInt(enrollmentStats.total_enrolled_courses) || 0,
+    totalEnrolledClasses: parseInt(enrollmentStats.total_enrolled_classes) || 0,
+    completedLessons: parseInt(lessonStats.completed_lessons) || 0,
+    totalLessons: parseInt(lessonStats.total_lessons) || 0,
+    studyTimeThisMonth: studyTimeThisMonth
+  });
+}));
+
+// Get user enrolled courses (separate endpoint for frontend compatibility)
+router.get('/:id/enrolled-courses', authenticateToken, asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const currentUserId = req.user.id;
+
+  // Users can only view their own enrollments unless they're admin
+  if (currentUserId !== id && req.user.role !== 'admin') {
+    throw new AppError('Access denied', 403, 'Access Denied');
+  }
+
+  const enrolledCourses = await getRows(
+    `SELECT e.id, e.course_id, e.progress, e.status, e.enrolled_at, e.completed_at,
+            c.title as course_title, c.topic, c.image_url, c.duration,
+            u.first_name as instructor_first_name, u.last_name as instructor_last_name,
+            s.discount_code, s.discount_type, s.discount_value,
+            (SELECT MAX(ta.completed_at) FROM test_attempts ta 
+             JOIN tests t ON ta.test_id = t.id 
+             WHERE t.course_id = c.id AND ta.user_id = e.user_id) as last_accessed_at
+     FROM enrollments e
+     JOIN courses c ON e.course_id = c.id
+     LEFT JOIN users u ON c.instructor_id = u.id
+     LEFT JOIN sponsorships s ON e.sponsorship_id = s.id
+     WHERE e.user_id = $1 AND e.enrollment_type = 'course'
+     ORDER BY e.enrolled_at DESC`,
+    [id]
+  );
+
+  res.json(enrolledCourses.map(ec => ({
+    id: ec.id,
+    courseId: ec.course_id,
+    courseTitle: ec.course_title,
+    progress: ec.progress,
+    status: ec.status,
+    enrolledAt: ec.enrolled_at,
+    lastAccessedAt: ec.last_accessed_at,
+    instructorName: ec.instructor_first_name ? `${ec.instructor_first_name} ${ec.instructor_last_name}` : null,
+    topic: ec.topic,
+    duration: ec.duration,
+    imageUrl: ec.image_url,
+    sponsorship: ec.discount_code ? {
+      discountCode: ec.discount_code,
+      discountType: ec.discount_type,
+      discountValue: ec.discount_value
+    } : null
+  })));
+}));
+
+// Get user enrolled classes (separate endpoint for frontend compatibility)
+router.get('/:id/enrolled-classes', authenticateToken, asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const currentUserId = req.user.id;
+
+  // Users can only view their own enrollments unless they're admin
+  if (currentUserId !== id && req.user.role !== 'admin') {
+    throw new AppError('Access denied', 403, 'Access Denied');
+  }
+
+  const enrolledClasses = await getRows(
+    `SELECT e.id, e.class_id, e.progress, e.status, e.enrolled_at, e.completed_at,
+            cl.title as class_title, cl.topic, cl.type, cl.start_date, cl.end_date, cl.duration, cl.location,
+            u.first_name as instructor_first_name, u.last_name as instructor_last_name
+     FROM enrollments e
+     JOIN classes cl ON e.class_id = cl.id
+     LEFT JOIN users u ON cl.instructor_id = u.id
+     WHERE e.user_id = $1 AND e.enrollment_type = 'class'
+     ORDER BY cl.start_date ASC`,
+    [id]
+  );
+
+  res.json(enrolledClasses.map(ec => ({
+    id: ec.id,
+    classId: ec.class_id,
+    classTitle: ec.class_title,
+    instructorName: ec.instructor_first_name ? `${ec.instructor_first_name} ${ec.instructor_last_name}` : null,
+    startDate: ec.start_date,
+    endDate: ec.end_date,
+    type: ec.type,
+    status: ec.status,
+    enrolledAt: ec.enrolled_at,
+    topic: ec.topic,
+    duration: ec.duration,
+    location: ec.location
+  })));
+}));
+
+// Get current user's enrolled courses (for frontend /enrollments/courses endpoint)
+router.get('/enrollments/courses', authenticateToken, asyncHandler(async (req, res) => {
+  const userId = req.user.id;
+
+  const enrolledCourses = await getRows(
+    `SELECT e.id, e.course_id, e.progress, e.status, e.enrolled_at, e.completed_at,
+            c.title as course_title, c.topic, c.image_url, c.duration,
+            u.first_name as instructor_first_name, u.last_name as instructor_last_name,
+            s.discount_code, s.discount_type, s.discount_value,
+            (SELECT MAX(ta.completed_at) FROM test_attempts ta 
+             JOIN tests t ON ta.test_id = t.id 
+             WHERE t.course_id = c.id AND ta.user_id = e.user_id) as last_accessed_at
+     FROM enrollments e
+     JOIN courses c ON e.course_id = c.id
+     LEFT JOIN users u ON c.instructor_id = u.id
+     LEFT JOIN sponsorships s ON e.sponsorship_id = s.id
+     WHERE e.user_id = $1 AND e.enrollment_type = 'course'
+     ORDER BY e.enrolled_at DESC`,
+    [userId]
+  );
+
+  res.json(enrolledCourses.map(ec => ({
+    id: ec.id,
+    courseId: ec.course_id,
+    courseTitle: ec.course_title,
+    progress: ec.progress,
+    status: ec.status,
+    enrolledAt: ec.enrolled_at,
+    lastAccessedAt: ec.last_accessed_at,
+    instructorName: ec.instructor_first_name ? `${ec.instructor_first_name} ${ec.instructor_last_name}` : null,
+    topic: ec.topic,
+    duration: ec.duration,
+    imageUrl: ec.image_url,
+    sponsorship: ec.discount_code ? {
+      discountCode: ec.discount_code,
+      discountType: ec.discount_type,
+      discountValue: ec.discount_value
+    } : null
+  })));
+}));
+
+// Get current user's enrolled classes (for frontend /enrollments/classes endpoint)
+router.get('/enrollments/classes', authenticateToken, asyncHandler(async (req, res) => {
+  const userId = req.user.id;
+
+  const enrolledClasses = await getRows(
+    `SELECT e.id, e.class_id, e.progress, e.status, e.enrolled_at, e.completed_at,
+            cl.title as class_title, cl.topic, cl.type, cl.start_date, cl.end_date, cl.duration, cl.location,
+            u.first_name as instructor_first_name, u.last_name as instructor_last_name
+     FROM enrollments e
+     JOIN classes cl ON e.class_id = cl.id
+     LEFT JOIN users u ON cl.instructor_id = u.id
+     WHERE e.user_id = $1 AND e.enrollment_type = 'class'
+     ORDER BY cl.start_date ASC`,
+    [userId]
+  );
+
+  res.json(enrolledClasses.map(ec => ({
+    id: ec.id,
+    classId: ec.class_id,
+    classTitle: ec.class_title,
+    instructorName: ec.instructor_first_name ? `${ec.instructor_first_name} ${ec.instructor_last_name}` : null,
+    startDate: ec.start_date,
+    endDate: ec.end_date,
+    type: ec.type,
+    status: ec.status,
+    enrolledAt: ec.enrolled_at,
+    topic: ec.topic,
+    duration: ec.duration,
+    location: ec.location
+  })));
+}));
+
+// Get current user's dashboard stats (for frontend /users/dashboard-stats endpoint)
+router.get('/dashboard-stats', authenticateToken, asyncHandler(async (req, res) => {
+  const userId = req.user.id;
+
+  // Get enrollment counts
+  const enrollmentStats = await getRow(
+    `SELECT 
+       COUNT(CASE WHEN enrollment_type = 'course' THEN 1 END) as total_enrolled_courses,
+       COUNT(CASE WHEN enrollment_type = 'class' THEN 1 END) as total_enrolled_classes,
+       COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed_enrollments
+     FROM enrollments 
+     WHERE user_id = $1`,
+    [userId]
+  );
+
+  // Get lesson completion stats
+  const lessonStats = await getRow(
+    `SELECT 
+       COUNT(DISTINCT l.id) as total_lessons,
+       COUNT(DISTINCT CASE WHEN lp.user_id = $1 THEN l.id END) as completed_lessons
+     FROM lessons l
+     JOIN courses c ON l.course_id = c.id
+     JOIN enrollments e ON c.id = e.course_id
+     LEFT JOIN lesson_progress lp ON l.id = lp.lesson_id AND lp.user_id = $1
+     WHERE e.user_id = $1 AND l.is_published = true`,
+    [userId]
+  );
+
+  // Get study time for current month (mock data for now, would need study_time table)
+  const studyTimeThisMonth = 18; // Mock value - would be calculated from study sessions
+
+  res.json({
+    totalEnrolledCourses: parseInt(enrollmentStats.total_enrolled_courses) || 0,
+    totalEnrolledClasses: parseInt(enrollmentStats.total_enrolled_classes) || 0,
+    completedLessons: parseInt(lessonStats.completed_lessons) || 0,
+    totalLessons: parseInt(lessonStats.total_lessons) || 0,
+    studyTimeThisMonth: studyTimeThisMonth
+  });
+}));
+
 module.exports = router; 

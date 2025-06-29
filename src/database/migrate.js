@@ -312,6 +312,25 @@ const createTables = async () => {
       )
     `);
 
+    // Create Lesson_Progress table to track user progress through lessons
+    await query(`
+      CREATE TABLE IF NOT EXISTS lesson_progress (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id UUID NOT NULL,
+        lesson_id UUID NOT NULL,
+        status VARCHAR(20) DEFAULT 'not_started',
+        progress_percentage INTEGER DEFAULT 0,
+        time_spent_minutes INTEGER DEFAULT 0,
+        completed_at TIMESTAMP NULL,
+        last_accessed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (lesson_id) REFERENCES lessons(id) ON DELETE CASCADE,
+        UNIQUE(user_id, lesson_id)
+      )
+    `);
+
     // Create Tests table
     await query(`
       CREATE TABLE IF NOT EXISTS tests (

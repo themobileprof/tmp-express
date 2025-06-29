@@ -312,6 +312,51 @@ router.get('/me', asyncHandler(async (req, res) => {
   });
 }));
 
+// Get current user profile (alias for /me for frontend compatibility)
+router.get('/profile', asyncHandler(async (req, res) => {
+  // This route requires authentication middleware
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (!token) {
+    throw new AppError('Access token required', 401, 'Authentication Required');
+  }
+
+  const decoded = jwt.verify(token, process.env.JWT_SECRET);
+  
+  const user = await getRow(
+    `SELECT u.id, u.email, u.first_name, u.last_name, u.role, u.avatar_url, u.bio, 
+            u.created_at, u.is_active, u.auth_provider, u.email_verified, us.theme, us.language, us.timezone
+     FROM users u
+     LEFT JOIN user_settings us ON u.id = us.user_id
+     WHERE u.id = $1`,
+    [decoded.user_id]
+  );
+
+  if (!user || !user.is_active) {
+    throw new AppError('User not found or account is inactive', 401, 'Invalid Token');
+  }
+
+  // Return in the format expected by frontend
+  res.json({
+    id: user.id,
+    email: user.email,
+    firstName: user.first_name,
+    lastName: user.last_name,
+    role: user.role,
+    profilePicture: user.avatar_url,
+    bio: user.bio,
+    createdAt: user.created_at,
+    authProvider: user.auth_provider,
+    emailVerified: user.email_verified,
+    settings: {
+      theme: user.theme,
+      language: user.language,
+      timezone: user.timezone
+    }
+  });
+}));
+
 // Refresh token
 router.post('/refresh', asyncHandler(async (req, res) => {
   const { token } = req.body;
