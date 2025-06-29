@@ -20,6 +20,7 @@ const settingsRoutes = require('./routes/settings');
 const paymentRoutes = require('./routes/payments');
 const adminRoutes = require('./routes/admin');
 const scrapingRoutes = require('./routes/scraping');
+const notificationRoutes = require('./routes/notifications');
 
 const { errorHandler } = require('./middleware/errorHandler');
 const { authenticateToken } = require('./middleware/auth');
@@ -255,6 +256,7 @@ app.use('/api/settings', authenticateToken, settingsRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/scraping', scrapingRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 // 404 handler
 app.use('*', (req, res) => {

@@ -6,6 +6,122 @@ const { authenticateToken, authorizeInstructor, authorizeOwnerOrAdmin } = requir
 
 const router = express.Router();
 
+// Browse courses (public endpoint) - MUST be before /:id routes
+router.get('/browse', asyncHandler(async (req, res) => {
+  const { 
+    topic, 
+    instructor, 
+    level, 
+    price_min, 
+    price_max, 
+    sort = 'created_at', 
+    order = 'desc',
+    page = 1,
+    limit = 12
+  } = req.query;
+
+  let whereConditions = ['c.is_published = true'];
+  let params = [];
+  let paramIndex = 1;
+
+  // Add filters
+  if (topic) {
+    whereConditions.push(`c.topic ILIKE $${paramIndex}`);
+    params.push(`%${topic}%`);
+    paramIndex++;
+  }
+
+  if (instructor) {
+    whereConditions.push(`(u.first_name ILIKE $${paramIndex} OR u.last_name ILIKE $${paramIndex})`);
+    params.push(`%${instructor}%`);
+    paramIndex++;
+  }
+
+  if (level) {
+    whereConditions.push(`c.level = $${paramIndex}`);
+    params.push(level);
+    paramIndex++;
+  }
+
+  if (price_min) {
+    whereConditions.push(`c.price >= $${paramIndex}`);
+    params.push(parseFloat(price_min));
+    paramIndex++;
+  }
+
+  if (price_max) {
+    whereConditions.push(`c.price <= $${paramIndex}`);
+    params.push(parseFloat(price_max));
+    paramIndex++;
+  }
+
+  // Validate sort field
+  const allowedSortFields = ['created_at', 'title', 'price', 'rating', 'student_count'];
+  const sortField = allowedSortFields.includes(sort) ? sort : 'created_at';
+  const sortOrder = order.toLowerCase() === 'asc' ? 'ASC' : 'DESC';
+
+  // Calculate offset
+  const offset = (parseInt(page) - 1) * parseInt(limit);
+
+  // Get total count
+  const countQuery = `
+    SELECT COUNT(*) as total
+    FROM courses c
+    JOIN users u ON c.instructor_id = u.id
+    WHERE ${whereConditions.join(' AND ')}
+  `;
+  
+  const countResult = await getRow(countQuery, params);
+  const total = parseInt(countResult.total);
+
+  // Get courses
+  const coursesQuery = `
+    SELECT 
+      c.id, c.title, c.description, c.topic, c.type, c.price, c.image_url,
+      c.duration, c.rating, c.student_count, c.created_at,
+      u.id as instructor_id, u.first_name as instructor_first_name, 
+      u.last_name as instructor_last_name, u.avatar_url as instructor_avatar,
+      (SELECT COUNT(*) FROM lessons l WHERE l.course_id = c.id AND l.is_published = true) as lesson_count
+    FROM courses c
+    JOIN users u ON c.instructor_id = u.id
+    WHERE ${whereConditions.join(' AND ')}
+    ORDER BY c.${sortField} ${sortOrder}
+    LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
+  `;
+
+  params.push(parseInt(limit), offset);
+  const courses = await getRows(coursesQuery, params);
+
+  res.json({
+    courses: courses.map(course => ({
+      id: course.id,
+      title: course.title,
+      description: course.description,
+      topic: course.topic,
+      type: course.type,
+      price: course.price,
+      imageUrl: course.image_url,
+      duration: course.duration,
+      rating: course.rating,
+      studentCount: course.student_count,
+      lessonCount: course.lesson_count,
+      createdAt: course.created_at,
+      instructor: {
+        id: course.instructor_id,
+        firstName: course.instructor_first_name,
+        lastName: course.instructor_last_name,
+        avatarUrl: course.instructor_avatar
+      }
+    })),
+    pagination: {
+      page: parseInt(page),
+      limit: parseInt(limit),
+      total,
+      totalPages: Math.ceil(total / parseInt(limit))
+    }
+  });
+}));
+
 // Validation middleware
 const validateCourse = [
   body('title').trim().isLength({ min: 1 }).withMessage('Course title is required'),

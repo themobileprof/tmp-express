@@ -6,6 +6,123 @@ const { authenticateToken, authorizeInstructor, authorizeOwnerOrAdmin } = requir
 
 const router = express.Router();
 
+// Get upcoming classes (public endpoint) - MUST be before /:id routes
+router.get('/upcoming', asyncHandler(async (req, res) => {
+  const { 
+    topic, 
+    instructor, 
+    type, 
+    start_date, 
+    end_date,
+    sort = 'start_date', 
+    order = 'asc',
+    page = 1,
+    limit = 12
+  } = req.query;
+
+  let whereConditions = ['cl.start_date > CURRENT_TIMESTAMP'];
+  let params = [];
+  let paramIndex = 1;
+
+  // Add filters
+  if (topic) {
+    whereConditions.push(`cl.topic ILIKE $${paramIndex}`);
+    params.push(`%${topic}%`);
+    paramIndex++;
+  }
+
+  if (instructor) {
+    whereConditions.push(`(u.first_name ILIKE $${paramIndex} OR u.last_name ILIKE $${paramIndex})`);
+    params.push(`%${instructor}%`);
+    paramIndex++;
+  }
+
+  if (type) {
+    whereConditions.push(`cl.type = $${paramIndex}`);
+    params.push(type);
+    paramIndex++;
+  }
+
+  if (start_date) {
+    whereConditions.push(`cl.start_date >= $${paramIndex}`);
+    params.push(start_date);
+    paramIndex++;
+  }
+
+  if (end_date) {
+    whereConditions.push(`cl.start_date <= $${paramIndex}`);
+    params.push(end_date);
+    paramIndex++;
+  }
+
+  // Validate sort field
+  const allowedSortFields = ['start_date', 'title', 'price', 'available_slots'];
+  const sortField = allowedSortFields.includes(sort) ? sort : 'start_date';
+  const sortOrder = order.toLowerCase() === 'desc' ? 'DESC' : 'ASC';
+
+  // Calculate offset
+  const offset = (parseInt(page) - 1) * parseInt(limit);
+
+  // Get total count
+  const countQuery = `
+    SELECT COUNT(*) as total
+    FROM classes cl
+    JOIN users u ON cl.instructor_id = u.id
+    WHERE ${whereConditions.join(' AND ')}
+  `;
+  
+  const countResult = await getRow(countQuery, params);
+  const total = parseInt(countResult.total);
+
+  // Get classes
+  const classesQuery = `
+    SELECT 
+      cl.id, cl.title, cl.description, cl.topic, cl.type, cl.price,
+      cl.start_date, cl.end_date, cl.duration, cl.location, cl.available_slots,
+      cl.total_slots, cl.created_at,
+      u.id as instructor_id, u.first_name as instructor_first_name, 
+      u.last_name as instructor_last_name, u.avatar_url as instructor_avatar
+    FROM classes cl
+    JOIN users u ON cl.instructor_id = u.id
+    WHERE ${whereConditions.join(' AND ')}
+    ORDER BY cl.${sortField} ${sortOrder}
+    LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
+  `;
+
+  params.push(parseInt(limit), offset);
+  const classes = await getRows(classesQuery, params);
+
+  res.json({
+    classes: classes.map(cls => ({
+      id: cls.id,
+      title: cls.title,
+      description: cls.description,
+      topic: cls.topic,
+      type: cls.type,
+      price: cls.price,
+      startDate: cls.start_date,
+      endDate: cls.end_date,
+      duration: cls.duration,
+      location: cls.location,
+      availableSlots: cls.available_slots,
+      totalSlots: cls.total_slots,
+      createdAt: cls.created_at,
+      instructor: {
+        id: cls.instructor_id,
+        firstName: cls.instructor_first_name,
+        lastName: cls.instructor_last_name,
+        avatarUrl: cls.instructor_avatar
+      }
+    })),
+    pagination: {
+      page: parseInt(page),
+      limit: parseInt(limit),
+      total,
+      totalPages: Math.ceil(total / parseInt(limit))
+    }
+  });
+}));
+
 // Validation middleware
 const validateClass = [
   body('title').trim().isLength({ min: 1 }).withMessage('Class title is required'),

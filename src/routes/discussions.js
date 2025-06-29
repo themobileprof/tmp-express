@@ -6,6 +6,121 @@ const { authenticateToken, authorizeOwnerOrAdmin } = require('../middleware/auth
 
 const router = express.Router();
 
+// Get recent discussions (public endpoint) - MUST be before /:id routes
+router.get('/recent', asyncHandler(async (req, res) => {
+  const { 
+    course_id, 
+    class_id, 
+    author, 
+    sort = 'created_at', 
+    order = 'desc',
+    page = 1,
+    limit = 20
+  } = req.query;
+
+  let whereConditions = [];
+  let params = [];
+  let paramIndex = 1;
+
+  // Add filters
+  if (course_id) {
+    whereConditions.push(`d.course_id = $${paramIndex}`);
+    params.push(course_id);
+    paramIndex++;
+  }
+
+  if (class_id) {
+    whereConditions.push(`d.class_id = $${paramIndex}`);
+    params.push(class_id);
+    paramIndex++;
+  }
+
+  if (author) {
+    whereConditions.push(`(u.first_name ILIKE $${paramIndex} OR u.last_name ILIKE $${paramIndex})`);
+    params.push(`%${author}%`);
+    paramIndex++;
+  }
+
+  const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
+
+  // Validate sort field
+  const allowedSortFields = ['created_at', 'title', 'reply_count', 'view_count'];
+  const sortField = allowedSortFields.includes(sort) ? sort : 'created_at';
+  const sortOrder = order.toLowerCase() === 'asc' ? 'ASC' : 'DESC';
+
+  // Calculate offset
+  const offset = (parseInt(page) - 1) * parseInt(limit);
+
+  // Get total count
+  const countQuery = `
+    SELECT COUNT(*) as total
+    FROM discussions d
+    JOIN users u ON d.author_id = u.id
+    LEFT JOIN courses c ON d.course_id = c.id
+    LEFT JOIN classes cl ON d.class_id = cl.id
+    ${whereClause}
+  `;
+  
+  const countResult = await getRow(countQuery, params);
+  const total = parseInt(countResult.total);
+
+  // Get discussions
+  const discussionsQuery = `
+    SELECT 
+      d.id, d.title, d.content, d.created_at, d.updated_at,
+      d.reply_count, d.view_count, d.is_pinned, d.is_locked,
+      u.id as author_id, u.first_name as author_first_name, 
+      u.last_name as author_last_name, u.avatar_url as author_avatar,
+      c.id as course_id, c.title as course_title,
+      cl.id as class_id, cl.title as class_title,
+      (SELECT COUNT(*) FROM discussion_replies dr WHERE dr.discussion_id = d.id) as actual_reply_count
+    FROM discussions d
+    JOIN users u ON d.author_id = u.id
+    LEFT JOIN courses c ON d.course_id = c.id
+    LEFT JOIN classes cl ON d.class_id = cl.id
+    ${whereClause}
+    ORDER BY d.${sortField} ${sortOrder}
+    LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
+  `;
+
+  params.push(parseInt(limit), offset);
+  const discussions = await getRows(discussionsQuery, params);
+
+  res.json({
+    discussions: discussions.map(discussion => ({
+      id: discussion.id,
+      title: discussion.title,
+      content: discussion.content,
+      createdAt: discussion.created_at,
+      updatedAt: discussion.updated_at,
+      replyCount: discussion.actual_reply_count || discussion.reply_count,
+      viewCount: discussion.view_count,
+      isPinned: discussion.is_pinned,
+      isLocked: discussion.is_locked,
+      author: {
+        id: discussion.author_id,
+        firstName: discussion.author_first_name,
+        lastName: discussion.author_last_name,
+        avatarUrl: discussion.author_avatar
+      },
+      course: discussion.course_id ? {
+        id: discussion.course_id,
+        title: discussion.course_title
+      } : null,
+      class: discussion.class_id ? {
+        id: discussion.class_id,
+        title: discussion.class_title
+      } : null
+    })),
+    pagination: {
+      page: parseInt(page),
+      limit: parseInt(limit),
+      total,
+      totalPages: Math.ceil(total / parseInt(limit))
+    }
+  });
+}));
+
 // Validation middleware
 const validateDiscussion = [
   body('title').trim().isLength({ min: 1 }).withMessage('Discussion title is required'),

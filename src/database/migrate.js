@@ -318,11 +318,10 @@ const createTables = async () => {
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         user_id UUID NOT NULL,
         lesson_id UUID NOT NULL,
-        status VARCHAR(20) DEFAULT 'not_started',
+        is_completed BOOLEAN DEFAULT false,
+        completed_at TIMESTAMP,
         progress_percentage INTEGER DEFAULT 0,
         time_spent_minutes INTEGER DEFAULT 0,
-        completed_at TIMESTAMP NULL,
-        last_accessed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
@@ -418,9 +417,12 @@ const createTables = async () => {
         course_id UUID,
         class_id UUID,
         is_pinned BOOLEAN DEFAULT false,
+        is_locked BOOLEAN DEFAULT false,
         reply_count INTEGER DEFAULT 0,
+        view_count INTEGER DEFAULT 0,
         last_activity_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (author_id) REFERENCES users(id) ON DELETE CASCADE,
         FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE SET NULL,
         FOREIGN KEY (class_id) REFERENCES classes(id) ON DELETE SET NULL
@@ -537,6 +539,23 @@ const createTables = async () => {
         completed_at TIMESTAMP NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Create Notifications table
+    await query(`
+      CREATE TABLE IF NOT EXISTS notifications (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id UUID NOT NULL,
+        type VARCHAR(50) NOT NULL,
+        title VARCHAR(255) NOT NULL,
+        message TEXT NOT NULL,
+        data JSONB,
+        is_read BOOLEAN DEFAULT false,
+        read_at TIMESTAMP,
+        priority VARCHAR(20) DEFAULT 'normal',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
       )
     `);
 

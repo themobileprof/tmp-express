@@ -2,9 +2,10 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { body, validationResult } = require('express-validator');
-const { query, getRow } = require('../database/config');
+const { getRow, query } = require('../database/config');
 const { asyncHandler, AppError } = require('../middleware/errorHandler');
 const { OAuth2Client } = require('google-auth-library');
+const { authenticateToken } = require('../middleware/auth');
 
 const router = express.Router();
 
@@ -312,25 +313,15 @@ router.get('/me', asyncHandler(async (req, res) => {
   });
 }));
 
-// Get current user profile (alias for /me for frontend compatibility)
-router.get('/profile', asyncHandler(async (req, res) => {
-  // This route requires authentication middleware
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
-
-  if (!token) {
-    throw new AppError('Access token required', 401, 'Authentication Required');
-  }
-
-  const decoded = jwt.verify(token, process.env.JWT_SECRET);
-  
+// Get current user profile (frontend compatible)
+router.get('/profile', authenticateToken, asyncHandler(async (req, res) => {
   const user = await getRow(
     `SELECT u.id, u.email, u.first_name, u.last_name, u.role, u.avatar_url, u.bio, 
             u.created_at, u.is_active, u.auth_provider, u.email_verified, us.theme, us.language, us.timezone
      FROM users u
      LEFT JOIN user_settings us ON u.id = us.user_id
      WHERE u.id = $1`,
-    [decoded.user_id]
+    [req.user.id]
   );
 
   if (!user || !user.is_active) {

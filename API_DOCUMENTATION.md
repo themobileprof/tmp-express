@@ -285,9 +285,9 @@ Refresh JWT token.
 {
   "token": "new-jwt-token",
   "user": {
-    "id": "uuid",
-    "email": "user@example.com",
-    "role": "student"
+      "id": "uuid",
+      "email": "user@example.com",
+  "role": "student"
   }
 }
 ```
@@ -342,11 +342,11 @@ Authorization: Bearer <jwt-token>
 **Response (200):**
 ```json
 {
-  "id": "uuid",
-  "email": "user@example.com",
-  "firstName": "John",
-  "lastName": "Doe",
-  "role": "student",
+    "id": "uuid",
+    "email": "user@example.com",
+    "firstName": "John",
+    "lastName": "Doe",
+      "role": "student",
   "avatarUrl": "https://example.com/avatar.jpg",
   "bio": "User bio",
   "isActive": true,
