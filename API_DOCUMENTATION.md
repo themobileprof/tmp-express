@@ -1728,10 +1728,11 @@ Authorization: Bearer <jwt-token>
   "totalEnrolledCourses": 2,
   "totalEnrolledClasses": 1,
   "completedLessons": 12,
-  "totalLessons": 24,
-  "studyTimeThisMonth": 18
+  "totalLessons": 24
 }
 ```
+
+> **Note:** The `studyTimeThisMonth` field has been removed and is no longer returned by this endpoint.
 
 #### Get User Enrolled Courses
 **GET** `/users/:id/enrolled-courses`
@@ -1877,7 +1878,8 @@ Authorization: Bearer <jwt-token>
   "totalEnrolledCourses": 2,
   "totalEnrolledClasses": 1,
   "completedLessons": 12,
-  "totalLessons": 24,
-  "studyTimeThisMonth": 18
+  "totalLessons": 24
 }
 ```
+
+> **Note:** The `studyTimeThisMonth` field has been removed and is no longer returned by this endpoint.

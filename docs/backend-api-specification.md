@@ -1,4 +1,3 @@
-
 # TheMobileProf Backend API Specification
 
 ## Overview

@@ -115,15 +115,11 @@ router.get('/dashboard-stats', authenticateToken, asyncHandler(async (req, res) 
     [userId]
   );
 
-  // Get study time for current month (mock data for now, would need study_time table)
-  const studyTimeThisMonth = 18; // Mock value - would be calculated from study sessions
-
   res.json({
     totalEnrolledCourses: parseInt(enrollmentStats.total_enrolled_courses) || 0,
     totalEnrolledClasses: parseInt(enrollmentStats.total_enrolled_classes) || 0,
     completedLessons: parseInt(lessonStats.completed_lessons) || 0,
-    totalLessons: parseInt(lessonStats.total_lessons) || 0,
-    studyTimeThisMonth: studyTimeThisMonth
+    totalLessons: parseInt(lessonStats.total_lessons) || 0
   });
 }));
 
@@ -450,15 +446,11 @@ router.get('/:id/dashboard-stats', authenticateToken, asyncHandler(async (req, r
     [id]
   );
 
-  // Get study time for current month (mock data for now, would need study_time table)
-  const studyTimeThisMonth = 18; // Mock value - would be calculated from study sessions
-
   res.json({
     totalEnrolledCourses: parseInt(enrollmentStats.total_enrolled_courses) || 0,
     totalEnrolledClasses: parseInt(enrollmentStats.total_enrolled_classes) || 0,
     completedLessons: parseInt(lessonStats.completed_lessons) || 0,
-    totalLessons: parseInt(lessonStats.total_lessons) || 0,
-    studyTimeThisMonth: studyTimeThisMonth
+    totalLessons: parseInt(lessonStats.total_lessons) || 0
   });
 }));
 
