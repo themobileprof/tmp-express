@@ -495,8 +495,8 @@ router.get('/stats/overview', asyncHandler(async (req, res) => {
   const testStats = await query(`
     SELECT 
       COUNT(*) as total,
-      COUNT(CASE WHEN status = 'active' THEN 1 END) as active,
-      COUNT(CASE WHEN status = 'draft' THEN 1 END) as draft
+      COUNT(CASE WHEN is_published = true THEN 1 END) as published,
+      COUNT(CASE WHEN is_published = false THEN 1 END) as draft
     FROM tests
   `);
 

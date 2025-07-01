@@ -8,7 +8,7 @@ const createTables = async () => {
     // Create custom types
     await query(`
       DO $$ BEGIN
-        CREATE TYPE user_role AS ENUM ('student', 'instructor', 'admin');
+        CREATE TYPE user_role AS ENUM ('student', 'instructor', 'admin', 'sponsor');
       EXCEPTION
         WHEN duplicate_object THEN null;
       END $$;
