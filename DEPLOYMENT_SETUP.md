@@ -124,7 +124,7 @@ docker inspect themobileprof-backend
 curl http://localhost:3000/health
 
 # Check uploads directory
-ls -la /var/www/tmp-root/uploads
+ls -la /var/www/api.themobileprof.com/uploads
 
 # Check environment variables in container
 docker exec themobileprof-backend env
@@ -146,9 +146,9 @@ docker stop themobileprof-backend || true
 docker rm themobileprof-backend || true
 
 # Create uploads directory
-sudo mkdir -p /var/www/tmp-root/uploads
-sudo chown $USER:$USER /var/www/tmp-root/uploads
-sudo chmod 755 /var/www/tmp-root/uploads
+sudo mkdir -p /var/www/api.themobileprof.com/uploads
+sudo chown $USER:$USER /var/www/api.themobileprof.com/uploads
+sudo chmod 755 /var/www/api.themobileprof.com/uploads
 
 # Create .env file (copy your environment variables here)
 cat > .env << 'EOF'
@@ -158,12 +158,12 @@ JWT_SECRET=your-jwt-secret
 # ... add all other environment variables
 EOF
 
-# Run container
+# Run container (same as GitHub Actions)
 docker run -d \
   --name themobileprof-backend \
   --restart unless-stopped \
-  -p 3000:3000 \
-  -v /var/www/tmp-root/uploads:/app/uploads \
+  --network host \
+  -v /var/www/api.themobileprof.com/uploads:/app/uploads \
   --env-file .env \
   your-username/themobileprof-backend:latest
 

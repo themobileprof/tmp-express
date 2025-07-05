@@ -181,14 +181,14 @@ jobs:
           
           # Create uploads directory if it doesn't exist
           echo "📁 Creating uploads directory..."
-          UPLOADS_DIR="/var/www/tmp-root/uploads"
+          UPLOADS_DIR="/var/www/api.themobileprof.com/uploads"
           
           # Try to create directory without sudo first
           if mkdir -p "$UPLOADS_DIR" 2>/dev/null; then
             echo "✅ Created uploads directory without sudo"
           else
             # If that fails, use home directory instead
-            echo "⚠️  Cannot create /var/www/tmp-root/uploads, using home directory"
+            echo "⚠️  Cannot create /var/www/api.themobileprof.com/uploads, using home directory"
             UPLOADS_DIR="$HOME/themobileprof-uploads"
             mkdir -p "$UPLOADS_DIR"
             echo "✅ Created uploads directory in home: $UPLOADS_DIR"

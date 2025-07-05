@@ -21,6 +21,7 @@ const paymentRoutes = require('./routes/payments');
 const adminRoutes = require('./routes/admin');
 const scrapingRoutes = require('./routes/scraping');
 const notificationRoutes = require('./routes/notifications');
+const uploadRoutes = require('./routes/upload');
 
 const { errorHandler } = require('./middleware/errorHandler');
 const { authenticateToken } = require('./middleware/auth');
@@ -51,6 +52,10 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Compression middleware
 app.use(compression());
+
+// Static file serving for uploads
+const uploadPath = process.env.UPLOAD_PATH || './uploads';
+app.use('/uploads', express.static(uploadPath));
 
 // Logging middleware
 app.use(morgan('combined'));
@@ -257,6 +262,8 @@ app.use('/api/payments', paymentRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/scraping', scrapingRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/upload', uploadRoutes);
+app.use('/uploads', uploadRoutes);
 
 // 404 handler
 app.use('*', (req, res) => {

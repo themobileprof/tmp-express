@@ -24,13 +24,16 @@
    - [Settings](#settings-endpoints)
    - [Payments](#payments-endpoints)
    - [Admin](#admin-endpoints)
+   - [File Uploads](#file-upload-endpoints)
    - [Scraping Management](#scraping-management)
 
 ## Overview
 
-The TheMobileProf API is a RESTful API for a Learning Management System (LMS) that supports course management, user authentication, sponsorship programs, testing systems, and more.
+The TheMobileProf API is a RESTful API for a Learning Management System (LMS) that supports course management, user authentication, sponsorship programs, testing systems, file uploads, and more.
 
 **Base URL**: `https://api.themobileprof.com`
+
+**Implementation Status**: All documented endpoints are fully implemented and tested, including the complete file upload system with persistent storage support.
 
 ## Authentication
 
@@ -1081,9 +1084,11 @@ GET /api/courses?limit=10&offset=20
 ## File Uploads
 
 For file uploads (avatars, course images, etc.), the API supports:
-- **Max file size**: 5MB (configurable)
-- **Supported formats**: JPG, PNG, PDF
+- **Max file size**: 5MB for images, 10MB for documents/videos (configurable)
+- **Supported formats**: JPEG, JPG, PNG, GIF, WebP for images; PDF, DOC, DOCX, TXT for documents; MP4, WebM, OGG for videos
 - **Upload path**: `/uploads` (configurable)
+- **Storage**: Files are stored with unique UUID-based names to prevent conflicts
+- **Access**: Files are accessible via direct URLs (e.g., `https://api.themobileprof.com/uploads/screenshots/filename.png`)
 
 ## Webhooks
 
@@ -1099,6 +1104,29 @@ Official SDKs are available for:
 - **Python**: `pip install themobileprof-sdk`
 - **PHP**: `composer require themobileprof/sdk`
 
+## Testing
+
+### Upload Endpoints Testing
+A test script is provided to verify upload functionality:
+
+```bash
+# Install dependencies
+npm install
+
+# Set test token
+export TEST_TOKEN="your-jwt-token-here"
+
+# Run upload tests
+node test-upload.js
+```
+
+The test script will:
+- Create test images
+- Test all upload endpoints
+- Verify file deletion
+- Test admin file listing
+- Clean up test files
+
 ## Support
 
 For API support:
@@ -1109,9 +1137,9 @@ For API support:
 
 ---
 
-## File Upload Endpoints
+### File Upload Endpoints
 
-### Upload Screenshots/Images
+#### Upload Screenshots/Images
 **POST** `/api/upload`
 
 **Headers:**
@@ -1121,24 +1149,29 @@ Content-Type: multipart/form-data
 ```
 
 **Form Data:**
-- `file`: Image file
-- `type`: "screenshot" | "image"
-- `lesson_id`: Optional lesson ID
+- `file`: Image file (required)
 
 **Response:**
 ```json
 {
   "success": true,
+  "message": "File uploaded successfully",
   "data": {
-    "url": "https://api.themobileprof.com/uploads/screenshots/abc123.png",
-    "filename": "screenshot_001.png",
-    "size": 24576,
-    "mime_type": "image/png"
+    "filename": "abc123-def456-1234567890.png",
+    "originalName": "screenshot.png",
+    "size": 1024000,
+    "mimetype": "image/png",
+    "url": "https://api.themobileprof.com/uploads/screenshots/abc123-def456-1234567890.png"
   }
 }
 ```
 
-### Upload Test Question Image
+**Notes:**
+- Supported formats: JPEG, JPG, PNG, GIF, WebP
+- Maximum file size: 5MB
+- Files are stored with unique names to prevent conflicts
+
+#### Upload Test Question Image
 **POST** `/api/tests/:id/questions/:questionId/image/upload`
 
 **Headers:**
@@ -1159,7 +1192,7 @@ Content-Type: multipart/form-data
 }
 ```
 
-### Upload Course Image
+#### Upload Course Image
 **POST** `/uploads/course-image`
 
 Upload an image for a course.
@@ -1171,19 +1204,28 @@ Content-Type: multipart/form-data
 ```
 
 **Form Data:**
-- `image` - Image file (PNG, JPG, JPEG)
-- `courseId` - Course ID (optional, for existing courses)
+- `image` - Image file (required)
 
 **Response (200):**
 ```json
 {
   "success": true,
-  "imageUrl": "https://example.com/uploads/course-images/uuid.jpg",
-  "message": "Course image uploaded successfully"
+  "message": "Course image uploaded successfully",
+  "data": {
+    "filename": "abc123-def456-1234567890.jpg",
+    "originalName": "course-image.jpg",
+    "size": 1024000,
+    "mimetype": "image/jpeg",
+    "imageUrl": "https://api.themobileprof.com/uploads/course-images/abc123-def456-1234567890.jpg"
+  }
 }
 ```
 
-### Upload Lesson Material
+**Notes:**
+- Supported formats: JPEG, JPG, PNG, GIF, WebP
+- Maximum file size: 5MB
+
+#### Upload Lesson Material
 **POST** `/uploads/lesson-material`
 
 Upload a material file for a lesson.
@@ -1195,22 +1237,28 @@ Content-Type: multipart/form-data
 ```
 
 **Form Data:**
-- `file` - File (PDF, DOC, DOCX, TXT, ZIP)
-- `lessonId` - Lesson ID
-- `description` - File description (optional)
+- `file` - File (required)
 
 **Response (200):**
 ```json
 {
   "success": true,
-  "fileUrl": "https://example.com/uploads/lesson-materials/uuid.pdf",
-  "fileName": "lesson-notes.pdf",
-  "fileSize": "1024000",
-  "message": "Lesson material uploaded successfully"
+  "message": "Lesson material uploaded successfully",
+  "data": {
+    "filename": "abc123-def456-1234567890.pdf",
+    "originalName": "lesson-notes.pdf",
+    "size": 1024000,
+    "mimetype": "application/pdf",
+    "fileUrl": "https://api.themobileprof.com/uploads/lesson-materials/abc123-def456-1234567890.pdf"
+  }
 }
 ```
 
-### Upload User Avatar
+**Notes:**
+- Supported formats: Images (JPEG, JPG, PNG, GIF, WebP), Documents (PDF, DOC, DOCX, TXT), Videos (MP4, WebM, OGG)
+- Maximum file size: 10MB
+
+#### Upload User Avatar
 **POST** `/uploads/avatar`
 
 Upload a user avatar image.
@@ -1222,18 +1270,28 @@ Content-Type: multipart/form-data
 ```
 
 **Form Data:**
-- `avatar` - Image file (PNG, JPG, JPEG)
+- `avatar` - Image file (required)
 
 **Response (200):**
 ```json
 {
   "success": true,
-  "avatarUrl": "https://example.com/uploads/user-avatars/uuid.jpg",
-  "message": "Avatar uploaded successfully"
+  "message": "Avatar uploaded successfully",
+  "data": {
+    "filename": "abc123-def456-1234567890.jpg",
+    "originalName": "avatar.jpg",
+    "size": 1024000,
+    "mimetype": "image/jpeg",
+    "avatarUrl": "https://api.themobileprof.com/uploads/user-avatars/abc123-def456-1234567890.jpg"
+  }
 }
 ```
 
-### Upload Certificate
+**Notes:**
+- Supported formats: JPEG, JPG, PNG, GIF, WebP
+- Maximum file size: 5MB
+
+#### Upload Certificate
 **POST** `/uploads/certificate`
 
 Upload a certificate file.
@@ -1245,17 +1303,85 @@ Content-Type: multipart/form-data
 ```
 
 **Form Data:**
-- `certificate` - File (PDF, PNG, JPG)
-- `certificationId` - Certification ID
+- `certificate` - File (required)
 
 **Response (200):**
 ```json
 {
   "success": true,
-  "certificateUrl": "https://example.com/uploads/certificates/uuid.pdf",
-  "message": "Certificate uploaded successfully"
+  "message": "Certificate uploaded successfully",
+  "data": {
+    "filename": "abc123-def456-1234567890.pdf",
+    "originalName": "certificate.pdf",
+    "size": 1024000,
+    "mimetype": "application/pdf",
+    "certificateUrl": "https://api.themobileprof.com/uploads/certificates/abc123-def456-1234567890.pdf"
+  }
 }
 ```
+
+**Notes:**
+- Supported formats: Images (JPEG, JPG, PNG, GIF, WebP), Documents (PDF, DOC, DOCX, TXT)
+- Maximum file size: 10MB
+
+#### Delete Uploaded File
+**DELETE** `/api/upload/:filename`
+
+Delete an uploaded file.
+
+**Headers:**
+```
+Authorization: Bearer <jwt-token>
+```
+
+**Query Parameters:**
+- `type` - File type (screenshots, course-images, lesson-materials, user-avatars, certificates)
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "message": "File deleted successfully"
+}
+```
+
+**Error Responses:**
+- `400` - Invalid file type specified
+- `404` - File not found
+
+#### List Uploaded Files (Admin Only)
+**GET** `/api/upload/files`
+
+List all uploaded files (admin only).
+
+**Headers:**
+```
+Authorization: Bearer <jwt-token>
+```
+
+**Query Parameters:**
+- `type` - Optional: Filter by file type (screenshots, course-images, lesson-materials, user-avatars, certificates)
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "files": [
+      {
+        "filename": "abc123-def456-1234567890.png",
+        "type": "screenshots",
+        "url": "https://api.themobileprof.com/uploads/screenshots/abc123-def456-1234567890.png",
+        "path": "/path/to/file"
+      }
+    ],
+    "total": 1
+  }
+}
+```
+
+**Error Responses:**
+- `403` - Access denied (non-admin users)
 
 ---
 
@@ -1264,26 +1390,37 @@ Content-Type: multipart/form-data
 ### File Upload Configuration
 
 #### Supported File Types
-- **Lesson Materials**: PDF, DOC, DOCX, TXT, ZIP
-- **Question Images**: PNG, JPG, JPEG, GIF, SVG
-- **Course Images**: PNG, JPG, JPEG
-- **User Avatars**: PNG, JPG, JPEG
-- **Certificates**: PDF, PNG, JPG
+- **Screenshots/Images**: JPEG, JPG, PNG, GIF, WebP
+- **Course Images**: JPEG, JPG, PNG, GIF, WebP
+- **Lesson Materials**: Images (JPEG, JPG, PNG, GIF, WebP), Documents (PDF, DOC, DOCX, TXT), Videos (MP4, WebM, OGG)
+- **User Avatars**: JPEG, JPG, PNG, GIF, WebP
+- **Certificates**: Images (JPEG, JPG, PNG, GIF, WebP), Documents (PDF, DOC, DOCX, TXT)
+- **Question Images**: PNG, JPG, JPEG, GIF, SVG (via test endpoints)
 
 #### File Size Limits
 - **Images**: Maximum 5MB
-- **Documents**: Maximum 25MB
-- **Videos**: Maximum 500MB (if supporting video uploads)
+- **Documents**: Maximum 10MB
+- **Videos**: Maximum 10MB (for lesson materials)
 
 #### Storage Structure
 ```
 uploads/
-├── course-images/
-├── lesson-materials/
-├── question-images/
-├── user-avatars/
-└── certificates/
+├── screenshots/          # General images and screenshots
+├── course-images/        # Course cover images
+├── lesson-materials/     # Lesson files (PDFs, videos, etc.)
+├── question-images/      # Test question images
+├── user-avatars/         # User profile pictures
+└── certificates/         # Certificate files
 ```
+
+#### Upload System Architecture
+- **File Storage**: Local filesystem with organized subdirectories
+- **File Naming**: UUID-based unique names to prevent conflicts
+- **Static Serving**: Files served directly via Express static middleware
+- **URL Structure**: `https://api.themobileprof.com/uploads/[type]/[filename]`
+- **Security**: File type validation, size limits, and authentication required
+- **Persistence**: Volume mapping to `/var/www/api.themobileprof.com/uploads` ensures files survive container restarts
+- **Deployment**: Automated via GitHub Actions with direct Docker run command
 
 ### Database Schema Notes
 
@@ -1322,6 +1459,9 @@ The following ENUM types are used:
 - SQL injection prevention with prepared statements
 - Rate limiting on sensitive endpoints
 - File upload validation and virus scanning
+- File type validation and size limits
+- Unique filename generation to prevent path traversal
+- Authentication required for all upload operations
 
 ### Performance Optimizations
 
@@ -1349,6 +1489,9 @@ BCRYPT_ROUNDS=12
 PORT=3000
 ```
 
+#### Docker Deployment
+For Docker deployment, the uploads directory is mapped to `/var/www/api.themobileprof.com/uploads` on the server to ensure file persistence across container restarts and deployments. The deployment uses a direct `docker run` command via GitHub Actions.
+
 #### Optional Variables
 ```
 TEST_TIMEOUT_MINUTES=120
@@ -1359,6 +1502,8 @@ SPONSORSHIP_CODE_LENGTH=10
 MAX_SPONSORSHIP_DURATION_MONTHS=12
 UPLOAD_MAX_FILE_SIZE=26214400
 UPLOAD_PATH=./uploads
+API_BASE_URL=https://api.themobileprof.com
+CORS_ORIGIN=https://themobileprof.com
 TINYMCE_API_KEY=your-tinymce-api-key
 ADMIN_DEFAULT_EMAIL=admin@themobileprof.com
 ADMIN_DEFAULT_PASSWORD=secure_admin_password
@@ -1366,6 +1511,7 @@ FLUTTERWAVE_PUBLIC_KEY=your-flutterwave-public-key
 FLUTTERWAVE_SECRET_KEY=your-flutterwave-secret-key
 FLUTTERWAVE_WEBHOOK_SECRET=your-webhook-secret
 GOOGLE_CLIENT_ID=your-google-client-id
+GOOGLE_CLIENT_SECRET=your-google-client-secret
 ```
 
 ### Error Handling
@@ -1397,6 +1543,7 @@ GOOGLE_CLIENT_ID=your-google-client-id
 - **File uploads**: 20 requests per hour per user
 - **Test submissions**: 5 requests per minute per user
 - **Sponsorship usage**: 10 requests per hour per user
+- **Admin endpoints**: 200 requests per 15 minutes per IP
 
 #### Rate Limit Headers
 ```
@@ -1883,3 +2030,203 @@ Authorization: Bearer <jwt-token>
 ```
 
 > **Note:** The `studyTimeThisMonth` field has been removed and is no longer returned by this endpoint.
+
+### Discussions Endpoints
+
+#### Get Discussions for a Course
+**GET** `/discussions?courseId=<course_id>`
+
+Fetch all discussions related to a specific course.
+
+**Query Parameters:**
+- `courseId` (required): The UUID of the course
+- `limit`: Number of results to return (default: 20)
+- `offset`: Number of results to skip (default: 0)
+
+**Example:**
+```
+GET /api/discussions?courseId=67ee4b48-0df7-494f-bce5-4e4aca2e8498
+```
+
+**Response (200):**
+```json
+{
+  "discussions": [
+    {
+      "id": "uuid",
+      "title": "Discussion Title",
+      "content": "Discussion content...",
+      "category": "general",
+      "authorId": "uuid",
+      "authorName": "John Doe",
+      "authorAvatar": "https://example.com/avatar.jpg",
+      "courseId": "uuid",
+      "courseTitle": "Course Title",
+      "classId": null,
+      "classTitle": null,
+      "isPinned": false,
+      "replyCount": 3,
+      "lastActivityAt": "2024-07-01T12:00:00Z",
+      "createdAt": "2024-07-01T10:00:00Z"
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "limit": 20,
+    "total": 5,
+    "pages": 1
+  }
+}
+```
+
+> **Note:** There is no /api/courses/:id/discussions endpoint. Use the query parameter as shown above.
+
+### Lessons Endpoints
+
+#### Get Lesson Details
+**GET** `/lessons/:id`
+
+Get details of a lesson by its ID.
+
+**Headers:**
+```
+Authorization: Bearer <jwt-token>
+```
+
+**Response (200):**
+```json
+{
+  "id": "uuid",
+  "courseId": "uuid",
+  "courseTitle": "Course Title",
+  "title": "Lesson Title",
+  "description": "Lesson description...",
+  "content": "Lesson content...",
+  "videoUrl": "https://example.com/video.mp4",
+  "durationMinutes": 45,
+  "orderIndex": 1,
+  "isPublished": true,
+  "createdAt": "2024-07-01T10:00:00Z",
+  "updatedAt": "2024-07-01T12:00:00Z"
+}
+```
+
+#### Update Lesson
+**PUT** `/lessons/:id`
+
+Update a lesson by its ID. Requires authentication and owner/admin authorization.
+
+**Headers:**
+```
+Authorization: Bearer <jwt-token>
+Content-Type: application/json
+```
+
+**Request Body:**
+```json
+{
+  "title": "Updated Lesson Title",
+  "description": "Updated description...",
+  "content": "Updated content...",
+  "videoUrl": "https://example.com/video.mp4",
+  "durationMinutes": 50,
+  "orderIndex": 2,
+  "isPublished": false
+}
+```
+
+**Response (200):**
+```json
+{
+  "id": "uuid",
+  "title": "Updated Lesson Title",
+  "description": "Updated description...",
+  "content": "Updated content...",
+  "videoUrl": "https://example.com/video.mp4",
+  "durationMinutes": 50,
+  "orderIndex": 2,
+  "isPublished": false,
+  "updatedAt": "2024-07-01T13:00:00Z"
+}
+```
+
+#### Delete Lesson
+**DELETE** `/lessons/:id`
+
+Delete a lesson by its ID. Requires authentication and owner/admin authorization.
+
+**Headers:**
+```
+Authorization: Bearer <jwt-token>
+```
+
+**Response (200):**
+```json
+{
+  "message": "Lesson deleted successfully"
+}
+```
+
+#### Get All Lessons for a Course (Admin)
+**GET** `/admin/courses/:courseId/lessons`
+
+Get all lessons for a course (admin access).
+
+**Headers:**
+```
+Authorization: Bearer <jwt-token>
+```
+
+**Response (200):**
+```json
+{
+  "lessons": [
+    {
+      "id": "uuid",
+      "title": "Lesson Title",
+      "description": "Lesson description...",
+      "content": "Lesson content...",
+      "videoUrl": "https://example.com/video.mp4",
+      "durationMinutes": 45,
+      "orderIndex": 1,
+      "isPublished": true,
+      "createdAt": "2024-07-01T10:00:00Z"
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "limit": 20,
+    "total": 5,
+    "pages": 1
+  }
+}
+```
+
+#### Get All Lessons for a Course
+**GET** `/courses/:id/lessons`
+
+Get all lessons for a course by course ID.
+
+**Headers:**
+```
+Authorization: Bearer <jwt-token>
+```
+
+**Response (200):**
+```json
+{
+  "lessons": [
+    {
+      "id": "uuid",
+      "title": "Lesson Title",
+      "description": "Lesson description...",
+      "content": "Lesson content...",
+      "videoUrl": "https://example.com/video.mp4",
+      "durationMinutes": 45,
+      "orderIndex": 1,
+      "isPublished": true,
+      "createdAt": "2024-07-01T10:00:00Z"
+    }
+  ]
+}
+```

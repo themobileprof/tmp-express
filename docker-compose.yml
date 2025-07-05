@@ -1,5 +1,8 @@
 version: '3.8'
 
+# Development-only configuration
+# Production deployment uses GitHub Actions with direct docker run command
+
 services:
   db:
     image: postgres:15
@@ -36,20 +39,20 @@ services:
       RATE_LIMIT_WINDOW_MS: 60000
       RATE_LIMIT_MAX_REQUESTS: 1000
       MAX_FILE_SIZE: 1048576
-      UPLOAD_PATH: ./uploads
+      UPLOAD_PATH: /app/uploads
     ports:
       - "3000:3000"
     volumes:
       - .:/app
       - /app/node_modules
-      - uploads_data:/app/uploads
+      - ./uploads:/app/uploads  # Local development uploads
     networks:
       - app-network
     command: npm run dev
 
 volumes:
   db_data:
-  uploads_data:
+  # Note: uploads_data volume removed - using local ./uploads directory for development
 
 networks:
   app-network:
