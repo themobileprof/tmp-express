@@ -179,36 +179,32 @@ jobs:
           docker stop themobileprof-backend || true
           docker rm themobileprof-backend || true
           
-          # Create uploads directory if it doesn't exist
-          echo "📁 Creating uploads directory..."
+          # Check uploads directory
+          echo "📁 Checking uploads directory..."
           UPLOADS_DIR="/var/www/api.themobileprof.com/uploads"
           
-          # Try to create directory without sudo first
-          if mkdir -p "$UPLOADS_DIR" 2>/dev/null; then
-            echo "✅ Created uploads directory without sudo"
+          # Only create directory if it doesn't exist
+          if [ ! -d "$UPLOADS_DIR" ]; then
+            echo "📁 Creating uploads directory..."
+            if mkdir -p "$UPLOADS_DIR" 2>/dev/null; then
+              echo "✅ Created uploads directory"
+            else
+              echo "⚠️  Cannot create /var/www/api.themobileprof.com/uploads, using home directory"
+              UPLOADS_DIR="$HOME/themobileprof-uploads"
+              mkdir -p "$UPLOADS_DIR"
+              echo "✅ Created uploads directory in home: $UPLOADS_DIR"
+            fi
           else
-            # If that fails, use home directory instead
-            echo "⚠️  Cannot create /var/www/api.themobileprof.com/uploads, using home directory"
-            UPLOADS_DIR="$HOME/themobileprof-uploads"
-            mkdir -p "$UPLOADS_DIR"
-            echo "✅ Created uploads directory in home: $UPLOADS_DIR"
+            echo "✅ Uploads directory already exists: $UPLOADS_DIR"
           fi
           
-          # Set proper permissions
-          chmod 755 "$UPLOADS_DIR"
-          echo "✅ Uploads directory ready: $UPLOADS_DIR"
-          
-          # Verify uploads directory is accessible
-          if [ ! -d "$UPLOADS_DIR" ] || [ ! -w "$UPLOADS_DIR" ]; then
-            echo "❌ Uploads directory is not accessible or writable"
-            echo "📋 Directory info:"
-            ls -la "$UPLOADS_DIR" || true
-            echo "📋 Current user: $(whoami)"
-            echo "📋 Current directory: $(pwd)"
+          # Verify uploads directory is accessible (don't try to change permissions)
+          if [ ! -d "$UPLOADS_DIR" ]; then
+            echo "❌ Uploads directory does not exist: $UPLOADS_DIR"
             exit 1
           fi
           
-          echo "✅ Uploads directory is accessible and writable"
+          echo "📁 Using uploads directory: $UPLOADS_DIR"
           
           # Create .env file from GitHub secret
           echo "📝 Creating .env file..."
