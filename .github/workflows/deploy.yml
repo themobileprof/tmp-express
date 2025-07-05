@@ -198,17 +198,41 @@ jobs:
           chmod 755 "$UPLOADS_DIR"
           echo "✅ Uploads directory ready: $UPLOADS_DIR"
           
+          # Verify uploads directory is accessible
+          if [ ! -d "$UPLOADS_DIR" ] || [ ! -w "$UPLOADS_DIR" ]; then
+            echo "❌ Uploads directory is not accessible or writable"
+            echo "📋 Directory info:"
+            ls -la "$UPLOADS_DIR" || true
+            echo "📋 Current user: $(whoami)"
+            echo "📋 Current directory: $(pwd)"
+            exit 1
+          fi
+          
+          echo "✅ Uploads directory is accessible and writable"
+          
           # Create .env file from GitHub secret
           echo "📝 Creating .env file..."
           cat > .env << 'EOF'
           ${{ secrets.ENV_FILE }}
           EOF
           
+          # Verify .env file was created
+          if [ ! -f .env ] || [ ! -s .env ]; then
+            echo "❌ .env file was not created or is empty"
+            echo "📋 Current directory contents:"
+            ls -la || true
+            exit 1
+          fi
+          
+          echo "✅ .env file created successfully"
+          echo "📋 .env file size: $(wc -c < .env) bytes"
+          
           # Run new container with host networking
           echo "🐳 Starting new container with host networking..."
           echo "📋 Container command: docker run -d --name themobileprof-backend --restart unless-stopped --network host -v \"$UPLOADS_DIR:/app/uploads\" --env-file .env ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
           
           # Start container and capture the container ID
+          echo "🐳 Starting container..."
           CONTAINER_ID=$(docker run -d \
             --name themobileprof-backend \
             --restart unless-stopped \
@@ -219,6 +243,13 @@ jobs:
           
           if [ -z "$CONTAINER_ID" ]; then
             echo "❌ Failed to start container - no container ID returned"
+            echo "📋 Trying to get more information..."
+            echo "📋 Docker images:"
+            docker images | grep ${{ env.IMAGE_NAME }} || true
+            echo "📋 Recent containers:"
+            docker ps -a --last 5 || true
+            echo "📋 Docker system info:"
+            docker system df || true
             exit 1
           fi
           
@@ -249,46 +280,58 @@ jobs:
           
           # Clean up .env file
           rm -f .env
-
-    - name: Health check
-      run: |
-        echo "🏥 Performing health check..."
-        sleep 30
-        
-        # Check if container is still running
-        echo "🔍 Checking container status..."
-        if ! docker ps | grep -q themobileprof-backend; then
-          echo "❌ Container is not running"
-          echo "📋 Container logs:"
-          docker logs themobileprof-backend --tail 50 || true
-          echo "📋 Container status:"
-          docker ps -a | grep themobileprof-backend || true
-          exit 1
-        fi
-        
-        echo "✅ Container is running"
-        
-        # Try health check with retries
-        for i in {1..5}; do
-          echo "Health check attempt $i/5"
-          if curl -f -m 30 http://${{ secrets.SERVER_HOST }}:3000/health; then
-            echo "✅ Health check passed"
-            exit 0
-          else
-            echo "❌ Health check failed, attempt $i"
-            echo "📋 Container logs (last 10 lines):"
-            docker logs themobileprof-backend --tail 10 || true
-            if [ $i -lt 5 ]; then
-              echo "⏳ Waiting 10 seconds before retry..."
-              sleep 10
-            fi
+          
+          # Wait a moment for container to fully start
+          echo "⏳ Waiting for container to start..."
+          sleep 10
+          
+          # Check if container is running
+          echo "🔍 Checking container status..."
+          if ! docker ps | grep -q themobileprof-backend; then
+            echo "❌ Container failed to start"
+            echo "📋 Container logs:"
+            docker logs themobileprof-backend --tail 50 || true
+            echo "📋 Recent container status:"
+            docker ps -a | grep themobileprof-backend || true
+            echo "📋 Docker system info:"
+            docker system df || true
+            echo "📋 Available images:"
+            docker images | grep ${{ env.IMAGE_NAME }} || true
+            echo "📋 Environment file contents (first few lines):"
+            head -10 .env || true
+            exit 1
           fi
-        done
-        
-        echo "❌ Health check failed after 5 attempts"
-        echo "📋 Final container logs:"
-        docker logs themobileprof-backend --tail 50 || true
-        exit 1
+          
+          echo "✅ Container is running"
+          
+          # Show container logs for debugging
+          echo "📋 Container logs:"
+          docker logs themobileprof-backend --tail 20 || true
+          
+          # Perform health check with retries
+          echo "🏥 Performing health check..."
+          for i in {1..5}; do
+            echo "Health check attempt $i/5"
+            if curl -f -m 30 http://localhost:3000/health; then
+              echo "✅ Health check passed"
+              break
+            else
+              echo "❌ Health check failed, attempt $i"
+              echo "📋 Container logs (last 10 lines):"
+              docker logs themobileprof-backend --tail 10 || true
+              if [ $i -lt 5 ]; then
+                echo "⏳ Waiting 10 seconds before retry..."
+                sleep 10
+              else
+                echo "❌ Health check failed after 5 attempts"
+                echo "📋 Final container logs:"
+                docker logs themobileprof-backend --tail 50 || true
+                exit 1
+              fi
+            fi
+          done
+          
+          echo "🎉 Deployment completed successfully!"
 
   notify:
     runs-on: ubuntu-latest

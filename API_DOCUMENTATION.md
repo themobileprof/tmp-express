@@ -1170,6 +1170,38 @@ Content-Type: multipart/form-data
 - Supported formats: JPEG, JPG, PNG, GIF, WebP
 - Maximum file size: 5MB
 - Files are stored with unique names to prevent conflicts
+- Files are stored in `/app/uploads/screenshots/` inside the container
+- Files are accessible via `/uploads/screenshots/filename` URL path
+
+#### Debug Upload Directory
+**GET** `/debug/uploads`
+
+Debug endpoint to check upload directory structure and file access.
+
+**Response:**
+```json
+{
+  "uploadPath": "./uploads",
+  "resolvedUploadPath": "/app/uploads",
+  "uploadExists": true,
+  "screenshotsExists": true,
+  "uploadContents": ["screenshots", "course-images", "lesson-materials"],
+  "screenshotsContents": ["file1.png", "file2.png"],
+  "cwd": "/app"
+}
+```
+
+#### Test File Access
+**GET** `/test-upload/:filename`
+
+Test endpoint to serve a specific file from the uploads directory.
+
+**Parameters:**
+- `filename` (string): Name of the file to serve
+
+**Response:**
+- If file exists: Returns the file
+- If file doesn't exist: Returns 404 with error details
 
 #### Upload Test Question Image
 **POST** `/api/tests/:id/questions/:questionId/image/upload`

@@ -10,19 +10,36 @@ const { AppError } = require('../middleware/errorHandler');
 const router = express.Router();
 
 // Ensure upload directories exist
-const uploadPath = process.env.UPLOAD_PATH || './uploads';
+const uploadPath = (process.env.UPLOAD_PATH || './uploads').trim();
+console.log('📁 Upload path:', uploadPath);
+
 const uploadDirs = {
-  screenshots: path.join(uploadPath, 'screenshots'),
-  courseImages: path.join(uploadPath, 'course-images'),
-  lessonMaterials: path.join(uploadPath, 'lesson-materials'),
-  userAvatars: path.join(uploadPath, 'user-avatars'),
-  certificates: path.join(uploadPath, 'certificates')
+  screenshots: path.resolve(uploadPath, 'screenshots'),
+  courseImages: path.resolve(uploadPath, 'course-images'),
+  lessonMaterials: path.resolve(uploadPath, 'lesson-materials'),
+  userAvatars: path.resolve(uploadPath, 'user-avatars'),
+  certificates: path.resolve(uploadPath, 'certificates')
 };
 
-// Create directories if they don't exist
-Object.values(uploadDirs).forEach(dir => {
+console.log('📁 Upload directories:', uploadDirs);
+
+// Ensure main upload directory exists
+if (!fs.existsSync(uploadPath)) {
+  console.log(`📁 Creating main upload directory: ${uploadPath}`);
+  fs.mkdirSync(uploadPath, { recursive: true });
+  console.log(`✅ Created main upload directory: ${uploadPath}`);
+} else {
+  console.log(`✅ Main upload directory already exists: ${uploadPath}`);
+}
+
+// Create subdirectories if they don't exist
+Object.entries(uploadDirs).forEach(([key, dir]) => {
+  console.log(`📁 Creating directory for ${key}: ${dir}`);
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
+    console.log(`✅ Created directory: ${dir}`);
+  } else {
+    console.log(`✅ Directory already exists: ${dir}`);
   }
 });
 
@@ -40,13 +57,18 @@ const maxFileSizes = {
 
 // Multer configuration for different upload types
 const createMulterConfig = (allowedTypes, maxSize, subfolder) => {
+  console.log(`🔧 Creating multer config for ${subfolder}:`, uploadDirs[subfolder]);
+  
   return multer({
     storage: multer.diskStorage({
       destination: (req, file, cb) => {
-        cb(null, uploadDirs[subfolder]);
+        const dest = uploadDirs[subfolder];
+        console.log(`📁 Multer destination for ${subfolder}:`, dest);
+        cb(null, dest);
       },
       filename: (req, file, cb) => {
         const uniqueName = `${uuidv4()}-${Date.now()}${path.extname(file.originalname)}`;
+        console.log(`📄 Generated filename:`, uniqueName);
         cb(null, uniqueName);
       }
     }),
@@ -73,7 +95,9 @@ const certificateUpload = createMulterConfig([...allowedImageTypes, ...allowedDo
 // Helper function to build file URL
 const buildFileUrl = (filename, subfolder) => {
   const baseUrl = process.env.API_BASE_URL || 'https://api.themobileprof.com';
-  return `${baseUrl}/uploads/${subfolder}/${filename}`;
+  const url = `${baseUrl}/uploads/${subfolder}/${filename}`;
+  console.log('🔗 Building URL:', { filename, subfolder, baseUrl, url });
+  return url;
 };
 
 // POST /api/upload - Upload screenshots/images
@@ -82,7 +106,16 @@ router.post('/', authenticateToken, imageUpload.single('file'), asyncHandler(asy
     throw new AppError('No file uploaded', 400, 'NO_FILE');
   }
 
+  console.log('📁 File uploaded:', {
+    filename: req.file.filename,
+    originalName: req.file.originalname,
+    destination: req.file.destination,
+    path: req.file.path,
+    size: req.file.size
+  });
+
   const fileUrl = buildFileUrl(req.file.filename, 'screenshots');
+  console.log('🔗 Generated URL:', fileUrl);
 
   res.status(200).json({
     success: true,
@@ -208,6 +241,43 @@ router.delete('/:filename', authenticateToken, asyncHandler(async (req, res) => 
   res.status(200).json({
     success: true,
     message: 'File deleted successfully'
+  });
+}));
+
+// GET /api/upload/debug - Debug upload directories (admin only)
+router.get('/debug', authenticateToken, asyncHandler(async (req, res) => {
+  if (req.user.role !== 'admin') {
+    throw new AppError('Access denied. Admin only.', 403, 'ACCESS_DENIED');
+  }
+
+  const debugInfo = {
+    uploadPath,
+    uploadDirs,
+    env: {
+      UPLOAD_PATH: process.env.UPLOAD_PATH,
+      API_BASE_URL: process.env.API_BASE_URL
+    },
+    directories: {}
+  };
+
+  // Check each directory
+  Object.entries(uploadDirs).forEach(([key, dir]) => {
+    const exists = fs.existsSync(dir);
+    const isDir = exists ? fs.statSync(dir).isDirectory() : false;
+    const files = exists && isDir ? fs.readdirSync(dir) : [];
+    
+    debugInfo.directories[key] = {
+      path: dir,
+      exists,
+      isDirectory: isDir,
+      fileCount: files.length,
+      files: files.slice(0, 10) // Show first 10 files
+    };
+  });
+
+  res.status(200).json({
+    success: true,
+    data: debugInfo
   });
 }));
 
