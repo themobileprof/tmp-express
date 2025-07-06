@@ -45,7 +45,7 @@ services:
     volumes:
       - .:/app
       - /app/node_modules
-      - ./uploads:/app/uploads  # Local development uploads
+      - ./uploads:/app/uploads
     networks:
       - app-network
     command: npm run dev
