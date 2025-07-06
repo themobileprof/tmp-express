@@ -59,7 +59,7 @@ const uploadPath = (process.env.UPLOAD_PATH || './uploads').trim();
 const resolvedUploadPath = path.resolve(uploadPath);
 console.log('🌐 Static file serving for uploads:', uploadPath);
 console.log('🌐 Resolved upload path:', resolvedUploadPath);
-app.use('/uploads', express.static(resolvedUploadPath));
+// app.use('/uploads', express.static(resolvedUploadPath)); // Commented out so Nginx can serve static files
 
 // Debug endpoint to check upload directory structure
 app.get('/debug/uploads', (req, res) => {
