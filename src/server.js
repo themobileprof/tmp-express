@@ -61,79 +61,6 @@ console.log('🌐 Static file serving for uploads:', uploadPath);
 console.log('🌐 Resolved upload path:', resolvedUploadPath);
 // app.use('/uploads', express.static(resolvedUploadPath)); // Commented out so Nginx can serve static files
 
-// Debug endpoint to check upload directory structure
-app.get('/debug/uploads', (req, res) => {
-  const fs = require('fs');
-  const path = require('path');
-  
-  try {
-    const uploadDir = resolvedUploadPath;
-    const screenshotsDir = path.join(uploadDir, 'screenshots');
-    
-    const uploadExists = fs.existsSync(uploadDir);
-    const screenshotsExists = fs.existsSync(screenshotsDir);
-    
-    let uploadContents = [];
-    let screenshotsContents = [];
-    
-    if (uploadExists) {
-      uploadContents = fs.readdirSync(uploadDir);
-    }
-    
-    if (screenshotsExists) {
-      screenshotsContents = fs.readdirSync(screenshotsDir).slice(0, 10); // First 10 files
-    }
-    
-    res.json({
-      uploadPath: uploadPath,
-      resolvedUploadPath: resolvedUploadPath,
-      uploadExists: uploadExists,
-      screenshotsExists: screenshotsExists,
-      uploadContents: uploadContents,
-      screenshotsContents: screenshotsContents,
-      cwd: process.cwd()
-    });
-  } catch (error) {
-    res.status(500).json({
-      error: error.message,
-      stack: error.stack
-    });
-  }
-});
-
-// Test endpoint to serve a specific file
-app.get('/test-upload/:filename', (req, res) => {
-  const fs = require('fs');
-  const path = require('path');
-  
-  try {
-    const filename = req.params.filename;
-    const filePath = path.join(resolvedUploadPath, 'screenshots', filename);
-    
-    console.log('🔍 Testing file access:', {
-      filename: filename,
-      filePath: filePath,
-      exists: fs.existsSync(filePath)
-    });
-    
-    if (fs.existsSync(filePath)) {
-      res.sendFile(filePath);
-    } else {
-      res.status(404).json({
-        error: 'File not found',
-        filename: filename,
-        filePath: filePath,
-        uploadPath: resolvedUploadPath
-      });
-    }
-  } catch (error) {
-    res.status(500).json({
-      error: error.message,
-      stack: error.stack
-    });
-  }
-});
-
 // Logging middleware
 app.use(morgan('combined'));
 
@@ -341,7 +268,81 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/scraping', scrapingRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/upload', uploadRoutes);
-app.use('/uploads', uploadRoutes);
+
+// Debug endpoints (must be defined before /uploads route to avoid conflicts)
+app.get('/debug/uploads', (req, res) => {
+  const fs = require('fs');
+  const path = require('path');
+  
+  try {
+    const uploadDir = resolvedUploadPath;
+    const screenshotsDir = path.join(uploadDir, 'screenshots');
+    
+    const uploadExists = fs.existsSync(uploadDir);
+    const screenshotsExists = fs.existsSync(screenshotsDir);
+    
+    let uploadContents = [];
+    let screenshotsContents = [];
+    
+    if (uploadExists) {
+      uploadContents = fs.readdirSync(uploadDir);
+    }
+    
+    if (screenshotsExists) {
+      screenshotsContents = fs.readdirSync(screenshotsDir).slice(0, 10); // First 10 files
+    }
+    
+    res.json({
+      uploadPath: uploadPath,
+      resolvedUploadPath: resolvedUploadPath,
+      uploadExists: uploadExists,
+      screenshotsExists: screenshotsExists,
+      uploadContents: uploadContents,
+      screenshotsContents: screenshotsContents,
+      cwd: process.cwd()
+    });
+  } catch (error) {
+    res.status(500).json({
+      error: error.message,
+      stack: error.stack
+    });
+  }
+});
+
+// Test endpoint to serve a specific file
+app.get('/test-upload/:filename', (req, res) => {
+  const fs = require('fs');
+  const path = require('path');
+  
+  try {
+    const filename = req.params.filename;
+    const filePath = path.join(resolvedUploadPath, 'screenshots', filename);
+    
+    console.log('🔍 Testing file access:', {
+      filename: filename,
+      filePath: filePath,
+      exists: fs.existsSync(filePath)
+    });
+    
+    if (fs.existsSync(filePath)) {
+      res.sendFile(filePath);
+    } else {
+      res.status(404).json({
+        error: 'File not found',
+        filename: filename,
+        filePath: filePath,
+        uploadPath: resolvedUploadPath
+      });
+    }
+  } catch (error) {
+    res.status(500).json({
+      error: error.message,
+      stack: error.stack
+    });
+  }
+});
+
+// app.use('/uploads', uploadRoutes); // Commented out so Nginx can serve static files
 
 // 404 handler
 app.use('*', (req, res) => {
