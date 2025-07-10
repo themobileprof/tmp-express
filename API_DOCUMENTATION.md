@@ -2409,3 +2409,40 @@ Authorization: Bearer <jwt-token>
 
 #### Get Course by ID
 **GET** `/api/courses/:id`
+
+Get details of a course by its ID.
+
+**Headers:**
+```
+Authorization: Bearer <jwt-token>
+```
+
+**Parameters:**
+- `id` (string, required): Course ID
+
+**Response (200):**
+```json
+{
+  "id": "uuid",
+  "title": "Course Title",
+  "description": "Course description...",
+  "topic": "Programming",
+  "type": "online",
+  "price": 99.99,
+  "duration": "8 weeks",
+  "certification": "Certificate of Completion",
+  "imageUrl": "https://api.themobileprof.com/uploads/course-images/course-image.jpg",
+  "instructorId": "uuid",
+  "instructorName": "John Doe",
+  "isPublished": true,
+  "enrollmentCount": 25,
+  "lessonCount": 8,
+  "testCount": 3,
+  "createdAt": "2024-07-01T10:00:00Z",
+  "updatedAt": "2024-07-01T12:00:00Z"
+}
+```
+
+**Error Responses:**
+- `404` - Course not found
+- `401` - Unauthorized (invalid or missing token)
