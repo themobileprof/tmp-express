@@ -687,4 +687,67 @@ router.get('/:id/attempts/:attemptId/details', authenticateToken, authorizeOwner
   });
 }));
 
+// Get test analytics (admin/instructor only)
+router.get('/:id/analytics', authenticateToken, authorizeOwnerOrAdmin('tests', 'id'), asyncHandler(async (req, res) => {
+  const { id } = req.params;
+
+  // Verify test exists
+  const test = await getRow('SELECT * FROM tests WHERE id = $1', [id]);
+  if (!test) {
+    throw new AppError('Test not found', 404, 'Test Not Found');
+  }
+
+  // Get overall test statistics
+  const testStats = await getRow(
+    `SELECT 
+       COUNT(*) as total_attempts,
+       AVG(score) as average_score,
+       COUNT(CASE WHEN score >= $1 THEN 1 END) as passed_attempts,
+       AVG(time_taken_minutes) as average_time_minutes
+     FROM test_attempts 
+     WHERE test_id = $2 AND status = 'completed'`,
+    [test.passing_score, id]
+  );
+
+  // Calculate pass rate
+  const passRate = testStats.total_attempts > 0 
+    ? Math.round((testStats.passed_attempts / testStats.total_attempts) * 100 * 10) / 10
+    : 0;
+
+  // Get question analytics
+  const questionAnalytics = await getRows(
+    `SELECT 
+       q.id,
+       q.question,
+       q.question_type,
+       q.points,
+       COUNT(taa.id) as total_answers,
+       COUNT(CASE WHEN taa.is_correct = true THEN 1 END) as correct_answers,
+       ROUND(COUNT(CASE WHEN taa.is_correct = true THEN 1 END) * 100.0 / COUNT(taa.id), 1) as correct_rate
+     FROM test_questions q
+     LEFT JOIN test_attempt_answers taa ON q.id = taa.question_id
+     LEFT JOIN test_attempts ta ON taa.attempt_id = ta.id
+     WHERE q.test_id = $1 AND ta.status = 'completed'
+     GROUP BY q.id, q.question, q.question_type, q.points
+     ORDER BY q.order_index`,
+    [id]
+  );
+
+  res.json({
+    totalAttempts: parseInt(testStats.total_attempts) || 0,
+    averageScore: Math.round(testStats.average_score * 10) / 10 || 0,
+    passRate: passRate,
+    averageTimeMinutes: Math.round(testStats.average_time_minutes * 10) / 10 || 0,
+    questionAnalytics: questionAnalytics.map(q => ({
+      questionId: q.id,
+      question: q.question,
+      questionType: q.question_type,
+      points: q.points,
+      totalAnswers: parseInt(q.total_answers) || 0,
+      correctAnswers: parseInt(q.correct_answers) || 0,
+      correctRate: parseFloat(q.correct_rate) || 0
+    }))
+  });
+}));
+
 module.exports = router; 

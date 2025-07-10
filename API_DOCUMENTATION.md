@@ -1635,6 +1635,37 @@ Example: `?sort=created_at&order=desc&status=published&topic=programming`
 > - If a test has both `course_id` and `lesson_id`, it is a **lesson test** (attached to a specific lesson).
 > - If a test has a `course_id` but no `lesson_id`, it is a **course test** (attached to the course as a whole).
 
+#### Get Test Analytics (Admin/Instructor)
+**GET** `/api/tests/:id/analytics`
+
+Get comprehensive analytics for a test including overall statistics and question-level analytics.
+
+**Headers:**
+```
+Authorization: Bearer <jwt-token>
+```
+
+**Response (200):**
+```json
+{
+  "totalAttempts": 25,
+  "averageScore": 85.5,
+  "passRate": 80.0,
+  "averageTimeMinutes": 15.2,
+  "questionAnalytics": [
+    {
+      "questionId": "uuid",
+      "question": "What is 2 + 2?",
+      "questionType": "multiple_choice",
+      "points": 1,
+      "totalAnswers": 25,
+      "correctAnswers": 23,
+      "correctRate": 92.0
+    }
+  ]
+}
+```
+
 #### List All Attempts for a Test (Admin/Instructor)
 **GET** `/api/tests/:id/attempts`
 
