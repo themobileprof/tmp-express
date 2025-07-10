@@ -605,4 +605,86 @@ router.post('/:id/questions/:questionId/image/upload', authenticateToken, upload
   });
 }));
 
+// List all attempts for a test (admin/instructor only)
+router.get('/:id/attempts', authenticateToken, authorizeOwnerOrAdmin('tests', 'id'), asyncHandler(async (req, res) => {
+  const { id } = req.params;
+
+  // Get all attempts for the test, joined with user info
+  const attempts = await getRows(
+    `SELECT a.id, a.user_id, a.attempt_number, a.score, a.time_taken_minutes, a.completed_at, a.status,
+            u.first_name, u.last_name, u.email
+     FROM test_attempts a
+     JOIN users u ON a.user_id = u.id
+     WHERE a.test_id = $1
+     ORDER BY a.completed_at DESC NULLS LAST, a.started_at DESC` ,
+    [id]
+  );
+
+  res.json({
+    attempts: attempts.map(a => ({
+      id: a.id,
+      studentName: `${a.first_name} ${a.last_name}`,
+      studentEmail: a.email,
+      score: a.score,
+      timeSpent: a.time_taken_minutes,
+      attemptNumber: a.attempt_number,
+      completedAt: a.completed_at,
+      status: a.status
+    }))
+  });
+}));
+
+// Per-student detailed answers for an attempt (admin/instructor only)
+router.get('/:id/attempts/:attemptId/details', authenticateToken, authorizeOwnerOrAdmin('tests', 'id'), asyncHandler(async (req, res) => {
+  const { id, attemptId } = req.params;
+
+  // Get attempt and user info
+  const attempt = await getRow(
+    `SELECT a.*, u.first_name, u.last_name, u.email
+     FROM test_attempts a
+     JOIN users u ON a.user_id = u.id
+     WHERE a.id = $1 AND a.test_id = $2`,
+    [attemptId, id]
+  );
+  if (!attempt) {
+    throw new AppError('Attempt not found', 404, 'Attempt Not Found');
+  }
+
+  // Get answers for this attempt
+  const answers = await getRows(
+    `SELECT q.id as question_id, q.question, q.question_type, q.options, q.correct_answer, q.correct_answer_text,
+            a.selected_answer, a.answer_text, a.is_correct, a.points_earned
+     FROM test_questions q
+     LEFT JOIN test_attempt_answers a ON q.id = a.question_id AND a.attempt_id = $1
+     WHERE q.test_id = $2
+     ORDER BY q.order_index`,
+    [attemptId, id]
+  );
+
+  res.json({
+    attempt: {
+      id: attempt.id,
+      studentName: `${attempt.first_name} ${attempt.last_name}`,
+      studentEmail: attempt.email,
+      score: attempt.score,
+      timeSpent: attempt.time_taken_minutes,
+      attemptNumber: attempt.attempt_number,
+      completedAt: attempt.completed_at,
+      status: attempt.status
+    },
+    answers: answers.map(q => ({
+      questionId: q.question_id,
+      question: q.question,
+      questionType: q.question_type,
+      options: q.options,
+      correctAnswer: q.correct_answer,
+      correctAnswerText: q.correct_answer_text,
+      userAnswer: q.selected_answer,
+      userAnswerText: q.answer_text,
+      isCorrect: q.is_correct,
+      pointsEarned: q.points_earned
+    }))
+  });
+}));
+
 module.exports = router; 

@@ -1635,6 +1635,70 @@ Example: `?sort=created_at&order=desc&status=published&topic=programming`
 > - If a test has both `course_id` and `lesson_id`, it is a **lesson test** (attached to a specific lesson).
 > - If a test has a `course_id` but no `lesson_id`, it is a **course test** (attached to the course as a whole).
 
+#### List All Attempts for a Test (Admin/Instructor)
+**GET** `/api/tests/:id/attempts`
+
+**Headers:**
+```
+Authorization: Bearer <jwt-token>
+```
+
+**Response (200):**
+```json
+{
+  "attempts": [
+    {
+      "id": "uuid",
+      "studentName": "John Doe",
+      "studentEmail": "john@example.com",
+      "score": 85,
+      "timeSpent": 42,
+      "attemptNumber": 1,
+      "completedAt": "2024-07-01T12:00:00Z",
+      "status": "completed"
+    }
+  ]
+}
+```
+
+#### Get Detailed Answers for a Student's Attempt (Admin/Instructor)
+**GET** `/api/tests/:id/attempts/:attemptId/details`
+
+**Headers:**
+```
+Authorization: Bearer <jwt-token>
+```
+
+**Response (200):**
+```json
+{
+  "attempt": {
+    "id": "uuid",
+    "studentName": "John Doe",
+    "studentEmail": "john@example.com",
+    "score": 85,
+    "timeSpent": 42,
+    "attemptNumber": 1,
+    "completedAt": "2024-07-01T12:00:00Z",
+    "status": "completed"
+  },
+  "answers": [
+    {
+      "questionId": "uuid",
+      "question": "What is 2 + 2?",
+      "questionType": "multiple_choice",
+      "options": ["2", "3", "4", "5"],
+      "correctAnswer": 2,
+      "correctAnswerText": null,
+      "userAnswer": 2,
+      "userAnswerText": null,
+      "isCorrect": true,
+      "pointsEarned": 1
+    }
+  ]
+}
+```
+
 ---
 
 ## Scraping Management
