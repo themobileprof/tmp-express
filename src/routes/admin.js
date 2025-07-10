@@ -308,7 +308,17 @@ router.post('/courses', [
   body('type').isIn(['online', 'offline']).withMessage('Type must be either "online" or "offline"'),
   body('price').isFloat({ min: 0 }).withMessage('Price must be a valid number greater than or equal to 0'),
   body('duration').trim().isLength({ min: 1 }).withMessage('Duration is required and must not be empty'),
-  body('instructorId').optional().isUUID().withMessage('Instructor ID must be a valid UUID if provided')
+  body('instructorId').optional().custom((value) => {
+    if (value === '' || value === null || value === undefined) {
+      return true; // Allow empty/null values
+    }
+    // Check if it's a valid UUID when provided
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(value)) {
+      throw new Error('Instructor ID must be a valid UUID if provided');
+    }
+    return true;
+  })
 ], asyncHandler(async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
@@ -356,7 +366,18 @@ router.put('/courses/:id', [
   body('type').optional().isIn(['online', 'offline']),
   body('price').optional().isFloat({ min: 0 }),
   body('duration').optional().trim().isLength({ min: 1 }),
-  body('isPublished').optional().isBoolean()
+  body('isPublished').optional().isBoolean(),
+  body('instructorId').optional().custom((value) => {
+    if (value === '' || value === null || value === undefined) {
+      return true; // Allow empty/null values
+    }
+    // Check if it's a valid UUID when provided
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(value)) {
+      throw new Error('Instructor ID must be a valid UUID if provided');
+    }
+    return true;
+  })
 ], asyncHandler(async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
@@ -364,12 +385,23 @@ router.put('/courses/:id', [
   }
 
   const { id } = req.params;
-  const { title, description, topic, type, certification, price, duration, imageUrl, isPublished } = req.body;
+  const { title, description, topic, type, certification, price, duration, imageUrl, isPublished, instructorId } = req.body;
 
   // Check if course exists
   const existingCourse = await getRow('SELECT id FROM courses WHERE id = $1', [id]);
   if (!existingCourse) {
     throw new AppError('Course not found', 404, 'Course Not Found');
+  }
+
+  // If instructorId is provided, verify the instructor exists
+  if (instructorId) {
+    const instructor = await getRow(
+      'SELECT id, role FROM users WHERE id = $1 AND role = $2',
+      [instructorId, 'instructor']
+    );
+    if (!instructor) {
+      throw new AppError('Instructor not found', 404, 'Instructor Not Found');
+    }
   }
 
   // Build update query
@@ -429,6 +461,12 @@ router.put('/courses/:id', [
     paramCount++;
     updates.push(`is_published = $${paramCount}`);
     params.push(isPublished);
+  }
+
+  if (instructorId !== undefined) {
+    paramCount++;
+    updates.push(`instructor_id = $${paramCount}`);
+    params.push(instructorId || null);
   }
 
   if (updates.length === 0) {
