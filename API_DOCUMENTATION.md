@@ -1139,8 +1139,25 @@ For API support:
 
 ### File Upload Endpoints
 
+**📋 IMPORTANT: Upload Endpoint Standard**
+
+All upload endpoints use the `/api/uploads` prefix for consistency with other API endpoints.
+
+**Standard Format:** `/api/uploads/{endpoint-name}`
+
+**Content-Type:** All upload endpoints require `multipart/form-data`
+
+**Available Endpoints:**
+- `POST /api/uploads` - Upload screenshots/images
+- `POST /api/uploads/course-image` - Upload course images  
+- `POST /api/uploads/lesson-material` - Upload lesson materials
+- `POST /api/uploads/avatar` - Upload user avatars
+- `POST /api/uploads/certificate` - Upload certificates
+- `DELETE /api/uploads/:filename` - Delete uploaded files
+- `GET /api/uploads/files` - List uploaded files (admin only)
+
 #### Upload Screenshots/Images
-**POST** `/api/upload`
+**POST** `/api/uploads`
 
 **Headers:**
 ```
@@ -1225,7 +1242,7 @@ Content-Type: multipart/form-data
 ```
 
 #### Upload Course Image
-**POST** `/uploads/course-image`
+**POST** `/api/uploads/course-image`
 
 Upload an image for a course.
 
@@ -1258,7 +1275,7 @@ Content-Type: multipart/form-data
 - Maximum file size: 5MB
 
 #### Upload Lesson Material
-**POST** `/uploads/lesson-material`
+**POST** `/api/uploads/lesson-material`
 
 Upload a material file for a lesson.
 
@@ -1291,7 +1308,7 @@ Content-Type: multipart/form-data
 - Maximum file size: 10MB
 
 #### Upload User Avatar
-**POST** `/uploads/avatar`
+**POST** `/api/uploads/avatar`
 
 Upload a user avatar image.
 
@@ -1324,7 +1341,7 @@ Content-Type: multipart/form-data
 - Maximum file size: 5MB
 
 #### Upload Certificate
-**POST** `/uploads/certificate`
+**POST** `/api/uploads/certificate`
 
 Upload a certificate file.
 
@@ -1357,7 +1374,7 @@ Content-Type: multipart/form-data
 - Maximum file size: 10MB
 
 #### Delete Uploaded File
-**DELETE** `/api/upload/:filename`
+**DELETE** `/api/uploads/:filename`
 
 Delete an uploaded file.
 
@@ -1382,7 +1399,7 @@ Authorization: Bearer <jwt-token>
 - `404` - File not found
 
 #### List Uploaded Files (Admin Only)
-**GET** `/api/upload/files`
+**GET** `/api/uploads/files`
 
 List all uploaded files (admin only).
 

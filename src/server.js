@@ -22,13 +22,16 @@ const paymentRoutes = require('./routes/payments');
 const adminRoutes = require('./routes/admin');
 const scrapingRoutes = require('./routes/scraping');
 const notificationRoutes = require('./routes/notifications');
-const uploadRoutes = require('./routes/upload');
+const uploadRoutes = require('./routes/uploads');
 
 const { errorHandler } = require('./middleware/errorHandler');
 const { authenticateToken } = require('./middleware/auth');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// Trust proxy configuration for rate limiting
+app.set('trust proxy', 1);
 
 // Security middleware
 app.use(helmet());
@@ -267,7 +270,7 @@ app.use('/api/payments', paymentRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/scraping', scrapingRoutes);
 app.use('/api/notifications', notificationRoutes);
-app.use('/api/upload', uploadRoutes);
+app.use('/api/uploads', uploadRoutes); // Standard upload endpoint
 
 // Debug endpoints (must be defined before /uploads route to avoid conflicts)
 app.get('/debug/uploads', (req, res) => {
