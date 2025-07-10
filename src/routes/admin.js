@@ -425,10 +425,10 @@ router.put('/courses/:id', [
     params.push(imageUrl);
   }
 
-  if (status) {
+  if (isPublished !== undefined) {
     paramCount++;
     updates.push(`is_published = $${paramCount}`);
-    params.push(status === 'active');
+    params.push(isPublished);
   }
 
   if (updates.length === 0) {
