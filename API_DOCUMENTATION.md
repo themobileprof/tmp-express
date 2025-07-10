@@ -2357,3 +2357,38 @@ Authorization: Bearer <jwt-token>
   ]
 }
 ```
+
+#### Get Course Analytics (Admin/Instructor)
+**GET** `/api/courses/:id/analytics`
+
+Get comprehensive analytics for all tests in a course, including both course-level and lesson-level tests.
+
+**Headers:**
+```
+Authorization: Bearer <jwt-token>
+```
+
+**Response (200):**
+```json
+{
+  "totalTests": 5,
+  "totalAttempts": 150,
+  "averageScore": 78.5,
+  "passRate": 75.0,
+  "averageTimeMinutes": 25.3,
+  "questionAnalytics": [
+    {
+      "questionId": "uuid",
+      "question": "What is the capital of France?",
+      "questionType": "multiple_choice",
+      "points": 1,
+      "totalAnswers": 150,
+      "correctAnswers": 135,
+      "correctRate": 90.0
+    }
+  ]
+}
+```
+
+#### Get Course by ID
+**GET** `/api/courses/:id`

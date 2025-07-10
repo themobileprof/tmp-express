@@ -560,4 +560,84 @@ router.put('/:id/enrollments/:enrollmentId', authenticateToken, asyncHandler(asy
   });
 }));
 
+// Get course analytics (admin/instructor only)
+router.get('/:id/analytics', authenticateToken, authorizeOwnerOrAdmin('courses', 'id'), asyncHandler(async (req, res) => {
+  const { id } = req.params;
+
+  // Get all test IDs for this course (course-level and lesson-level)
+  const testRows = await getRows(
+    `SELECT t.id, t.passing_score
+     FROM tests t
+     LEFT JOIN lessons l ON t.lesson_id = l.id
+     WHERE t.course_id = $1 OR l.course_id = $1`,
+    [id]
+  );
+  if (!testRows.length) {
+    return res.json({
+      totalTests: 0,
+      totalAttempts: 0,
+      averageScore: 0,
+      passRate: 0,
+      averageTimeMinutes: 0,
+      questionAnalytics: []
+    });
+  }
+  const testIds = testRows.map(t => t.id);
+  const passingScores = Object.fromEntries(testRows.map(t => [t.id, t.passing_score]));
+
+  // Aggregate attempts and stats for all those tests
+  const stats = await getRow(
+    `SELECT 
+       COUNT(*) as total_attempts,
+       AVG(a.score) as average_score,
+       COUNT(CASE WHEN a.score >= t.passing_score THEN 1 END) as passed_attempts,
+       AVG(a.time_taken_minutes) as average_time_minutes
+     FROM test_attempts a
+     JOIN tests t ON a.test_id = t.id
+     WHERE a.test_id = ANY($1) AND a.status = 'completed'`,
+    [testIds]
+  );
+
+  // Calculate pass rate
+  const passRate = stats.total_attempts > 0 
+    ? Math.round((stats.passed_attempts / stats.total_attempts) * 100 * 10) / 10
+    : 0;
+
+  // Efficient question analytics: aggregate per question across all tests in the course
+  const questionAnalytics = await getRows(
+    `SELECT 
+       q.id,
+       q.question,
+       q.question_type,
+       q.points,
+       COUNT(taa.id) as total_answers,
+       COUNT(CASE WHEN taa.is_correct = true THEN 1 END) as correct_answers,
+       ROUND(COUNT(CASE WHEN taa.is_correct = true THEN 1 END) * 100.0 / NULLIF(COUNT(taa.id),0), 1) as correct_rate
+     FROM test_questions q
+     LEFT JOIN test_attempt_answers taa ON q.id = taa.question_id
+     LEFT JOIN test_attempts ta ON taa.attempt_id = ta.id
+     WHERE q.test_id = ANY($1) AND ta.status = 'completed'
+     GROUP BY q.id, q.question, q.question_type, q.points
+     ORDER BY q.id`,
+    [testIds]
+  );
+
+  res.json({
+    totalTests: testIds.length,
+    totalAttempts: parseInt(stats.total_attempts) || 0,
+    averageScore: Math.round(stats.average_score * 10) / 10 || 0,
+    passRate: passRate,
+    averageTimeMinutes: Math.round(stats.average_time_minutes * 10) / 10 || 0,
+    questionAnalytics: questionAnalytics.map(q => ({
+      questionId: q.id,
+      question: q.question,
+      questionType: q.question_type,
+      points: q.points,
+      totalAnswers: parseInt(q.total_answers) || 0,
+      correctAnswers: parseInt(q.correct_answers) || 0,
+      correctRate: parseFloat(q.correct_rate) || 0
+    }))
+  });
+}));
+
 module.exports = router; 
