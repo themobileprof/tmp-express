@@ -993,6 +993,116 @@ Authorization: Bearer <jwt-token>
 }
 ```
 
+#### Course Management (Admin)
+
+##### Create Course (Admin)
+**POST** `/api/admin/courses`
+
+Create a new course.
+
+**Headers:**
+```
+Authorization: Bearer <jwt-token>
+Content-Type: application/json
+```
+
+**Request Body:**
+```json
+{
+  "title": "Advanced JavaScript Programming",
+  "description": "Learn advanced JavaScript concepts and modern development practices",
+  "topic": "Programming",
+  "type": "online",
+  "price": 99.99,
+  "duration": "8 weeks",
+  "certification": "Certificate of Completion",
+  "difficulty": "intermediate",
+  "objectives": "Master advanced JavaScript concepts, learn modern frameworks, build real-world projects",
+  "prerequisites": "Basic JavaScript knowledge, familiarity with HTML and CSS",
+  "syllabus": "Week 1: Advanced Functions and Closures\nWeek 2: Object-Oriented Programming\nWeek 3: Asynchronous Programming\nWeek 4: Modern ES6+ Features",
+  "tags": ["javascript", "programming", "web-development", "es6"],
+  "instructorId": "uuid",
+  "imageUrl": "https://api.themobileprof.com/uploads/course-images/course-image.jpg"
+}
+```
+
+**Response (201):**
+```json
+{
+  "success": true,
+  "course": {
+    "id": "uuid",
+    "title": "Advanced JavaScript Programming",
+    "description": "Learn advanced JavaScript concepts and modern development practices",
+    "topic": "Programming",
+    "type": "online",
+    "price": 99.99,
+    "duration": "8 weeks",
+    "certification": "Certificate of Completion",
+    "difficulty": "intermediate",
+    "objectives": "Master advanced JavaScript concepts, learn modern frameworks, build real-world projects",
+    "prerequisites": "Basic JavaScript knowledge, familiarity with HTML and CSS",
+    "syllabus": "Week 1: Advanced Functions and Closures\nWeek 2: Object-Oriented Programming\nWeek 3: Asynchronous Programming\nWeek 4: Modern ES6+ Features",
+    "tags": ["javascript", "programming", "web-development", "es6"],
+    "instructorId": "uuid",
+    "imageUrl": "https://api.themobileprof.com/uploads/course-images/course-image.jpg",
+    "isPublished": false,
+    "createdAt": "2024-07-01T10:00:00Z",
+    "updatedAt": "2024-07-01T10:00:00Z"
+  }
+}
+```
+
+**Notes:**
+- All fields except `instructorId` are required
+- `difficulty` must be one of: "beginner", "intermediate", "advanced"
+- `type` must be one of: "online", "offline"
+- `tags` should be an array of strings
+- `instructorId` is optional (can be null)
+
+##### Update Course (Admin)
+**PUT** `/api/admin/courses/:id`
+
+Update an existing course.
+
+**Headers:**
+```
+Authorization: Bearer <jwt-token>
+Content-Type: application/json
+```
+
+**Request Body:**
+```json
+{
+  "title": "Updated Course Title",
+  "description": "Updated course description",
+  "difficulty": "advanced",
+  "objectives": "Updated learning objectives",
+  "prerequisites": "Updated prerequisites",
+  "syllabus": "Updated syllabus content",
+  "tags": ["updated", "tags"],
+  "isPublished": true
+}
+```
+
+**Response (200):**
+```json
+{
+  "course": {
+    "id": "uuid",
+    "title": "Updated Course Title",
+    "description": "Updated course description",
+    "difficulty": "advanced",
+    "objectives": "Updated learning objectives",
+    "prerequisites": "Updated prerequisites",
+    "syllabus": "Updated syllabus content",
+    "tags": ["updated", "tags"],
+    "isPublished": true,
+    "updatedAt": "2024-07-01T12:00:00Z"
+  }
+}
+```
+
 #### System Settings
 
 ##### Get System Settings (Admin)
@@ -2431,6 +2541,11 @@ Authorization: Bearer <jwt-token>
   "price": 99.99,
   "duration": "8 weeks",
   "certification": "Certificate of Completion",
+  "difficulty": "intermediate",
+  "objectives": "Learn advanced programming concepts and build real-world projects",
+  "prerequisites": "Basic programming knowledge required",
+  "syllabus": "Week 1: Introduction to Advanced Concepts\nWeek 2: Practical Applications\nWeek 3: Project Development",
+  "tags": ["programming", "javascript", "web-development"],
   "imageUrl": "https://api.themobileprof.com/uploads/course-images/course-image.jpg",
   "instructorId": "uuid",
   "instructorName": "John Doe",

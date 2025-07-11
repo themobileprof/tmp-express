@@ -170,6 +170,11 @@ const createTables = async () => {
         duration VARCHAR(50) NOT NULL,
         instructor_id UUID,
         image_url TEXT,
+        difficulty VARCHAR(50),
+        objectives TEXT,
+        prerequisites TEXT,
+        syllabus TEXT,
+        tags TEXT[],
         is_published BOOLEAN DEFAULT false,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -584,10 +589,44 @@ const createTables = async () => {
     console.log('✅ Database migration completed successfully!');
     console.log('🎉 All tables created and ready!');
     
+    // Migrate existing courses table to add new fields
+    await migrateCoursesTable();
+    
   } catch (error) {
     console.error('❌ Migration failed:', error);
     console.error('💥 Error details:', error.message);
     process.exit(1);
+  }
+};
+
+// Function to migrate existing courses table
+const migrateCoursesTable = async () => {
+  try {
+    console.log('🔄 Migrating courses table to add new fields...');
+    
+    // Add new columns to existing courses table
+    const newColumns = [
+      'difficulty VARCHAR(50)',
+      'objectives TEXT',
+      'prerequisites TEXT', 
+      'syllabus TEXT',
+      'tags TEXT[]'
+    ];
+    
+    for (const column of newColumns) {
+      try {
+        const columnName = column.split(' ')[0];
+        await query(`ALTER TABLE courses ADD COLUMN IF NOT EXISTS ${columnName} ${column.split(' ').slice(1).join(' ')}`);
+        console.log(`✅ Added column: ${columnName}`);
+      } catch (error) {
+        console.log(`⚠️  Column might already exist: ${column.split(' ')[0]}`);
+      }
+    }
+    
+    console.log('✅ Courses table migration completed!');
+  } catch (error) {
+    console.error('❌ Courses table migration failed:', error);
+    throw error;
   }
 };
 

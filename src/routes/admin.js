@@ -308,6 +308,11 @@ router.post('/courses', [
   body('type').isIn(['online', 'offline']).withMessage('Type must be either "online" or "offline"'),
   body('price').isFloat({ min: 0 }).withMessage('Price must be a valid number greater than or equal to 0'),
   body('duration').trim().isLength({ min: 1 }).withMessage('Duration is required and must not be empty'),
+  body('difficulty').optional().isIn(['beginner', 'intermediate', 'advanced']).withMessage('Difficulty must be beginner, intermediate, or advanced'),
+  body('objectives').optional().isString().withMessage('Objectives must be a string'),
+  body('prerequisites').optional().isString().withMessage('Prerequisites must be a string'),
+  body('syllabus').optional().isString().withMessage('Syllabus must be a string'),
+  body('tags').optional().isArray().withMessage('Tags must be an array'),
   body('instructorId').optional().custom((value) => {
     if (value === '' || value === null || value === undefined) {
       return true; // Allow empty/null values
@@ -332,7 +337,7 @@ router.post('/courses', [
     throw validationError;
   }
 
-  const { title, description, topic, type, certification, price, duration, instructorId, imageUrl } = req.body;
+  const { title, description, topic, type, certification, price, duration, difficulty, objectives, prerequisites, syllabus, tags, instructorId, imageUrl } = req.body;
 
   // If instructorId is provided, verify the instructor exists
   if (instructorId) {
@@ -346,10 +351,10 @@ router.post('/courses', [
   }
 
   const result = await query(
-    `INSERT INTO courses (title, description, topic, type, certification, price, duration, instructor_id, image_url)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+    `INSERT INTO courses (title, description, topic, type, certification, price, duration, difficulty, objectives, prerequisites, syllabus, tags, instructor_id, image_url)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
      RETURNING *`,
-    [title, description, topic, type, certification, price, duration, instructorId || null, imageUrl]
+    [title, description, topic, type, certification, price, duration, difficulty, objectives, prerequisites, syllabus, tags, instructorId || null, imageUrl]
   );
 
   res.status(201).json({
@@ -366,6 +371,11 @@ router.put('/courses/:id', [
   body('type').optional().isIn(['online', 'offline']),
   body('price').optional().isFloat({ min: 0 }),
   body('duration').optional().trim().isLength({ min: 1 }),
+  body('difficulty').optional().isIn(['beginner', 'intermediate', 'advanced']),
+  body('objectives').optional().isString(),
+  body('prerequisites').optional().isString(),
+  body('syllabus').optional().isString(),
+  body('tags').optional().isArray(),
   body('isPublished').optional().isBoolean(),
   body('instructorId').optional().custom((value) => {
     if (value === '' || value === null || value === undefined) {
@@ -385,7 +395,7 @@ router.put('/courses/:id', [
   }
 
   const { id } = req.params;
-  const { title, description, topic, type, certification, price, duration, imageUrl, isPublished, instructorId } = req.body;
+  const { title, description, topic, type, certification, price, duration, difficulty, objectives, prerequisites, syllabus, tags, imageUrl, isPublished, instructorId } = req.body;
 
   // Check if course exists
   const existingCourse = await getRow('SELECT id FROM courses WHERE id = $1', [id]);
@@ -449,6 +459,36 @@ router.put('/courses/:id', [
     paramCount++;
     updates.push(`duration = $${paramCount}`);
     params.push(duration);
+  }
+
+  if (difficulty !== undefined) {
+    paramCount++;
+    updates.push(`difficulty = $${paramCount}`);
+    params.push(difficulty);
+  }
+
+  if (objectives !== undefined) {
+    paramCount++;
+    updates.push(`objectives = $${paramCount}`);
+    params.push(objectives);
+  }
+
+  if (prerequisites !== undefined) {
+    paramCount++;
+    updates.push(`prerequisites = $${paramCount}`);
+    params.push(prerequisites);
+  }
+
+  if (syllabus !== undefined) {
+    paramCount++;
+    updates.push(`syllabus = $${paramCount}`);
+    params.push(syllabus);
+  }
+
+  if (tags !== undefined) {
+    paramCount++;
+    updates.push(`tags = $${paramCount}`);
+    params.push(tags);
   }
 
   if (imageUrl !== undefined) {
