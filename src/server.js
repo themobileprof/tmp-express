@@ -50,6 +50,9 @@ const limiter = rateLimit({
 });
 app.use('/api/', limiter);
 
+// Upload routes (must come before JSON parser to handle multipart data)
+app.use('/api/uploads', uploadRoutes); // Standard upload endpoint
+
 // Body parsing middleware
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
@@ -270,7 +273,6 @@ app.use('/api/payments', paymentRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/scraping', scrapingRoutes);
 app.use('/api/notifications', notificationRoutes);
-app.use('/api/uploads', uploadRoutes); // Standard upload endpoint
 
 // Debug endpoints (must be defined before /uploads route to avoid conflicts)
 app.get('/debug/uploads', (req, res) => {
