@@ -371,6 +371,7 @@ router.put('/courses/:id', [
   body('type').optional().isIn(['online', 'offline']),
   body('price').optional().isFloat({ min: 0 }),
   body('duration').optional().trim().isLength({ min: 1 }),
+  body('certification').optional().isString(),
   body('difficulty').optional().isIn(['beginner', 'intermediate', 'advanced']),
   body('objectives').optional().isString(),
   body('prerequisites').optional().isString(),
@@ -391,6 +392,8 @@ router.put('/courses/:id', [
 ], asyncHandler(async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
+    console.log('Validation errors:', JSON.stringify(errors.array(), null, 2));
+    console.log('Request body:', JSON.stringify(req.body, null, 2));
     throw new AppError('Validation failed', 400, 'Validation Error');
   }
 
