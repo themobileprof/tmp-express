@@ -78,7 +78,8 @@ router.get('/browse', asyncHandler(async (req, res) => {
   const coursesQuery = `
     SELECT 
       c.id, c.title, c.description, c.topic, c.type, c.price, c.image_url,
-      c.duration, c.rating, c.student_count, c.created_at,
+      c.duration, c.rating, c.student_count, c.difficulty, c.objectives, 
+      c.prerequisites, c.syllabus, c.tags, c.created_at,
       u.id as instructor_id, u.first_name as instructor_first_name, 
       u.last_name as instructor_last_name, u.avatar_url as instructor_avatar,
       (SELECT COUNT(*) FROM lessons l WHERE l.course_id = c.id AND l.is_published = true) as lesson_count
@@ -104,6 +105,11 @@ router.get('/browse', asyncHandler(async (req, res) => {
       duration: course.duration,
       rating: course.rating,
       studentCount: course.student_count,
+      difficulty: course.difficulty,
+      objectives: course.objectives,
+      prerequisites: course.prerequisites,
+      syllabus: course.syllabus,
+      tags: course.tags,
       lessonCount: course.lesson_count,
       createdAt: course.created_at,
       instructor: {
@@ -131,6 +137,11 @@ const validateCourse = [
   body('price').isFloat({ min: 0 }).withMessage('Price must be a non-negative number'),
   body('duration').trim().isLength({ min: 1 }).withMessage('Course duration is required'),
   body('certification').optional().isString().withMessage('Certification must be a string'),
+  body('difficulty').optional().isIn(['beginner', 'intermediate', 'advanced']).withMessage('Difficulty must be beginner, intermediate, or advanced'),
+  body('objectives').optional().isString().withMessage('Objectives must be a string'),
+  body('prerequisites').optional().isString().withMessage('Prerequisites must be a string'),
+  body('syllabus').optional().isString().withMessage('Syllabus must be a string'),
+  body('tags').optional().isArray().withMessage('Tags must be an array'),
   body('imageUrl').optional().isURL().withMessage('Image URL must be a valid URL')
 ];
 
@@ -192,6 +203,11 @@ router.get('/', asyncHandler(async (req, res) => {
       rating: c.rating,
       studentCount: c.student_count,
       duration: c.duration,
+      difficulty: c.difficulty,
+      objectives: c.objectives,
+      prerequisites: c.prerequisites,
+      syllabus: c.syllabus,
+      tags: c.tags,
       instructorId: c.instructor_id,
       instructorName: c.instructor_id ? `${c.instructor_first_name} ${c.instructor_last_name}` : null,
       imageUrl: c.image_url,
@@ -210,17 +226,18 @@ router.post('/', authenticateToken, authorizeInstructor, validateCourse, asyncHa
   }
 
   const {
-    title, description, topic, type, certification, price, duration, imageUrl
+    title, description, topic, type, certification, price, duration, difficulty, objectives, prerequisites, syllabus, tags, imageUrl
   } = req.body;
   const instructorId = req.user.id;
 
   const result = await query(
     `INSERT INTO courses (
       title, description, topic, type, certification, price, duration, 
+      difficulty, objectives, prerequisites, syllabus, tags,
       instructor_id, image_url
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
     RETURNING *`,
-    [title, description, topic, type, certification, price, duration, instructorId, imageUrl]
+    [title, description, topic, type, certification, price, duration, difficulty, objectives, prerequisites, syllabus, tags, instructorId, imageUrl]
   );
 
   const course = result.rows[0];
@@ -234,6 +251,11 @@ router.post('/', authenticateToken, authorizeInstructor, validateCourse, asyncHa
     certification: course.certification,
     price: course.price,
     duration: course.duration,
+    difficulty: course.difficulty,
+    objectives: course.objectives,
+    prerequisites: course.prerequisites,
+    syllabus: course.syllabus,
+    tags: course.tags,
     instructorId: course.instructor_id,
     imageUrl: course.image_url,
     isPublished: course.is_published,
@@ -269,6 +291,11 @@ router.get('/:id', asyncHandler(async (req, res) => {
     rating: course.rating,
     studentCount: course.student_count,
     duration: course.duration,
+    difficulty: course.difficulty,
+    objectives: course.objectives,
+    prerequisites: course.prerequisites,
+    syllabus: course.syllabus,
+    tags: course.tags,
     instructorId: course.instructor_id,
     instructorName: course.instructor_id ? `${course.instructor_first_name} ${course.instructor_last_name}` : null,
     instructorAvatar: course.instructor_avatar,
@@ -289,7 +316,7 @@ router.put('/:id', authenticateToken, authorizeOwnerOrAdmin('courses', 'id'), va
 
   const { id } = req.params;
   const {
-    title, description, topic, type, certification, price, duration, imageUrl, isPublished
+    title, description, topic, type, certification, price, duration, difficulty, objectives, prerequisites, syllabus, tags, imageUrl, isPublished
   } = req.body;
 
   // Verify course exists
@@ -308,12 +335,17 @@ router.put('/:id', authenticateToken, authorizeOwnerOrAdmin('courses', 'id'), va
          certification = COALESCE($5, certification),
          price = COALESCE($6, price),
          duration = COALESCE($7, duration),
-         image_url = COALESCE($8, image_url),
-         is_published = COALESCE($9, is_published),
+         difficulty = COALESCE($8, difficulty),
+         objectives = COALESCE($9, objectives),
+         prerequisites = COALESCE($10, prerequisites),
+         syllabus = COALESCE($11, syllabus),
+         tags = COALESCE($12, tags),
+         image_url = COALESCE($13, image_url),
+         is_published = COALESCE($14, is_published),
          updated_at = CURRENT_TIMESTAMP
-     WHERE id = $10
+     WHERE id = $15
      RETURNING *`,
-    [title, description, topic, type, certification, price, duration, imageUrl, isPublished, id]
+    [title, description, topic, type, certification, price, duration, difficulty, objectives, prerequisites, syllabus, tags, imageUrl, isPublished, id]
   );
 
   const updatedCourse = result.rows[0];
@@ -327,6 +359,11 @@ router.put('/:id', authenticateToken, authorizeOwnerOrAdmin('courses', 'id'), va
     certification: updatedCourse.certification,
     price: updatedCourse.price,
     duration: updatedCourse.duration,
+    difficulty: updatedCourse.difficulty,
+    objectives: updatedCourse.objectives,
+    prerequisites: updatedCourse.prerequisites,
+    syllabus: updatedCourse.syllabus,
+    tags: updatedCourse.tags,
     imageUrl: updatedCourse.image_url,
     isPublished: updatedCourse.is_published,
     updatedAt: updatedCourse.updated_at
