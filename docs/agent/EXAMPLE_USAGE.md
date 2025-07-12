@@ -321,8 +321,71 @@ curl -X POST \
 
 ```bash
 curl -X GET \
+  'https://api.themobileprof.com/api/lessons/abcd-lesson-uuid/tests' \
+  -H 'Authorization: Bearer <access_token>'
+
+**Response:**
+```json
+{
+  "lesson": {
+    "id": "abcd-lesson-uuid",
+    "title": "Introduction to JavaScript",
+    "courseId": "course-uuid"
+  },
+  "tests": [
+    {
+      "id": "test-uuid",
+      "title": "JavaScript Basics Quiz",
+      "description": "Test your knowledge of JavaScript fundamentals",
+      "durationMinutes": 30,
+      "passingScore": 70,
+      "maxAttempts": 3,
+      "orderIndex": 1,
+      "isPublished": true,
+      "questionCount": 10,
+      "attemptCount": 25,
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z"
+    }
+  ]
+}
+```
+
+### Get Tests for a Lesson (Admin)
+
+```bash
+curl -X GET \
   'https://api.themobileprof.com/api/admin/lessons/abcd-lesson-uuid/tests' \
   -H 'Authorization: Bearer <access_token>'
+
+**Response:**
+```json
+{
+  "lesson": {
+    "id": "abcd-lesson-uuid",
+    "title": "Introduction to JavaScript",
+    "courseId": "course-uuid"
+  },
+  "tests": [
+    {
+      "id": "test-uuid",
+      "title": "JavaScript Basics Quiz",
+      "description": "Test your knowledge of JavaScript fundamentals",
+      "durationMinutes": 30,
+      "passingScore": 70,
+      "maxAttempts": 3,
+      "orderIndex": 1,
+      "isPublished": true,
+      "questionCount": 10,
+      "attemptCount": 25,
+      "averageScore": 85.5,
+      "passedAttempts": 20,
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z"
+    }
+  ]
+}
+```
 ```
 
 **Response:**

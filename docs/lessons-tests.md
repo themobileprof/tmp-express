@@ -71,6 +71,45 @@ Authorization: Bearer <jwt-token>
 
 ## Tests Endpoints
 
+### Get Lesson Tests
+**GET** `/lessons/:id/tests`
+
+Get all tests for a lesson.
+
+**Headers:**
+```
+Authorization: Bearer <jwt-token>
+```
+
+**Response (200):**
+```json
+{
+  "lesson": {
+    "id": "uuid",
+    "title": "Introduction to JavaScript",
+    "courseId": "uuid"
+  },
+  "tests": [
+    {
+      "id": "uuid",
+      "title": "Lesson Quiz",
+      "description": "Test covering lesson material",
+      "durationMinutes": 30,
+      "passingScore": 80,
+      "maxAttempts": 3,
+      "orderIndex": 1,
+      "isPublished": true,
+      "questionCount": 10,
+      "attemptCount": 25,
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z"
+    }
+  ]
+}
+```
+
+---
+
 ### Get Test by ID
 **GET** `/tests/:id`
 

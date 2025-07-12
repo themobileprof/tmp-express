@@ -130,6 +130,7 @@ LMS_BASE_URL=https://api.themobileprof.com
 - `DELETE /api/admin/lessons/:id` - Delete lesson (admin only)
 - `PUT /api/admin/lessons/:id/status` - Update lesson publication status (admin only)
 - `POST /api/admin/lessons/:id/duplicate` - Duplicate lesson (admin only)
+- `GET /api/lessons/:id/tests` - List tests for a lesson
 - `GET /api/admin/lessons/:id/tests` - List tests for a lesson (admin only)
 
 ### Test Management

@@ -274,6 +274,8 @@ DOCKERHUB_USERNAME=your-username
 ### Core Features
 - **User Management**: Registration, authentication, role-based access control
 - **Course Management**: Create, update, delete courses with lessons and tests
+- **Lesson Management**: Create, update, delete lessons with associated tests
+- **Test Management**: Create, update, delete tests with questions and analytics
 - **Class Management**: Schedule-based learning with limited slots
 - **Sponsorship System**: Discount codes and funding opportunities
 - **Testing System**: Multiple choice, true/false, and short answer questions

@@ -657,6 +657,35 @@ GET /api/admin/lessons/:lessonId/tests
 Authorization: Bearer <access_token>
 ```
 
+**Response:**
+```json
+{
+  "lesson": {
+    "id": "uuid",
+    "title": "Introduction to JavaScript",
+    "courseId": "uuid"
+  },
+  "tests": [
+    {
+      "id": "uuid",
+      "title": "Lesson Quiz",
+      "description": "Test covering lesson material",
+      "durationMinutes": 30,
+      "passingScore": 80,
+      "maxAttempts": 3,
+      "orderIndex": 1,
+      "isPublished": true,
+      "questionCount": 10,
+      "attemptCount": 25,
+      "averageScore": 85.5,
+      "passedAttempts": 20,
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z"
+    }
+  ]
+}
+```
+
 #### Get Test Details
 ```http
 GET /api/tests/:id
@@ -683,4 +712,37 @@ Content-Type: application/json
 ```http
 GET /api/tests/:id/questions
 Authorization: Bearer <access_token>
+```
+
+#### Get Tests for a Lesson
+```http
+GET /api/lessons/:id/tests
+Authorization: Bearer <access_token>
+```
+
+**Response:**
+```json
+{
+  "lesson": {
+    "id": "uuid",
+    "title": "Introduction to JavaScript",
+    "courseId": "uuid"
+  },
+  "tests": [
+    {
+      "id": "uuid",
+      "title": "Lesson Quiz",
+      "description": "Test covering lesson material",
+      "durationMinutes": 30,
+      "passingScore": 80,
+      "maxAttempts": 3,
+      "orderIndex": 1,
+      "isPublished": true,
+      "questionCount": 10,
+      "attemptCount": 25,
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z"
+    }
+  ]
+}
 ```

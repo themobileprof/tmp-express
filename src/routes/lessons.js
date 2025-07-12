@@ -112,4 +112,51 @@ router.delete('/:id', authenticateToken, authorizeOwnerOrAdmin('lessons', 'id'),
   });
 }));
 
+// Get tests for a lesson
+router.get('/:id/tests', authenticateToken, asyncHandler(async (req, res) => {
+  const { id } = req.params;
+
+  // Verify lesson exists
+  const lesson = await getRow('SELECT * FROM lessons WHERE id = $1', [id]);
+  if (!lesson) {
+    throw new AppError('Lesson not found', 404, 'Lesson Not Found');
+  }
+
+  // Get all tests for this lesson
+  const tests = await getRows(
+    `SELECT t.*, 
+            COUNT(tq.id) as question_count,
+            COUNT(ta.id) as attempt_count
+     FROM tests t
+     LEFT JOIN test_questions tq ON t.id = tq.test_id
+     LEFT JOIN test_attempts ta ON t.id = ta.test_id
+     WHERE t.lesson_id = $1
+     GROUP BY t.id
+     ORDER BY t.order_index ASC`,
+    [id]
+  );
+
+  res.json({
+    lesson: {
+      id: lesson.id,
+      title: lesson.title,
+      courseId: lesson.course_id
+    },
+    tests: tests.map(t => ({
+      id: t.id,
+      title: t.title,
+      description: t.description,
+      durationMinutes: t.duration_minutes,
+      passingScore: t.passing_score,
+      maxAttempts: t.max_attempts,
+      orderIndex: t.order_index,
+      isPublished: t.is_published,
+      questionCount: parseInt(t.question_count),
+      attemptCount: parseInt(t.attempt_count),
+      createdAt: t.created_at,
+      updatedAt: t.updated_at
+    }))
+  });
+}));
+
 module.exports = router; 

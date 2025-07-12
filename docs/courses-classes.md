@@ -61,6 +61,11 @@ Authorization: Bearer <jwt-token>
   "certification": "JavaScript Developer",
   "price": 99.99,
   "duration": "8 weeks",
+  "difficulty": "beginner",
+  "objectives": "Learn JavaScript fundamentals and build real-world projects",
+  "prerequisites": "Basic computer skills and familiarity with HTML",
+  "syllabus": "Week 1: Introduction to JavaScript\nWeek 2: Variables and Data Types\nWeek 3: Functions and Scope\nWeek 4: DOM Manipulation",
+  "tags": ["javascript", "programming", "web-development"],
   "imageUrl": "https://example.com/course.jpg"
 }
 ```
@@ -76,6 +81,11 @@ Authorization: Bearer <jwt-token>
   "certification": "JavaScript Developer",
   "price": 99.99,
   "duration": "8 weeks",
+  "difficulty": "beginner",
+  "objectives": "Learn JavaScript fundamentals and build real-world projects",
+  "prerequisites": "Basic computer skills and familiarity with HTML",
+  "syllabus": "Week 1: Introduction to JavaScript\nWeek 2: Variables and Data Types\nWeek 3: Functions and Scope\nWeek 4: DOM Manipulation",
+  "tags": ["javascript", "programming", "web-development"],
   "instructorId": "uuid",
   "imageUrl": "https://example.com/course.jpg",
   "isPublished": false,
@@ -101,6 +111,11 @@ Get detailed course information.
   "rating": 4.5,
   "studentCount": 150,
   "duration": "8 weeks",
+  "difficulty": "beginner",
+  "objectives": "Learn JavaScript fundamentals and build real-world projects",
+  "prerequisites": "Basic computer skills and familiarity with HTML",
+  "syllabus": "Week 1: Introduction to JavaScript\nWeek 2: Variables and Data Types\nWeek 3: Functions and Scope\nWeek 4: DOM Manipulation",
+  "tags": ["javascript", "programming", "web-development"],
   "instructorId": "uuid",
   "instructorName": "John Doe",
   "instructorAvatar": "https://example.com/avatar.jpg",
@@ -127,6 +142,11 @@ Authorization: Bearer <jwt-token>
 {
   "title": "Updated JavaScript Fundamentals",
   "description": "Updated description",
+  "difficulty": "intermediate",
+  "objectives": "Updated learning objectives",
+  "prerequisites": "Updated prerequisites",
+  "syllabus": "Updated syllabus content",
+  "tags": ["updated", "javascript", "programming"],
   "price": 89.99,
   "isPublished": true
 }
@@ -143,6 +163,11 @@ Authorization: Bearer <jwt-token>
   "certification": "JavaScript Developer",
   "price": 89.99,
   "duration": "8 weeks",
+  "difficulty": "intermediate",
+  "objectives": "Updated learning objectives",
+  "prerequisites": "Updated prerequisites",
+  "syllabus": "Updated syllabus content",
+  "tags": ["updated", "javascript", "programming"],
   "imageUrl": "https://example.com/course.jpg",
   "isPublished": true,
   "updatedAt": "2024-01-01T00:00:00.000Z"

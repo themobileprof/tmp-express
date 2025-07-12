@@ -2446,4 +2446,55 @@ router.post('/lessons/:lessonId/tests', asyncHandler(async (req, res) => {
   });
 }));
 
+// Get tests for a lesson (admin only)
+router.get('/lessons/:lessonId/tests', asyncHandler(async (req, res) => {
+  const { lessonId } = req.params;
+
+  // Verify lesson exists
+  const lesson = await getRow('SELECT * FROM lessons WHERE id = $1', [lessonId]);
+  if (!lesson) {
+    throw new AppError('Lesson not found', 404, 'Lesson Not Found');
+  }
+
+  // Get all tests for this lesson with additional statistics
+  const tests = await query(
+    `SELECT t.*, 
+            COUNT(DISTINCT tq.id) as question_count,
+            COUNT(DISTINCT ta.id) as attempt_count,
+            AVG(ta.score) as average_score,
+            COUNT(CASE WHEN ta.score >= t.passing_score THEN 1 END) as passed_attempts
+     FROM tests t
+     LEFT JOIN test_questions tq ON t.id = tq.test_id
+     LEFT JOIN test_attempts ta ON t.id = ta.test_id AND ta.status = 'completed'
+     WHERE t.lesson_id = $1
+     GROUP BY t.id
+     ORDER BY t.order_index ASC`,
+    [lessonId]
+  );
+
+  res.json({
+    lesson: {
+      id: lesson.id,
+      title: lesson.title,
+      courseId: lesson.course_id
+    },
+    tests: tests.rows.map(t => ({
+      id: t.id,
+      title: t.title,
+      description: t.description,
+      durationMinutes: t.duration_minutes,
+      passingScore: t.passing_score,
+      maxAttempts: t.max_attempts,
+      orderIndex: t.order_index,
+      isPublished: t.is_published,
+      questionCount: parseInt(t.question_count),
+      attemptCount: parseInt(t.attempt_count),
+      averageScore: t.average_score ? parseFloat(t.average_score) : null,
+      passedAttempts: parseInt(t.passed_attempts),
+      createdAt: t.created_at,
+      updatedAt: t.updated_at
+    }))
+  });
+}));
+
 module.exports = router; 

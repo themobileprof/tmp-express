@@ -35,12 +35,17 @@ CREATE TABLE courses (
     rating DECIMAL(3,2) DEFAULT 0,
     student_count INTEGER DEFAULT 0,
     duration VARCHAR(50) NOT NULL,
-    instructor_id UUID NOT NULL,
+    instructor_id UUID,
     image_url TEXT,
-    status ENUM('published', 'draft', 'review', 'archived') DEFAULT 'draft',
+    difficulty VARCHAR(50),
+    objectives TEXT,
+    prerequisites TEXT,
+    syllabus TEXT,
+    tags TEXT[],
+    is_published BOOLEAN DEFAULT false,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (instructor_id) REFERENCES users(id) ON DELETE CASCADE
+    FOREIGN KEY (instructor_id) REFERENCES users(id) ON DELETE SET NULL
 );
 ```
 
@@ -401,8 +406,8 @@ PUT    /api/admin/lessons/:id
 DELETE /api/admin/lessons/:id
 PUT    /api/admin/lessons/:id/status
 POST   /api/admin/lessons/:id/duplicate
-GET    /api/admin/lessons/:id/tests
-POST   /api/admin/lessons/:id/tests
+GET    /api/admin/lessons/:lessonId/tests
+POST   /api/admin/lessons/:lessonId/tests
 ```
 
 ### Admin - Test Management
@@ -470,6 +475,7 @@ POST   /api/classes/:id/enroll
 GET    /api/lessons/:id
 PUT    /api/lessons/:id
 DELETE /api/lessons/:id
+GET    /api/lessons/:id/tests
 POST   /api/lessons/:id/materials/upload
 ```
 
