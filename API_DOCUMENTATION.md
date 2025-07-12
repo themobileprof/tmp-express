@@ -2296,10 +2296,10 @@ Authorization: Bearer <jwt-token>
 }
 ```
 
-#### Create Lesson Test
-**POST** `/api/lessons/:id/tests`
+#### Create Lesson Test (Admin Only)
+**POST** `/api/admin/lessons/:lessonId/tests`
 
-Create a new test for a lesson (instructor/admin only).
+Create a new test for a lesson (admin only).
 
 **Headers:**
 ```
@@ -2323,6 +2323,41 @@ Content-Type: application/json
       "correctAnswer": 1,
       "points": 3,
       "orderIndex": 1
+    }
+  ]
+}
+```
+
+**Response (201):**
+```json
+{
+  "test": {
+    "id": "uuid",
+    "course_id": "uuid",
+    "lesson_id": "uuid",
+    "title": "Lesson Quiz",
+    "description": "Test covering lesson material",
+    "duration_minutes": 30,
+    "passing_score": 80,
+    "max_attempts": 3,
+    "order_index": 0,
+    "is_published": true,
+    "created_at": "2024-01-01T00:00:00.000Z",
+    "updated_at": "2024-01-01T00:00:00.000Z"
+  },
+  "questions": [
+    {
+      "id": "uuid",
+      "test_id": "uuid",
+      "question": "What did you learn in this lesson?",
+      "question_type": "multiple_choice",
+      "options": "[\"Option A\", \"Option B\", \"Option C\", \"Option D\"]",
+      "correct_answer": 1,
+      "points": 3,
+      "order_index": 1,
+      "image_url": null,
+      "created_at": "2024-01-01T00:00:00.000Z",
+      "updated_at": "2024-01-01T00:00:00.000Z"
     }
   ]
 }
@@ -3164,6 +3199,48 @@ Authorization: Bearer <jwt-token>
     "limit": 20,
     "total": 5,
     "pages": 1
+  }
+}
+```
+
+#### Create Lesson for a Course (Admin)
+**POST** `/admin/courses/:courseId/lessons`
+
+Create a new lesson for a course (admin access).
+
+**Headers:**
+```
+Authorization: Bearer <jwt-token>
+Content-Type: application/json
+```
+
+**Request Body:**
+```json
+{
+  "title": "Lesson Title",
+  "description": "Lesson description...",
+  "content": "Lesson content...",
+  "videoUrl": "https://example.com/video.mp4",
+  "durationMinutes": 45,
+  "orderIndex": 1,
+  "isPublished": true
+}
+```
+
+**Response (201):**
+```json
+{
+  "lesson": {
+    "id": "uuid",
+    "courseId": "uuid",
+    "title": "Lesson Title",
+    "description": "Lesson description...",
+    "content": "Lesson content...",
+    "videoUrl": "https://example.com/video.mp4",
+    "durationMinutes": 45,
+    "orderIndex": 1,
+    "isPublished": true,
+    "createdAt": "2024-07-01T10:00:00Z"
   }
 }
 ```

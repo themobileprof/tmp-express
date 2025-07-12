@@ -11,12 +11,23 @@ const router = express.Router();
 
 // Validation middleware
 const validateTest = [
+  body('title').optional().trim().isLength({ min: 1 }).withMessage('Test title must not be empty if provided'),
+  body('description').optional().isString().withMessage('Description must be a string'),
+  body('durationMinutes').optional().isInt({ min: 1 }).withMessage('Duration must be at least 1 minute'),
+  body('passingScore').optional().isInt({ min: 0, max: 100 }).withMessage('Passing score must be between 0 and 100'),
+  body('maxAttempts').optional().isInt({ min: 1 }).withMessage('Max attempts must be at least 1'),
+  body('orderIndex').optional().isInt({ min: 0 }).withMessage('Order index must be a non-negative integer'),
+  body('isPublished').optional().isBoolean().withMessage('isPublished must be a boolean')
+];
+
+const validateCreateTest = [
   body('title').trim().isLength({ min: 1 }).withMessage('Test title is required'),
   body('description').optional().isString().withMessage('Description must be a string'),
   body('durationMinutes').isInt({ min: 1 }).withMessage('Duration must be at least 1 minute'),
   body('passingScore').isInt({ min: 0, max: 100 }).withMessage('Passing score must be between 0 and 100'),
   body('maxAttempts').isInt({ min: 1 }).withMessage('Max attempts must be at least 1'),
-  body('orderIndex').isInt({ min: 0 }).withMessage('Order index must be a non-negative integer')
+  body('orderIndex').optional().isInt({ min: 0 }).withMessage('Order index must be a non-negative integer'),
+  body('isPublished').optional().isBoolean().withMessage('isPublished must be a boolean')
 ];
 
 const validateQuestion = [
