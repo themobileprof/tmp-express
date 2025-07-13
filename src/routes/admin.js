@@ -1073,12 +1073,14 @@ router.get('/tests/:id/questions', asyncHandler(async (req, res) => {
 
 // Add question to test
 router.post('/tests/:id/questions', [
-  body('question').trim().isLength({ min: 1 }),
-  body('questionType').isIn(['multiple_choice', 'true_false']),
-  body('options').optional().isArray(),
-  body('correctAnswer').isInt({ min: 0 }),
-  body('points').optional().isInt({ min: 1 }),
-  body('imageUrl').optional().trim()
+  body('question').trim().isLength({ min: 1 }).withMessage('Question text is required'),
+  body('questionType').isIn(['multiple_choice', 'true_false', 'short_answer']).withMessage('Invalid question type'),
+  body('options').optional().isArray().withMessage('Options must be an array if provided'),
+  body('correctAnswer').optional().isInt({ min: 0 }).withMessage('Correct answer must be a non-negative integer if provided'),
+  body('correctAnswerText').optional().isString().withMessage('Correct answer text must be a string if provided'),
+  body('points').optional().isInt({ min: 1 }).withMessage('Points must be at least 1 if provided'),
+  body('orderIndex').optional().isInt({ min: 0 }).withMessage('Order index must be a non-negative integer if provided'),
+  body('imageUrl').optional().trim().withMessage('Image URL must be a string if provided')
 ], asyncHandler(async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
@@ -1086,7 +1088,7 @@ router.post('/tests/:id/questions', [
   }
 
   const { id } = req.params;
-  const { question, questionType, options, correctAnswer, points = 1, imageUrl } = req.body;
+  const { question, questionType, options, correctAnswer, correctAnswerText, points = 1, orderIndex, imageUrl } = req.body;
 
   // Check if test exists
   const existingTest = await getRow('SELECT id FROM tests WHERE id = $1', [id]);
@@ -1094,18 +1096,39 @@ router.post('/tests/:id/questions', [
     throw new AppError('Test not found', 404, 'Test Not Found');
   }
 
-  // Get next order index
-  const orderResult = await query(
-    'SELECT COALESCE(MAX(order_index), 0) + 1 as next_order FROM test_questions WHERE test_id = $1',
-    [id]
-  );
-  const orderIndex = orderResult.rows[0].next_order;
+  // Validate question type specific requirements
+  if (questionType === 'multiple_choice') {
+    if (!options || !Array.isArray(options) || options.length < 2) {
+      throw new AppError('Multiple choice questions must have at least 2 options', 400, 'Invalid Question');
+    }
+    if (correctAnswer === undefined || correctAnswer < 0 || correctAnswer >= options.length) {
+      throw new AppError('Valid correct answer index is required for multiple choice', 400, 'Invalid Answer');
+    }
+  } else if (questionType === 'true_false') {
+    if (correctAnswer === undefined || ![0, 1].includes(correctAnswer)) {
+      throw new AppError('Correct answer must be 0 (false) or 1 (true) for true/false questions', 400, 'Invalid Answer');
+    }
+  } else if (questionType === 'short_answer') {
+    if (!correctAnswerText || correctAnswerText.trim().length === 0) {
+      throw new AppError('Correct answer text is required for short answer questions', 400, 'Invalid Answer');
+    }
+  }
+
+  // Get next order index if not provided
+  let finalOrderIndex = orderIndex;
+  if (finalOrderIndex === undefined) {
+    const orderResult = await query(
+      'SELECT COALESCE(MAX(order_index), 0) + 1 as next_order FROM test_questions WHERE test_id = $1',
+      [id]
+    );
+    finalOrderIndex = orderResult.rows[0].next_order;
+  }
 
   const result = await query(
-    `INSERT INTO test_questions (test_id, question, question_type, options, correct_answer, points, image_url, order_index)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+    `INSERT INTO test_questions (test_id, question, question_type, options, correct_answer, correct_answer_text, points, order_index, image_url)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
      RETURNING *`,
-    [id, question, questionType, options || [], correctAnswer, points, imageUrl, orderIndex]
+    [id, question, questionType, options || [], correctAnswer, correctAnswerText, points, finalOrderIndex, imageUrl]
   );
 
   res.status(201).json({
