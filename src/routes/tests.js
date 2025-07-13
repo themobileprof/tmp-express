@@ -31,6 +31,16 @@ const validateCreateTest = [
 ];
 
 const validateQuestion = [
+  body('question').optional().trim().isLength({ min: 1 }).withMessage('Question text must not be empty if provided'),
+  body('questionType').optional().isIn(['multiple_choice', 'true_false', 'short_answer']).withMessage('Invalid question type'),
+  body('points').optional().isInt({ min: 1 }).withMessage('Points must be at least 1 if provided'),
+  body('orderIndex').optional().isInt({ min: 0 }).withMessage('Order index must be a non-negative integer if provided'),
+  body('options').optional().isArray().withMessage('Options must be an array if provided'),
+  body('correctAnswer').optional().isInt({ min: 0 }).withMessage('Correct answer must be a non-negative integer if provided'),
+  body('correctAnswerText').optional().isString().withMessage('Correct answer text must be a string if provided')
+];
+
+const validateCreateQuestion = [
   body('question').trim().isLength({ min: 1 }).withMessage('Question text is required'),
   body('questionType').isIn(['multiple_choice', 'true_false', 'short_answer']).withMessage('Invalid question type'),
   body('points').isInt({ min: 1 }).withMessage('Points must be at least 1'),
@@ -196,7 +206,7 @@ router.get('/:id/questions', authenticateToken, asyncHandler(async (req, res) =>
 }));
 
 // Add question to test
-router.post('/:id/questions', authenticateToken, authorizeOwnerOrAdmin('tests', 'id'), validateQuestion, asyncHandler(async (req, res) => {
+router.post('/:id/questions', authenticateToken, authorizeOwnerOrAdmin('tests', 'id'), validateCreateQuestion, asyncHandler(async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
     throw new AppError('Validation failed', 400, 'Validation Error');
