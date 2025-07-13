@@ -309,9 +309,9 @@ router.post('/courses', [
   body('price').isFloat({ min: 0 }).withMessage('Price must be a valid number greater than or equal to 0'),
   body('duration').trim().isLength({ min: 1 }).withMessage('Duration is required and must not be empty'),
   body('difficulty').optional().isIn(['beginner', 'intermediate', 'advanced']).withMessage('Difficulty must be beginner, intermediate, or advanced'),
-  body('objectives').optional().isString().withMessage('Objectives must be a string'),
-  body('prerequisites').optional().isString().withMessage('Prerequisites must be a string'),
-  body('syllabus').optional().isString().withMessage('Syllabus must be a string'),
+  body('objectives').optional().isLength({ min: 1 }).withMessage('Objectives must be a non-empty string if provided'),
+  body('prerequisites').optional().isLength({ min: 1 }).withMessage('Prerequisites must be a non-empty string if provided'),
+  body('syllabus').optional().isLength({ min: 1 }).withMessage('Syllabus must be a non-empty string if provided'),
   body('tags').optional().isArray().withMessage('Tags must be an array'),
   body('instructorId').optional().custom((value) => {
     if (value === '' || value === null || value === undefined) {
@@ -371,11 +371,11 @@ router.put('/courses/:id', [
   body('type').optional().isIn(['online', 'offline']),
   body('price').optional().isFloat({ min: 0 }),
   body('duration').optional().trim().isLength({ min: 1 }),
-  body('certification').optional().isString(),
+  body('certification').optional().isLength({ min: 1 }).withMessage('Certification must be a non-empty string if provided'),
   body('difficulty').optional().isIn(['beginner', 'intermediate', 'advanced']),
-  body('objectives').optional().isString(),
-  body('prerequisites').optional().isString(),
-  body('syllabus').optional().isString(),
+  body('objectives').optional().isLength({ min: 1 }).withMessage('Objectives must be a non-empty string if provided'),
+  body('prerequisites').optional().isLength({ min: 1 }).withMessage('Prerequisites must be a non-empty string if provided'),
+  body('syllabus').optional().isLength({ min: 1 }).withMessage('Syllabus must be a non-empty string if provided'),
   body('tags').optional().isArray(),
   body('isPublished').optional().isBoolean(),
   body('instructorId').optional().custom((value) => {
@@ -1077,10 +1077,10 @@ router.post('/tests/:id/questions', [
   body('questionType').isIn(['multiple_choice', 'true_false', 'short_answer']).withMessage('Invalid question type'),
   body('options').optional().isArray().withMessage('Options must be an array if provided'),
   body('correctAnswer').optional().isInt({ min: 0 }).withMessage('Correct answer must be a non-negative integer if provided'),
-  body('correctAnswerText').optional().isString().withMessage('Correct answer text must be a string if provided'),
+  body('correctAnswerText').optional().isLength({ min: 1 }).withMessage('Correct answer text must be a non-empty string if provided'),
   body('points').optional().isInt({ min: 1 }).withMessage('Points must be at least 1 if provided'),
   body('orderIndex').optional().isInt({ min: 0 }).withMessage('Order index must be a non-negative integer if provided'),
-  body('imageUrl').optional().trim().withMessage('Image URL must be a string if provided')
+  body('imageUrl').optional().trim().isLength({ min: 1 }).withMessage('Image URL must be a non-empty string if provided')
 ], asyncHandler(async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
