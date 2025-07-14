@@ -239,6 +239,15 @@ const createTables = async () => {
       )
     `);
 
+    // Create System Settings table
+    await query(`
+      CREATE TABLE IF NOT EXISTS system_settings (
+        key VARCHAR(100) PRIMARY KEY,
+        value TEXT,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
     // Create Classes table
     await query(`
       CREATE TABLE IF NOT EXISTS classes (

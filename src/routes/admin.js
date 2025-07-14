@@ -2552,4 +2552,63 @@ router.get('/lessons/:lessonId/tests', asyncHandler(async (req, res) => {
   });
 }));
 
+// Get a single system setting
+router.get('/settings/:key', asyncHandler(async (req, res) => {
+  const { key } = req.params;
+  const result = await query('SELECT * FROM system_settings WHERE key = $1', [key]);
+  if (result.rows.length === 0) {
+    return res.status(404).json({ error: 'Setting not found' });
+  }
+  res.json(result.rows[0]);
+}));
+
+// Create a new system setting
+router.post('/settings', [
+  body('key').isString().isLength({ min: 1 }),
+  body('value').optional()
+], asyncHandler(async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    throw new AppError('Validation failed', 400, 'Validation Error');
+  }
+  const { key, value } = req.body;
+  // Check if exists
+  const exists = await query('SELECT 1 FROM system_settings WHERE key = $1', [key]);
+  if (exists.rows.length > 0) {
+    return res.status(409).json({ error: 'Setting already exists' });
+  }
+  await query('INSERT INTO system_settings (key, value) VALUES ($1, $2)', [key, value]);
+  res.status(201).json({ message: 'Setting created' });
+}));
+
+// Update a single system setting
+router.put('/settings/:key', [
+  body('value').isString()
+], asyncHandler(async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    throw new AppError('Validation failed', 400, 'Validation Error');
+  }
+  const { key } = req.params;
+  const { value } = req.body;
+  const result = await query(
+    `UPDATE system_settings SET value = $1, updated_at = CURRENT_TIMESTAMP WHERE key = $2 RETURNING *`,
+    [value, key]
+  );
+  if (result.rows.length === 0) {
+    return res.status(404).json({ error: 'Setting not found' });
+  }
+  res.json({ message: 'Setting updated', setting: result.rows[0] });
+}));
+
+// Delete a system setting
+router.delete('/settings/:key', asyncHandler(async (req, res) => {
+  const { key } = req.params;
+  const result = await query('DELETE FROM system_settings WHERE key = $1 RETURNING *', [key]);
+  if (result.rows.length === 0) {
+    return res.status(404).json({ error: 'Setting not found' });
+  }
+  res.json({ message: 'Setting deleted' });
+}));
+
 module.exports = router; 
