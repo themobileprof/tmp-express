@@ -2434,8 +2434,13 @@ router.post('/lessons/:lessonId/tests', asyncHandler(async (req, res) => {
   const { title, description, durationMinutes, passingScore, maxAttempts, questions } = req.body;
 
   // Validate required fields
-  if (!title || !durationMinutes || !passingScore || !maxAttempts || !Array.isArray(questions) || questions.length === 0) {
-    throw new AppError('Missing required fields', 400, 'VALIDATION_ERROR');
+  if (!title || !durationMinutes || !passingScore || !maxAttempts) {
+    throw new AppError('Missing required fields: title, durationMinutes, passingScore, and maxAttempts are required', 400, 'VALIDATION_ERROR');
+  }
+
+  // Validate questions array if provided
+  if (questions && !Array.isArray(questions)) {
+    throw new AppError('Questions must be an array', 400, 'VALIDATION_ERROR');
   }
 
   // Check that the lesson exists
@@ -2451,13 +2456,14 @@ router.post('/lessons/:lessonId/tests', asyncHandler(async (req, res) => {
   );
   const test = testResult.rows[0];
 
-  // Insert questions
+  // Insert questions if provided
   const insertedQuestions = [];
-  for (let i = 0; i < questions.length; i++) {
-    const q = questions[i];
-    if (!q.question || !q.questionType || q.points === undefined || q.orderIndex === undefined) {
-      throw new AppError('Each question must have question, questionType, points, and orderIndex', 400, 'VALIDATION_ERROR');
-    }
+  if (questions && questions.length > 0) {
+    for (let i = 0; i < questions.length; i++) {
+      const q = questions[i];
+      if (!q.question || !q.questionType || q.points === undefined || q.orderIndex === undefined) {
+        throw new AppError('Each question must have question, questionType, points, and orderIndex', 400, 'VALIDATION_ERROR');
+      }
     
     // Handle options JSON properly
     let optionsJson = null;
@@ -2486,6 +2492,7 @@ router.post('/lessons/:lessonId/tests', asyncHandler(async (req, res) => {
       [test.id, q.question, q.questionType, optionsJson, q.correctAnswer, q.points, q.orderIndex, q.imageUrl || null]
     );
     insertedQuestions.push(result.rows[0]);
+    }
   }
 
   res.status(201).json({

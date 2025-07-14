@@ -2328,6 +2328,13 @@ Content-Type: application/json
 }
 ```
 
+**Notes:**
+- `title`, `durationMinutes`, `passingScore`, and `maxAttempts` are required
+- `description` is optional
+- `questions` array is optional - you can create a test without questions and add them later
+- If `questions` is provided, each question must have `question`, `questionType`, `points`, and `orderIndex`
+- `questionType` must be one of: "multiple_choice", "true_false", "short_answer"
+
 **Response (201):**
 ```json
 {
@@ -2360,6 +2367,27 @@ Content-Type: application/json
       "updated_at": "2024-01-01T00:00:00.000Z"
     }
   ]
+}
+```
+
+**Example Response (when no questions provided):**
+```json
+{
+  "test": {
+    "id": "uuid",
+    "course_id": "uuid",
+    "lesson_id": "uuid",
+    "title": "Lesson Quiz",
+    "description": "Test covering lesson material",
+    "duration_minutes": 30,
+    "passing_score": 80,
+    "max_attempts": 3,
+    "order_index": 0,
+    "is_published": true,
+    "created_at": "2024-01-01T00:00:00.000Z",
+    "updated_at": "2024-01-01T00:00:00.000Z"
+  },
+  "questions": []
 }
 ```
 
@@ -2558,8 +2586,40 @@ Content-Type: application/json
   "questionType": "multiple_choice",
   "options": ["Server-side programming", "Client-side programming", "Database management", "File system"],
   "correctAnswer": 1,
+  "correctAnswerText": null,
   "points": 2,
-  "orderIndex": 2
+  "orderIndex": 2,
+  "imageUrl": null
+}
+```
+
+**Notes:**
+- `question` and `questionType` are required
+- `questionType` must be one of: "multiple_choice", "true_false", "short_answer"
+- `options` is required for "multiple_choice" questions
+- `correctAnswer` is required for "multiple_choice" and "true_false" questions
+- `correctAnswerText` is required for "short_answer" questions
+- `points` defaults to 1 if not provided
+- `orderIndex` is optional - will be auto-assigned if not provided
+- `imageUrl` is optional for question images
+
+**Response (201):**
+```json
+{
+  "question": {
+    "id": "uuid",
+    "test_id": "uuid",
+    "question": "What is the purpose of JavaScript?",
+    "question_type": "multiple_choice",
+    "options": "[\"Server-side programming\", \"Client-side programming\", \"Database management\", \"File system\"]",
+    "correct_answer": 1,
+    "correct_answer_text": null,
+    "points": 2,
+    "order_index": 2,
+    "image_url": null,
+    "created_at": "2024-01-01T00:00:00.000Z",
+    "updated_at": "2024-01-01T00:00:00.000Z"
+  }
 }
 ```
 
@@ -2573,6 +2633,26 @@ Update a question in a test (admin only).
 Authorization: Bearer <jwt-token>
 Content-Type: application/json
 ```
+
+**Request Body:**
+```json
+{
+  "question": "Updated question text",
+  "questionType": "multiple_choice",
+  "options": ["Option A", "Option B", "Option C", "Option D"],
+  "correctAnswer": 2,
+  "correctAnswerText": null,
+  "points": 3,
+  "imageUrl": "https://example.com/image.jpg"
+}
+```
+
+**Notes:**
+- All fields are optional for updates
+- `questionType` must be one of: "multiple_choice", "true_false", "short_answer"
+- `options` is required for "multiple_choice" questions
+- `correctAnswer` is required for "multiple_choice" and "true_false" questions
+- `correctAnswerText` is required for "short_answer" questions
 
 #### Delete Question (Admin)
 **DELETE** `/api/admin/tests/:id/questions/:questionId`
