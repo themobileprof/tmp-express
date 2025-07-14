@@ -1082,9 +1082,18 @@ router.post('/tests/:id/questions', [
   body('orderIndex').optional().isInt({ min: 0 }).withMessage('Order index must be a non-negative integer if provided'),
   body('imageUrl').optional().trim().isLength({ min: 1 }).withMessage('Image URL must be a non-empty string if provided')
 ], asyncHandler(async (req, res) => {
+  console.log('Request body for question creation:', JSON.stringify(req.body, null, 2));
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
-    throw new AppError('Validation failed', 400, 'Validation Error');
+    console.log('Validation errors:', JSON.stringify(errors.array(), null, 2));
+    const errorDetails = errors.array().reduce((acc, error) => {
+      acc[error.path] = error.msg;
+      return acc;
+    }, {});
+    
+    const validationError = new AppError('Validation failed', 400, 'VALIDATION_ERROR');
+    validationError.details = errorDetails;
+    throw validationError;
   }
 
   const { id } = req.params;
@@ -1139,19 +1148,29 @@ router.post('/tests/:id/questions', [
 // Update question
 router.put('/tests/:id/questions/:questionId', [
   body('question').optional().trim().isLength({ min: 1 }),
-  body('questionType').optional().isIn(['multiple_choice', 'true_false']),
+  body('questionType').optional().isIn(['multiple_choice', 'true_false', 'short_answer']),
   body('options').optional().isArray(),
   body('correctAnswer').optional().isInt({ min: 0 }),
+  body('correctAnswerText').optional().isLength({ min: 1 }).withMessage('Correct answer text must be a non-empty string if provided'),
   body('points').optional().isInt({ min: 1 }),
-  body('imageUrl').optional().trim()
+  body('imageUrl').optional().trim().isLength({ min: 1 }).withMessage('Image URL must be a non-empty string if provided')
 ], asyncHandler(async (req, res) => {
+  console.log('Request body for question update:', JSON.stringify(req.body, null, 2));
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
-    throw new AppError('Validation failed', 400, 'Validation Error');
+    console.log('Validation errors:', JSON.stringify(errors.array(), null, 2));
+    const errorDetails = errors.array().reduce((acc, error) => {
+      acc[error.path] = error.msg;
+      return acc;
+    }, {});
+    
+    const validationError = new AppError('Validation failed', 400, 'VALIDATION_ERROR');
+    validationError.details = errorDetails;
+    throw validationError;
   }
 
   const { id, questionId } = req.params;
-  const { question, questionType, options, correctAnswer, points, imageUrl } = req.body;
+  const { question, questionType, options, correctAnswer, correctAnswerText, points, imageUrl } = req.body;
 
   // Check if question exists and belongs to test
   const existingQuestion = await getRow(
@@ -1189,6 +1208,12 @@ router.put('/tests/:id/questions/:questionId', [
     paramCount++;
     updates.push(`correct_answer = $${paramCount}`);
     params.push(correctAnswer);
+  }
+
+  if (correctAnswerText !== undefined) {
+    paramCount++;
+    updates.push(`correct_answer_text = $${paramCount}`);
+    params.push(correctAnswerText);
   }
 
   if (points) {
