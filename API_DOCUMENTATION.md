@@ -1105,7 +1105,7 @@ Content-Type: application/json
 
 #### System Settings
 
-##### Get System Settings (Admin)
+##### Get All System Settings (Admin)
 **GET** `/admin/settings`
 
 Get all system settings.
@@ -1133,14 +1133,74 @@ Authorization: Bearer <jwt-token>
 }
 ```
 
-##### Update System Settings (Admin)
-**PUT** `/admin/settings`
+##### Get Single System Setting (Admin)
+**GET** `/admin/settings/:key`
 
-Update system settings.
+Get a specific system setting by key.
 
 **Headers:**
 ```
 Authorization: Bearer <jwt-token>
+```
+
+**Response (200):**
+```json
+{
+  "key": "site_name",
+  "value": "TheMobileProf LMS",
+  "updated_at": "2024-01-01T00:00:00.000Z"
+}
+```
+
+**Error Response (404):**
+```json
+{
+  "error": "Setting not found"
+}
+```
+
+##### Create System Setting (Admin)
+**POST** `/admin/settings`
+
+Create a new system setting.
+
+**Headers:**
+```
+Authorization: Bearer <jwt-token>
+Content-Type: application/json
+```
+
+**Request Body:**
+```json
+{
+  "key": "new_setting_key",
+  "value": "new_setting_value"
+}
+```
+
+**Response (201):**
+```json
+{
+  "message": "Setting created"
+}
+```
+
+**Error Response (409):**
+```json
+{
+  "error": "Setting already exists"
+}
+```
+
+##### Update Multiple System Settings (Admin)
+**PUT** `/admin/settings`
+
+Update multiple system settings at once.
+
+**Headers:**
+```
+Authorization: Bearer <jwt-token>
+Content-Type: application/json
 ```
 
 **Request Body:**
@@ -1160,16 +1220,68 @@ Authorization: Bearer <jwt-token>
 **Response (200):**
 ```json
 {
-  "success": true,
-  "message": "Settings updated successfully",
-  "updatedSettings": {
-    "site_name": "TheMobileProf Learning Platform",
-    "max_file_size": "15MB",
-    "maintenance_mode": "false",
-    "registration_enabled": "true",
-    "max_test_attempts": "5",
-    "test_timeout_minutes": "90"
+  "message": "Settings updated successfully"
+}
+```
+
+##### Update Single System Setting (Admin)
+**PUT** `/admin/settings/:key`
+
+Update a specific system setting.
+
+**Headers:**
+```
+Authorization: Bearer <jwt-token>
+Content-Type: application/json
+```
+
+**Request Body:**
+```json
+{
+  "value": "updated_setting_value"
+}
+```
+
+**Response (200):**
+```json
+{
+  "message": "Setting updated",
+  "setting": {
+    "key": "site_name",
+    "value": "updated_setting_value",
+    "updated_at": "2024-01-01T00:00:00.000Z"
   }
+}
+```
+
+**Error Response (404):**
+```json
+{
+  "error": "Setting not found"
+}
+```
+
+##### Delete System Setting (Admin)
+**DELETE** `/admin/settings/:key`
+
+Delete a system setting.
+
+**Headers:**
+```
+Authorization: Bearer <jwt-token>
+```
+
+**Response (200):**
+```json
+{
+  "message": "Setting deleted"
+}
+```
+
+**Error Response (404):**
+```json
+{
+  "error": "Setting not found"
 }
 ```
 
