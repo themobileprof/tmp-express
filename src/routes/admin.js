@@ -1137,7 +1137,7 @@ router.post('/tests/:id/questions', [
     `INSERT INTO test_questions (test_id, question, question_type, options, correct_answer, correct_answer_text, points, order_index, image_url)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
      RETURNING *`,
-    [id, question, questionType, options || [], correctAnswer, correctAnswerText, points, finalOrderIndex, imageUrl]
+    [id, question, questionType, JSON.stringify(options || []), correctAnswer, correctAnswerText, points, finalOrderIndex, imageUrl]
   );
 
   res.status(201).json({
@@ -1201,7 +1201,7 @@ router.put('/tests/:id/questions/:questionId', [
   if (options !== undefined) {
     paramCount++;
     updates.push(`options = $${paramCount}`);
-    params.push(options);
+    params.push(JSON.stringify(options));
   }
 
   if (correctAnswer !== undefined) {
