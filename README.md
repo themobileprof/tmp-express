@@ -62,7 +62,18 @@ docker run -d \
    PORT=3000
    ```
 
-4. **Database Setup**
+4. **Payment Configuration (Optional)**
+   
+   Add these variables to your `.env` file for payment functionality:
+   ```env
+   FLUTTERWAVE_PUBLIC_KEY=your-public-key
+   FLUTTERWAVE_SECRET_KEY=your-secret-key
+   FLUTTERWAVE_SECRET_HASH=your-webhook-secret-hash
+   ```
+
+   **Note for Docker:** The `.env` file is excluded from the Docker image for security. In production, the `.env` file is mounted into the container at runtime.
+
+5. **Database Setup**
    ```bash
    # Run database migration
    npm run migrate
@@ -244,6 +255,7 @@ docker run -d \
 
 ## ⚙️ Environment Variables
 
+### Local Development
 Create a `.env` file with the following variables:
 
 ```env
@@ -267,7 +279,48 @@ PORT=3000
 
 # Optional: Docker Hub username for CI/CD
 DOCKERHUB_USERNAME=your-username
+
+### Docker/Production Deployment
+
+For Docker and production deployments, environment variables are handled differently:
+
+#### Option 1: Pass Environment Variables Directly
+```bash
+docker run -d \
+  --name themobileprof-backend \
+  -p 3000:3000 \
+  -e DATABASE_URL=postgresql://user:pass@host:5432/db \
+  -e JWT_SECRET=your-secret \
+  -e FLUTTERWAVE_PUBLIC_KEY=your-key \
+  -e FLUTTERWAVE_SECRET_KEY=your-secret \
+  --env-file .env \
+  themobileprof-backend
 ```
+
+#### Option 2: Use Environment File
+```bash
+docker run -d \
+  --name themobileprof-backend \
+  -p 3000:3000 \
+  --env-file .env \
+  themobileprof-backend
+```
+
+#### Option 3: Docker Compose with Environment File
+```yaml
+version: '3.8'
+services:
+  backend:
+    image: themobileprof-backend
+    env_file:
+      - .env
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./uploads:/app/uploads
+```
+
+**Note:** The `.env` file is excluded from the Docker image (via `.dockerignore`) for security reasons. The `.env` file is mounted into the container at runtime.
 
 ## 📊 API Features
 
@@ -312,6 +365,8 @@ npm run migrate
 # Docker development
 docker-compose exec backend npm run migrate
 ```
+
+
 
 ### Health Check
 ```bash

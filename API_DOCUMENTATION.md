@@ -3224,6 +3224,180 @@ Authorization: Bearer <jwt-token>
 
 > **Note:** The `studyTimeThisMonth` field has been removed and is no longer returned by this endpoint.
 
+### Payments Endpoints
+
+> **Note:** The payment redirect URL is determined dynamically from the incoming request (using the request's origin or host), and the payment page logo is set to a static URL. You do **not** need to set `FRONTEND_URL` or `LOGO_URL` environment variables for payment integration.
+
+#### Initialize Payment
+**POST** `/payments/initialize`
+
+Initialize a payment for course or class enrollment.
+
+**Headers:**
+```
+Authorization: Bearer <jwt-token>
+Content-Type: application/json
+```
+
+**Request Body:**
+```json
+{
+  "paymentType": "course",
+  "itemId": "uuid-of-course-or-class",
+  "paymentMethod": "card"
+}
+```
+
+**Parameters:**
+- `paymentType` (required): "course" or "class"
+- `itemId` (required): UUID of the course or class
+- `paymentMethod` (optional): "card", "bank_transfer", "ussd", "mobile_money", "qr_code"
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "paymentId": "uuid",
+  "reference": "TMP_1234567890_ABC123",
+  "authorizationUrl": "https://checkout.flutterwave.com/v3/hosted/pay/...",
+  "paymentData": {
+    "link": "https://checkout.flutterwave.com/v3/hosted/pay/...",
+    "status": "success"
+  },
+  "message": "Payment initialized successfully. Redirect to Flutterwave to complete payment."
+}
+```
+
+**Error Response (400):**
+```json
+{
+  "error": "Payment Error",
+  "message": "Payment initialization failed: Invalid API key"
+}
+```
+
+#### Verify Payment
+**GET** `/payments/verify/:reference`
+
+Verify payment status and complete enrollment.
+
+**Headers:**
+```
+Authorization: Bearer <jwt-token>
+```
+
+**Parameters:**
+- `reference` (required): Payment reference from Flutterwave
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "message": "Payment verified and enrollment completed",
+  "payment": {
+    "id": "uuid",
+    "amount": 5000,
+    "status": "successful",
+    "transactionId": "FLW123456789"
+  }
+}
+```
+
+**Error Response (400):**
+```json
+{
+  "error": "Payment Error",
+  "message": "Payment verification failed"
+}
+```
+
+#### Get User Payments
+**GET** `/payments/user`
+
+Get current user's payment history.
+
+**Headers:**
+```
+Authorization: Bearer <jwt-token>
+```
+
+**Query Parameters:**
+- `limit` (optional): Number of results (default: 20)
+- `offset` (optional): Number of results to skip (default: 0)
+
+**Response (200):**
+```json
+{
+  "payments": [
+    {
+      "id": "uuid",
+      "paymentType": "course",
+      "amount": 5000,
+      "currency": "NGN",
+      "status": "successful",
+      "paymentMethod": "card",
+      "reference": "TMP_1234567890_ABC123",
+      "transactionId": "FLW123456789",
+      "course": {
+        "id": "uuid",
+        "title": "JavaScript Fundamentals",
+        "topic": "Programming"
+      },
+      "class": null,
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z"
+    }
+  ]
+}
+```
+
+#### Get Payment by ID
+**GET** `/payments/:id`
+
+Get specific payment details.
+
+**Headers:**
+```
+Authorization: Bearer <jwt-token>
+```
+
+**Response (200):**
+```json
+{
+  "id": "uuid",
+  "paymentType": "course",
+  "amount": 5000,
+  "currency": "NGN",
+  "status": "successful",
+  "paymentMethod": "card",
+  "reference": "TMP_1234567890_ABC123",
+  "transactionId": "FLW123456789",
+  "errorMessage": null,
+  "course": {
+    "id": "uuid",
+    "title": "JavaScript Fundamentals",
+    "topic": "Programming"
+  },
+  "class": null,
+  "metadata": {
+    "itemTitle": "JavaScript Fundamentals",
+    "itemDescription": "Payment for JavaScript Fundamentals course",
+    "userEmail": "user@example.com",
+    "userName": "John Doe"
+  },
+  "createdAt": "2024-01-01T00:00:00.000Z",
+  "updatedAt": "2024-01-01T00:00:00.000Z"
+}
+```
+
+**Error Response (404):**
+```json
+{
+  "error": "Payment Not Found",
+  "message": "Payment not found"
+}
+```
+
 ### Discussions Endpoints
 
 #### Get Discussions for a Course

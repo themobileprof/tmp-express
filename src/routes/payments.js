@@ -34,11 +34,22 @@ router.post('/initialize', authenticateToken, validatePaymentInitiation, asyncHa
 
   // Check if Flutterwave is configured
   if (!flw) {
-    throw new AppError('Payment processing is not configured', 503, 'Payment Service Unavailable');
+    console.error('Flutterwave not configured. Missing environment variables.');
+    throw new AppError('Payment processing is not configured. Please contact support.', 503, 'Payment Service Unavailable');
   }
+
+
 
   const { paymentType, itemId, paymentMethod } = req.body;
   const userId = req.user.id;
+
+  console.log('Payment initialization request:', {
+    userId,
+    paymentType,
+    itemId,
+    paymentMethod,
+    timestamp: new Date().toISOString()
+  });
 
   // Get item details (course or class)
   let item, itemTitle, itemDescription;
@@ -57,6 +68,11 @@ router.post('/initialize', authenticateToken, validatePaymentInitiation, asyncHa
     }
     itemTitle = item.title;
     itemDescription = `Payment for ${item.title} class`;
+  }
+
+  // Validate item price
+  if (!item.price || item.price <= 0) {
+    throw new AppError('Invalid item price', 400, 'Invalid Price');
   }
 
   // Check if user is already enrolled
@@ -108,7 +124,7 @@ router.post('/initialize', authenticateToken, validatePaymentInitiation, asyncHa
     tx_ref: reference,
     amount: formatAmount(item.price),
     currency: 'NGN',
-    redirect_url: `${process.env.FRONTEND_URL}/payment/verify`,
+    redirect_url: `${req.headers.origin || req.headers.host ? `${req.protocol}://${req.headers.host}` : 'https://themobileprof.com'}/payment/verify`,
     customer: {
       email: req.user.email,
       name: `${req.user.first_name} ${req.user.last_name}`,
@@ -117,7 +133,7 @@ router.post('/initialize', authenticateToken, validatePaymentInitiation, asyncHa
     customizations: {
       title: 'TheMobileProf LMS',
       description: itemDescription,
-      logo: process.env.LOGO_URL || 'https://themobileprof.com/assets/logo.jpg'
+      logo: 'https://themobileprof.com/assets/logo.jpg'
     },
     meta: {
       payment_id: payment.id,
@@ -128,7 +144,19 @@ router.post('/initialize', authenticateToken, validatePaymentInitiation, asyncHa
   };
 
   try {
+    console.log('Initializing Flutterwave payment:', {
+      reference,
+      amount: item.price,
+      paymentId: payment.id
+    });
+
     const response = await flw.Charge.card(paymentData);
+    
+    console.log('Flutterwave response:', {
+      status: response.status,
+      message: response.message,
+      reference
+    });
     
     if (response.status === 'success') {
       res.json({
@@ -136,19 +164,33 @@ router.post('/initialize', authenticateToken, validatePaymentInitiation, asyncHa
         paymentId: payment.id,
         reference: reference,
         authorizationUrl: response.data.link,
-        paymentData: response.data
+        paymentData: response.data,
+        message: 'Payment initialized successfully. Redirect to Flutterwave to complete payment.'
       });
     } else {
-      throw new AppError('Payment initialization failed', 400, 'Payment Error');
+      // Update payment status to failed
+      await query(
+        'UPDATE payments SET status = $1, error_message = $2 WHERE id = $3',
+        ['failed', response.message || 'Payment initialization failed', payment.id]
+      );
+
+      throw new AppError(`Payment initialization failed: ${response.message}`, 400, 'Payment Error');
     }
   } catch (error) {
+    console.error('Payment initialization error:', {
+      error: error.message,
+      stack: error.stack,
+      reference,
+      paymentId: payment.id
+    });
+
     // Update payment status to failed
     await query(
       'UPDATE payments SET status = $1, error_message = $2 WHERE id = $3',
       ['failed', error.message, payment.id]
     );
 
-    throw new AppError('Payment initialization failed', 400, 'Payment Error');
+    throw new AppError(`Payment initialization failed: ${error.message}`, 400, 'Payment Error');
   }
 }));
 

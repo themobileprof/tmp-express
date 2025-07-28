@@ -234,6 +234,7 @@ jobs:
             --restart unless-stopped \
             --network host \
             -v "$UPLOADS_DIR:/app/uploads" \
+            -v "$(pwd)/.env:/app/.env:ro" \
             --env-file .env \
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest)
           
