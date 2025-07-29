@@ -8,7 +8,10 @@ const {
   verifyWebhookSignature, 
   generateReference, 
   formatAmount, 
-  parseAmount 
+  parseAmount,
+  validatePaymentMethod,
+  getSupportedPaymentMethods,
+  handleFlutterwaveError
 } = require('../config/flutterwave');
 
 const router = express.Router();
@@ -17,7 +20,7 @@ const router = express.Router();
 const validatePaymentInitiation = [
   body('paymentType').isIn(['course', 'class']).withMessage('Payment type must be course or class'),
   body('itemId').isUUID().withMessage('Valid item ID is required'),
-  body('paymentMethod').optional().isIn(['card', 'bank_transfer', 'ussd', 'mobile_money', 'qr_code']).withMessage('Invalid payment method')
+  body('paymentMethod').optional().isIn(['card', 'bank_transfer', 'ussd', 'mobile_money', 'qr_code', 'barter', 'mpesa', 'gh_mobile_money', 'ug_mobile_money', 'franc_mobile_money', 'emalipay']).withMessage('Invalid payment method')
 ];
 
 const validateWebhook = [
@@ -25,7 +28,7 @@ const validateWebhook = [
   body('data').isObject().withMessage('Data object is required')
 ];
 
-// Initialize payment
+// Initialize payment using Flutterwave Standard
 router.post('/initialize', authenticateToken, validatePaymentInitiation, asyncHandler(async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
@@ -37,8 +40,6 @@ router.post('/initialize', authenticateToken, validatePaymentInitiation, asyncHa
     console.error('Flutterwave not configured. Missing environment variables.');
     throw new AppError('Payment processing is not configured. Please contact support.', 503, 'Payment Service Unavailable');
   }
-
-
 
   const { paymentType, itemId, paymentMethod } = req.body;
   const userId = req.user.id;
@@ -119,12 +120,16 @@ router.post('/initialize', authenticateToken, validatePaymentInitiation, asyncHa
 
   const payment = paymentResult.rows[0];
 
-  // Initialize Flutterwave payment
+  // Build redirect URL dynamically
+  const baseUrl = req.headers.origin || `${req.protocol}://${req.headers.host}`;
+  const redirectUrl = `${baseUrl}/payment/verify`;
+
+  // Initialize Flutterwave Standard payment
   const paymentData = {
     tx_ref: reference,
     amount: formatAmount(item.price),
     currency: 'NGN',
-    redirect_url: `${req.headers.origin || req.headers.host ? `${req.protocol}://${req.headers.host}` : 'https://themobileprof.com'}/payment/verify`,
+    redirect_url: redirectUrl,
     customer: {
       email: req.user.email,
       name: `${req.user.first_name} ${req.user.last_name}`,
@@ -143,16 +148,26 @@ router.post('/initialize', authenticateToken, validatePaymentInitiation, asyncHa
     }
   };
 
+  // Validate and add payment method if specified
+  if (paymentMethod) {
+    if (!validatePaymentMethod(paymentMethod)) {
+      throw new AppError(`Unsupported payment method: ${paymentMethod}`, 400, 'Invalid Payment Method');
+    }
+    paymentData.payment_options = paymentMethod;
+  }
+
   try {
-    console.log('Initializing Flutterwave payment:', {
+    console.log('Initializing Flutterwave Standard payment:', {
       reference,
       amount: item.price,
-      paymentId: payment.id
+      paymentId: payment.id,
+      paymentMethod
     });
 
-    const response = await flw.Charge.card(paymentData);
+    // Use Flutterwave Standard payment flow
+    const response = await flw.Charge.standard(paymentData);
     
-    console.log('Flutterwave response:', {
+    console.log('Flutterwave Standard response:', {
       status: response.status,
       message: response.message,
       reference
@@ -174,7 +189,8 @@ router.post('/initialize', authenticateToken, validatePaymentInitiation, asyncHa
         ['failed', response.message || 'Payment initialization failed', payment.id]
       );
 
-      throw new AppError(`Payment initialization failed: ${response.message}`, 400, 'Payment Error');
+      const errorInfo = handleFlutterwaveError({ message: response.message, code: 'PAYMENT_INIT_FAILED' });
+      throw new AppError(errorInfo.message, 400, 'Payment Error');
     }
   } catch (error) {
     console.error('Payment initialization error:', {
@@ -190,11 +206,12 @@ router.post('/initialize', authenticateToken, validatePaymentInitiation, asyncHa
       ['failed', error.message, payment.id]
     );
 
-    throw new AppError(`Payment initialization failed: ${error.message}`, 400, 'Payment Error');
+    const errorInfo = handleFlutterwaveError(error);
+    throw new AppError(errorInfo.message, 400, 'Payment Error');
   }
 }));
 
-// Verify payment
+// Primary payment verification (Frontend SDK verification)
 router.get('/verify/:reference', authenticateToken, asyncHandler(async (req, res) => {
   const { reference } = req.params;
   const userId = req.user.id;
@@ -252,6 +269,13 @@ router.get('/verify/:reference', authenticateToken, asyncHandler(async (req, res
         );
       }
 
+      console.log('Payment verified successfully (Primary Verification):', {
+        paymentId: payment.id,
+        reference: reference,
+        transactionId: response.data.id,
+        verificationMethod: 'frontend_sdk'
+      });
+
       res.json({
         success: true,
         message: 'Payment verified and enrollment completed',
@@ -289,7 +313,7 @@ router.get('/verify/:reference', authenticateToken, asyncHandler(async (req, res
   }
 }));
 
-// Webhook handler
+// Webhook handler for Flutterwave Standard (Backup Verification)
 router.post('/webhook', validateWebhook, asyncHandler(async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
@@ -304,68 +328,171 @@ router.post('/webhook', validateWebhook, asyncHandler(async (req, res) => {
   const { event, data } = req.body;
   const signature = req.headers['verif-hash'];
 
+  console.log('Webhook received (Backup Verification):', {
+    event,
+    tx_ref: data.tx_ref,
+    status: data.status,
+    timestamp: new Date().toISOString()
+  });
+
   // Verify webhook signature
   if (!verifyWebhookSignature(req.body, signature)) {
+    console.error('Invalid webhook signature:', {
+      event,
+      tx_ref: data.tx_ref,
+      signature: signature ? 'present' : 'missing'
+    });
     throw new AppError('Invalid webhook signature', 401, 'Unauthorized');
   }
 
-  // Log webhook
+  // Log webhook for backup verification
   await query(
     'INSERT INTO payment_webhooks (flutterwave_reference, webhook_data) VALUES ($1, $2)',
     [data.tx_ref, JSON.stringify(req.body)]
   );
 
-  // Process webhook based on event
-  if (event === 'charge.completed' && data.status === 'successful') {
-    const payment = await getRow(
-      'SELECT * FROM payments WHERE flutterwave_reference = $1',
-      [data.tx_ref]
-    );
+  // Get payment record
+  const payment = await getRow(
+    'SELECT * FROM payments WHERE flutterwave_reference = $1',
+    [data.tx_ref]
+  );
 
-    if (payment && payment.status === 'pending') {
-      // Update payment status
-      await query(
-        'UPDATE payments SET status = $1, flutterwave_transaction_id = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3',
-        ['successful', data.id, payment.id]
-      );
-
-      // Create enrollment
-      if (payment.payment_type === 'course') {
-        await query(
-          `INSERT INTO enrollments (user_id, course_id, enrollment_type)
-           VALUES ($1, $2, 'course')`,
-          [payment.user_id, payment.course_id]
-        );
-
-        // Update course student count
-        await query(
-          'UPDATE courses SET student_count = student_count + 1 WHERE id = $1',
-          [payment.course_id]
-        );
-      } else {
-        await query(
-          `INSERT INTO enrollments (user_id, class_id, enrollment_type)
-           VALUES ($1, $2, 'class')`,
-          [payment.user_id, payment.class_id]
-        );
-
-        // Update class available slots
-        await query(
-          'UPDATE classes SET available_slots = available_slots - 1 WHERE id = $1',
-          [payment.class_id]
-        );
-      }
-
-      // Mark webhook as processed
-      await query(
-        'UPDATE payment_webhooks SET processed = true, processed_at = CURRENT_TIMESTAMP WHERE flutterwave_reference = $1',
-        [data.tx_ref]
-      );
-    }
+  if (!payment) {
+    console.error('Payment not found for webhook (Backup Verification):', {
+      tx_ref: data.tx_ref,
+      event
+    });
+    res.json({ status: 'success', message: 'Payment not found' });
+    return;
   }
+
+  // Only process webhook if frontend verification hasn't already succeeded
+  // This serves as a backup verification mechanism
+  if (payment.status === 'pending') {
+    console.log('Processing webhook as backup verification:', {
+      paymentId: payment.id,
+      tx_ref: data.tx_ref,
+      event
+    });
+
+    // Process webhook based on event
+    switch (event) {
+      case 'charge.completed':
+        if (data.status === 'successful') {
+          await processSuccessfulPayment(payment, data);
+        } else if (data.status === 'failed') {
+          await processFailedPayment(payment, data);
+        }
+        break;
+
+      case 'charge.failed':
+        await processFailedPayment(payment, data);
+        break;
+
+      case 'transfer.completed':
+        // Handle bank transfer completion
+        if (data.status === 'successful') {
+          await processSuccessfulPayment(payment, data);
+        }
+        break;
+
+      case 'refund.processed':
+        // Handle refund processing
+        await processRefund(payment, data);
+        break;
+
+      default:
+        console.log('Unhandled webhook event:', event);
+    }
+  } else {
+    console.log('Payment already processed by frontend verification, webhook skipped:', {
+      paymentId: payment.id,
+      status: payment.status,
+      tx_ref: data.tx_ref
+    });
+  }
+
+  // Mark webhook as processed
+  await query(
+    'UPDATE payment_webhooks SET processed = true, processed_at = CURRENT_TIMESTAMP WHERE flutterwave_reference = $1',
+    [data.tx_ref]
+  );
 
   res.json({ status: 'success' });
 }));
+
+// Helper function to process successful payment
+async function processSuccessfulPayment(payment, data) {
+  if (payment.status === 'pending') {
+    // Update payment status
+    await query(
+      'UPDATE payments SET status = $1, flutterwave_transaction_id = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3',
+      ['successful', data.id, payment.id]
+    );
+
+    // Create enrollment
+    if (payment.payment_type === 'course') {
+      await query(
+        `INSERT INTO enrollments (user_id, course_id, enrollment_type)
+         VALUES ($1, $2, 'course')`,
+        [payment.user_id, payment.course_id]
+      );
+
+      // Update course student count
+      await query(
+        'UPDATE courses SET student_count = student_count + 1 WHERE id = $1',
+        [payment.course_id]
+      );
+    } else {
+      await query(
+        `INSERT INTO enrollments (user_id, class_id, enrollment_type)
+         VALUES ($1, $2, 'class')`,
+        [payment.user_id, payment.class_id]
+      );
+
+      // Update class available slots
+      await query(
+        'UPDATE classes SET available_slots = available_slots - 1 WHERE id = $1',
+        [payment.class_id]
+      );
+    }
+
+    console.log('Payment processed successfully (Backup Verification):', {
+      paymentId: payment.id,
+      tx_ref: data.tx_ref,
+      transactionId: data.id,
+      verificationMethod: 'webhook'
+    });
+  }
+}
+
+// Helper function to process failed payment
+async function processFailedPayment(payment, data) {
+  await query(
+    'UPDATE payments SET status = $1, error_message = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3',
+    ['failed', data.failure_reason || 'Payment failed', payment.id]
+  );
+
+  console.log('Payment failed:', {
+    paymentId: payment.id,
+    tx_ref: data.tx_ref,
+    reason: data.failure_reason
+  });
+}
+
+// Helper function to process refund
+async function processRefund(payment, data) {
+  await query(
+    'UPDATE payments SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+    ['refunded', payment.id]
+  );
+
+  console.log('Payment refunded:', {
+    paymentId: payment.id,
+    tx_ref: data.tx_ref,
+    refundId: data.id
+  });
+}
 
 // Get user payments
 router.get('/user', authenticateToken, asyncHandler(async (req, res) => {
@@ -408,6 +535,19 @@ router.get('/user', authenticateToken, asyncHandler(async (req, res) => {
       createdAt: p.created_at,
       updatedAt: p.updated_at
     }))
+  });
+}));
+
+// Get supported payment methods
+router.get('/methods', asyncHandler(async (req, res) => {
+  const { country = 'NG' } = req.query;
+  
+  const supportedMethods = getSupportedPaymentMethods(country);
+  
+  res.json({
+    country,
+    supportedMethods,
+    message: `Payment methods available for ${country}`
   });
 }));
 

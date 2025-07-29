@@ -3224,14 +3224,14 @@ Authorization: Bearer <jwt-token>
 
 > **Note:** The `studyTimeThisMonth` field has been removed and is no longer returned by this endpoint.
 
-### Payments Endpoints
+### Payments Endpoints (Flutterwave Standard v3.0.0)
 
-> **Note:** The payment redirect URL is determined dynamically from the incoming request (using the request's origin or host), and the payment page logo is set to a static URL. You do **not** need to set `FRONTEND_URL` or `LOGO_URL` environment variables for payment integration.
+> **Note:** The payment system uses a **dual-verification approach**: Primary verification via frontend SDK and backup verification via webhook. The payment redirect URL is determined dynamically from the incoming request (using the request's origin or host), and the payment page logo is set to a static URL. You do **not** need to set `FRONTEND_URL` or `LOGO_URL` environment variables for payment integration.
 
 #### Initialize Payment
 **POST** `/payments/initialize`
 
-Initialize a payment for course or class enrollment.
+Initialize a payment for course or class enrollment using Flutterwave Standard v3.0.0.
 
 **Headers:**
 ```
@@ -3251,18 +3251,31 @@ Content-Type: application/json
 **Parameters:**
 - `paymentType` (required): "course" or "class"
 - `itemId` (required): UUID of the course or class
-- `paymentMethod` (optional): "card", "bank_transfer", "ussd", "mobile_money", "qr_code"
+- `paymentMethod` (optional): Payment method to use
+
+**Supported Payment Methods:**
+- `card` - Credit/Debit cards
+- `bank_transfer` - Direct bank transfers
+- `ussd` - USSD payments
+- `mobile_money` - Mobile money transfers
+- `qr_code` - QR code payments
+- `barter` - Barter payments
+- `mpesa` - M-Pesa (Kenya)
+- `gh_mobile_money` - Ghana Mobile Money
+- `ug_mobile_money` - Uganda Mobile Money
+- `franc_mobile_money` - Francophone Mobile Money
+- `emalipay` - EmaliPay (Ethiopia)
 
 **Response (200):**
 ```json
 {
   "success": true,
   "paymentId": "uuid",
-  "reference": "TMP_1234567890_ABC123",
+  "reference": "TMP_1234567890_ABC123_ABCD1234",
   "authorizationUrl": "https://checkout.flutterwave.com/v3/hosted/pay/...",
   "paymentData": {
     "link": "https://checkout.flutterwave.com/v3/hosted/pay/...",
-    "status": "success"
+    "status": "pending"
   },
   "message": "Payment initialized successfully. Redirect to Flutterwave to complete payment."
 }
@@ -3272,14 +3285,45 @@ Content-Type: application/json
 ```json
 {
   "error": "Payment Error",
-  "message": "Payment initialization failed: Invalid API key"
+  "message": "Unsupported payment method: invalid_method"
 }
 ```
 
-#### Verify Payment
+#### Get Supported Payment Methods
+**GET** `/payments/methods`
+
+Get supported payment methods for a specific country.
+
+**Query Parameters:**
+- `country` (optional): Country code (default: NG)
+
+**Response (200):**
+```json
+{
+  "country": "NG",
+  "supportedMethods": [
+    "card",
+    "bank_transfer",
+    "ussd",
+    "mobile_money",
+    "qr_code"
+  ],
+  "message": "Payment methods available for NG"
+}
+```
+
+**Supported Countries:**
+- **NG** (Nigeria): card, bank_transfer, ussd, mobile_money, qr_code
+- **GH** (Ghana): card, bank_transfer, mobile_money, gh_mobile_money
+- **KE** (Kenya): card, bank_transfer, mobile_money, mpesa
+- **UG** (Uganda): card, bank_transfer, mobile_money, ug_mobile_money
+- **CM** (Cameroon): card, bank_transfer, mobile_money, franc_mobile_money
+- **ET** (Ethiopia): card, bank_transfer, mobile_money, emalipay
+
+#### Primary Payment Verification (Frontend SDK)
 **GET** `/payments/verify/:reference`
 
-Verify payment status and complete enrollment.
+Primary payment verification method. Called by frontend when user returns from Flutterwave.
 
 **Headers:**
 ```
@@ -3311,6 +3355,20 @@ Authorization: Bearer <jwt-token>
 }
 ```
 
+**Enhanced Error Responses:**
+```json
+{
+  "error": "Payment Error",
+  "message": "Card was declined by bank",
+  "code": "CARD_DECLINED",
+  "details": {
+    "paymentId": "uuid",
+    "reference": "TMP_1234567890_ABC123_ABCD1234",
+    "suggestedAction": "try_alternative_payment_method"
+  }
+}
+```
+
 #### Get User Payments
 **GET** `/payments/user`
 
@@ -3336,7 +3394,7 @@ Authorization: Bearer <jwt-token>
       "currency": "NGN",
       "status": "successful",
       "paymentMethod": "card",
-      "reference": "TMP_1234567890_ABC123",
+      "reference": "TMP_1234567890_ABC123_ABCD1234",
       "transactionId": "FLW123456789",
       "course": {
         "id": "uuid",
@@ -3370,7 +3428,7 @@ Authorization: Bearer <jwt-token>
   "currency": "NGN",
   "status": "successful",
   "paymentMethod": "card",
-  "reference": "TMP_1234567890_ABC123",
+  "reference": "TMP_1234567890_ABC123_ABCD1234",
   "transactionId": "FLW123456789",
   "errorMessage": null,
   "course": {
@@ -3397,6 +3455,8 @@ Authorization: Bearer <jwt-token>
   "message": "Payment not found"
 }
 ```
+
+
 
 ### Discussions Endpoints
 

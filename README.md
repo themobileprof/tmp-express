@@ -376,10 +376,7 @@ curl http://localhost:3000/health
 ## 📖 Additional Resources
 
 - **[ADMIN_SETUP.md](ADMIN_SETUP.md)** - Admin user creation and management
-- **[FLUTTERWAVE_SETUP.md](FLUTTERWAVE_SETUP.md)** - Payment integration setup
-- **[GOOGLE_OAUTH_SETUP.md](GOOGLE_OAUTH_SETUP.md)** - Google OAuth configuration
-- **[DEPLOYMENT_SETUP.md](DEPLOYMENT_SETUP.md)** - Production deployment guide
-- **[PRODUCTION_MONITORING.md](PRODUCTION_MONITORING.md)** - Monitoring and troubleshooting
+- **[API_DOCUMENTATION.md](API_DOCUMENTATION.md)** - API Documentation
 
 ## 🤝 Support
 
