@@ -124,6 +124,13 @@ router.post('/initialize', authenticateToken, validatePaymentInitiation, asyncHa
   const baseUrl = req.headers.origin || `${req.protocol}://${req.headers.host}`;
   const redirectUrl = `${baseUrl}/payment/verify`;
 
+  // Debug price value
+  console.log('Price debug:', {
+    price: item.price,
+    priceType: typeof item.price,
+    priceValue: item.price
+  });
+
   // Initialize Flutterwave Standard payment
   const paymentData = {
     tx_ref: reference,
