@@ -137,8 +137,8 @@ router.post('/initialize', authenticateToken, validatePaymentInitiation, asyncHa
     amount: formatAmount(item.price),
     currency: 'NGN',
     redirect_url: redirectUrl,
+    email: req.user.email,
     customer: {
-      email: req.user.email,
       name: `${req.user.first_name} ${req.user.last_name}`,
       phone_number: req.user.phone || ''
     },
