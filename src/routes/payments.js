@@ -188,7 +188,7 @@ router.post('/initialize', authenticateToken, validatePaymentInitiation, asyncHa
     if (responseData.status === 'success') {
       // Update payment record with Flutterwave reference
       await query(
-        'UPDATE payments SET flutterwave_ref = $1, status = $2 WHERE id = $3',
+        'UPDATE payments SET flutterwave_reference = $1, status = $2 WHERE id = $3',
         ['hosted_link', 'pending', payment.id]
       );
 
@@ -198,7 +198,7 @@ router.post('/initialize', authenticateToken, validatePaymentInitiation, asyncHa
         data: {
           payment_id: payment.id,
           reference: reference,
-          flutterwave_ref: 'hosted_link',
+          flutterwave_reference: 'hosted_link',
           checkout_url: responseData.data.link,
           amount: parseAmount(formatAmount(item.price)),
           currency: 'USD',

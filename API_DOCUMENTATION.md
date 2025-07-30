@@ -3274,7 +3274,7 @@ Content-Type: application/json
   "data": {
     "payment_id": "uuid",
     "reference": "TMP_1234567890_ABC123_ABCD1234",
-    "flutterwave_ref": "hosted_link",
+    "flutterwave_reference": "hosted_link",
     "checkout_url": "https://checkout.flutterwave.com/v3/hosted/pay/...",
     "amount": 99.99,
     "currency": "USD",
