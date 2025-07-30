@@ -138,7 +138,6 @@ router.post('/initialize', authenticateToken, validatePaymentInitiation, asyncHa
     currency: 'NGN',
     redirect_url: redirectUrl,
     email: req.user.email,
-    payment_type: paymentMethod || 'card',
     customer: {
       name: `${req.user.first_name} ${req.user.last_name}`,
       phone_number: req.user.phone || ''
@@ -156,13 +155,8 @@ router.post('/initialize', authenticateToken, validatePaymentInitiation, asyncHa
     }
   };
 
-  // Add payment options if specified (Flutterwave Standard v3.0.0)
-  if (paymentMethod) {
-    if (!validatePaymentMethod(paymentMethod)) {
-      throw new AppError(`Unsupported payment method: ${paymentMethod}`, 400, 'Invalid Payment Method');
-    }
-    paymentData.payment_options = paymentMethod;
-  }
+  // Note: Flutterwave Standard v3.0.0 handles payment method selection automatically
+  // Payment method selection will be handled by Flutterwave's payment modal
 
   try {
     console.log('Initializing Flutterwave Standard v3.0.0 payment:', {
