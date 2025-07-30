@@ -131,7 +131,7 @@ router.post('/initialize', authenticateToken, validatePaymentInitiation, asyncHa
     priceValue: item.price
   });
 
-  // Initialize Flutterwave payment
+  // Initialize Flutterwave Standard v3.0.0 payment
   const paymentData = {
     tx_ref: reference,
     amount: formatAmount(item.price),
@@ -155,43 +155,57 @@ router.post('/initialize', authenticateToken, validatePaymentInitiation, asyncHa
     }
   };
 
-  // Note: payment_options is not supported in Charge.card() method
-  // Payment method selection will be handled by Flutterwave's payment modal
+  // Add payment options if specified (Flutterwave Standard v3.0.0)
+  if (paymentMethod) {
+    if (!validatePaymentMethod(paymentMethod)) {
+      throw new AppError(`Unsupported payment method: ${paymentMethod}`, 400, 'Invalid Payment Method');
+    }
+    paymentData.payment_options = paymentMethod;
+  }
 
   try {
-    console.log('Initializing Flutterwave payment:', {
+    console.log('Initializing Flutterwave Standard v3.0.0 payment:', {
       reference,
       amount: item.price,
       paymentId: payment.id,
       paymentMethod
     });
 
-    // Use Flutterwave payment flow
-    const response = await flw.Charge.card(paymentData);
+    // Use Flutterwave REST API for Standard v3.0.0 (since SDK doesn't support it yet)
+    const response = await fetch('https://api.flutterwave.com/v3/charges?type=standard', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.FLUTTERWAVE_SECRET_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(paymentData)
+    });
+
+    const responseData = await response.json();
     
-    console.log('Flutterwave response:', {
-      status: response.status,
-      message: response.message,
+    console.log('Flutterwave Standard v3.0.0 response:', {
+      status: responseData.status,
+      message: responseData.message,
       reference
     });
     
-    if (response.status === 'success') {
+    if (responseData.status === 'success') {
       res.json({
         success: true,
         paymentId: payment.id,
         reference: reference,
-        authorizationUrl: response.data.link,
-        paymentData: response.data,
+        authorizationUrl: responseData.data.link,
+        paymentData: responseData.data,
         message: 'Payment initialized successfully. Redirect to Flutterwave to complete payment.'
       });
     } else {
       // Update payment status to failed
       await query(
         'UPDATE payments SET status = $1, error_message = $2 WHERE id = $3',
-        ['failed', response.message || 'Payment initialization failed', payment.id]
+        ['failed', responseData.message || 'Payment initialization failed', payment.id]
       );
 
-      const errorInfo = handleFlutterwaveError({ message: response.message, code: 'PAYMENT_INIT_FAILED' });
+      const errorInfo = handleFlutterwaveError({ message: responseData.message, code: 'PAYMENT_INIT_FAILED' });
       throw new AppError(errorInfo.message, 400, 'Payment Error');
     }
   } catch (error) {
