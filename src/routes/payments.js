@@ -138,6 +138,7 @@ router.post('/initialize', authenticateToken, validatePaymentInitiation, asyncHa
     currency: 'NGN',
     redirect_url: redirectUrl,
     email: req.user.email,
+    payment_type: paymentMethod || 'card',
     customer: {
       name: `${req.user.first_name} ${req.user.last_name}`,
       phone_number: req.user.phone || ''
