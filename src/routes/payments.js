@@ -131,7 +131,7 @@ router.post('/initialize', authenticateToken, validatePaymentInitiation, asyncHa
     priceValue: item.price
   });
 
-  // Initialize Flutterwave Standard payment
+  // Initialize Flutterwave payment
   const paymentData = {
     tx_ref: reference,
     amount: formatAmount(item.price),
@@ -155,26 +155,21 @@ router.post('/initialize', authenticateToken, validatePaymentInitiation, asyncHa
     }
   };
 
-  // Validate and add payment method if specified
-  if (paymentMethod) {
-    if (!validatePaymentMethod(paymentMethod)) {
-      throw new AppError(`Unsupported payment method: ${paymentMethod}`, 400, 'Invalid Payment Method');
-    }
-    paymentData.payment_options = paymentMethod;
-  }
+  // Note: payment_options is not supported in Charge.card() method
+  // Payment method selection will be handled by Flutterwave's payment modal
 
   try {
-    console.log('Initializing Flutterwave Standard payment:', {
+    console.log('Initializing Flutterwave payment:', {
       reference,
       amount: item.price,
       paymentId: payment.id,
       paymentMethod
     });
 
-    // Use Flutterwave Standard payment flow
-    const response = await flw.Charge.standard(paymentData);
+    // Use Flutterwave payment flow
+    const response = await flw.Charge.card(paymentData);
     
-    console.log('Flutterwave Standard response:', {
+    console.log('Flutterwave response:', {
       status: response.status,
       message: response.message,
       reference
