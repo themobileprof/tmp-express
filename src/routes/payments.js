@@ -135,18 +135,19 @@ router.post('/initialize', authenticateToken, validatePaymentInitiation, asyncHa
   const paymentData = {
     tx_ref: reference,
     amount: formatAmount(item.price),
-    currency: 'NGN',
+    currency: 'USD',
     redirect_url: redirectUrl,
-    email: req.user.email,
     customer: {
-      name: `${req.user.first_name} ${req.user.last_name}`,
-      phone_number: req.user.phone || ''
+      email: req.user.email,
+      phone_number: req.user.phone || '',
+      name: `${req.user.first_name} ${req.user.last_name}`
     },
     customizations: {
       title: 'TheMobileProf LMS',
       description: itemDescription,
       logo: 'https://themobileprof.com/assets/logo.jpg'
     },
+    payment_options: 'card, ussd, banktransfer, mobilemoneyghana, mpesa',
     meta: {
       payment_id: payment.id,
       user_id: userId,
@@ -166,8 +167,8 @@ router.post('/initialize', authenticateToken, validatePaymentInitiation, asyncHa
       paymentMethod
     });
 
-    // Use Flutterwave REST API for Standard v3.0.0 (since SDK doesn't support it yet)
-    const response = await fetch('https://api.flutterwave.com/v3/charges?type=standard', {
+    // Use Flutterwave Standard v3.0.0 REST API
+    const response = await fetch('https://api.flutterwave.com/v3/payments', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${process.env.FLUTTERWAVE_SECRET_KEY}`,
@@ -185,13 +186,24 @@ router.post('/initialize', authenticateToken, validatePaymentInitiation, asyncHa
     });
     
     if (responseData.status === 'success') {
+      // Update payment record with Flutterwave reference
+      await query(
+        'UPDATE payments SET flutterwave_ref = $1, status = $2 WHERE id = $3',
+        ['hosted_link', 'pending', payment.id]
+      );
+
       res.json({
         success: true,
-        paymentId: payment.id,
-        reference: reference,
-        authorizationUrl: responseData.data.link,
-        paymentData: responseData.data,
-        message: 'Payment initialized successfully. Redirect to Flutterwave to complete payment.'
+        message: 'Payment initialized successfully',
+        data: {
+          payment_id: payment.id,
+          reference: reference,
+          flutterwave_ref: 'hosted_link',
+          checkout_url: responseData.data.link,
+          amount: parseAmount(formatAmount(item.price)),
+          currency: 'USD',
+          payment_type: paymentType
+        }
       });
     } else {
       // Update payment status to failed

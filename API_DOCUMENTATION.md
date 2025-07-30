@@ -3270,14 +3270,16 @@ Content-Type: application/json
 ```json
 {
   "success": true,
-  "paymentId": "uuid",
-  "reference": "TMP_1234567890_ABC123_ABCD1234",
-  "authorizationUrl": "https://checkout.flutterwave.com/v3/hosted/pay/...",
-  "paymentData": {
-    "link": "https://checkout.flutterwave.com/v3/hosted/pay/...",
-    "status": "pending"
-  },
-  "message": "Payment initialized successfully. Redirect to Flutterwave to complete payment."
+  "message": "Payment initialized successfully",
+  "data": {
+    "payment_id": "uuid",
+    "reference": "TMP_1234567890_ABC123_ABCD1234",
+    "flutterwave_ref": "hosted_link",
+    "checkout_url": "https://checkout.flutterwave.com/v3/hosted/pay/...",
+    "amount": 99.99,
+    "currency": "USD",
+    "payment_type": "course"
+  }
 }
 ```
 
@@ -3390,8 +3392,8 @@ Authorization: Bearer <jwt-token>
     {
       "id": "uuid",
       "paymentType": "course",
-      "amount": 5000,
-      "currency": "NGN",
+      "amount": 99.99,
+      "currency": "USD",
       "status": "successful",
       "paymentMethod": "card",
       "reference": "TMP_1234567890_ABC123_ABCD1234",
@@ -3424,8 +3426,8 @@ Authorization: Bearer <jwt-token>
 {
   "id": "uuid",
   "paymentType": "course",
-  "amount": 5000,
-  "currency": "NGN",
+  "amount": 99.99,
+  "currency": "USD",
   "status": "successful",
   "paymentMethod": "card",
   "reference": "TMP_1234567890_ABC123_ABCD1234",
