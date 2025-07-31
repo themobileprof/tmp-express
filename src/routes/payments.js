@@ -49,6 +49,7 @@ const handleFlutterwaveError = (error) => {
 router.post('/initialize', authenticateToken, async (req, res) => {
   const { paymentType, itemId, paymentMethod, sponsorshipCode } = req.body;
   const userId = req.user.id;
+  let payment = null; // Declare payment variable at the top
 
   try {
     // Validate payment type
@@ -169,7 +170,7 @@ router.post('/initialize', authenticateToken, async (req, res) => {
     });
 
     // Create payment record
-    const payment = await getRow(
+    payment = await getRow(
       `INSERT INTO payments (user_id, ${paymentType}_id, payment_type, amount, currency, flutterwave_reference, payment_method, metadata)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
       [
@@ -246,10 +247,10 @@ router.post('/initialize', authenticateToken, async (req, res) => {
     });
 
     if (response.data.status === 'success') {
-      // Update payment with hosted link
+      // Update payment with hosted link (no need to update flutterwave_reference since it's already set to the reference)
       await query(
-        'UPDATE payments SET flutterwave_reference = $1, status = $2 WHERE id = $3',
-        ['hosted_link', 'pending', payment.id]
+        'UPDATE payments SET status = $1 WHERE id = $2',
+        ['pending', payment.id]
       );
 
       res.json({
@@ -258,7 +259,7 @@ router.post('/initialize', authenticateToken, async (req, res) => {
         data: {
           payment_id: payment.id,
           reference: reference,
-          flutterwave_reference: 'hosted_link',
+          flutterwave_reference: reference,
           checkout_url: response.data.data.link,
           original_amount: item.price,
           final_amount: parseAmount(formatAmount(finalAmount)),
