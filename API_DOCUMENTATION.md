@@ -3342,7 +3342,7 @@ Authorization: Bearer <jwt-token>
   "message": "Payment verified and enrollment completed",
   "payment": {
     "id": "uuid",
-    "amount": 5000,
+    "amount": 99.99,
     "status": "successful",
     "transactionId": "FLW123456789"
   }
@@ -3458,7 +3458,100 @@ Authorization: Bearer <jwt-token>
 }
 ```
 
+#### Admin Payment Management
 
+##### Get All Payments (Admin)
+**GET** `/api/admin/payments`
+
+Get payment history with admin details.
+
+**Headers:**
+```
+Authorization: Bearer <jwt-token>
+```
+
+**Query Parameters:**
+- `page` - Page number (default: 1)
+- `limit` - Number of results (default: 20)
+- `status` - Filter by status (successful, failed, pending)
+- `paymentMethod` - Filter by payment method
+- `search` - Search by user name or transaction ID
+
+**Response (200):**
+```json
+{
+  "payments": [
+    {
+      "id": "uuid",
+      "user_id": "uuid",
+      "first_name": "John",
+      "last_name": "Doe",
+      "email": "john@example.com",
+      "amount": 99.99,
+      "currency": "USD",
+      "status": "successful",
+      "payment_method": "card",
+      "reference": "TMP_1234567890_ABC123",
+      "transaction_id": "FLW123456789",
+      "course_title": "JavaScript Fundamentals",
+      "class_title": null,
+      "created_at": "2024-01-01T00:00:00.000Z"
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "limit": 20,
+    "total": 500,
+    "pages": 25
+  }
+}
+```
+
+##### Get Payment Statistics (Admin)
+**GET** `/api/admin/payments/stats`
+
+Get comprehensive payment statistics.
+
+**Headers:**
+```
+Authorization: Bearer <jwt-token>
+```
+
+**Query Parameters:**
+- `period` - Time period in days (default: 30)
+
+**Response (200):**
+```json
+{
+  "overview": {
+    "total_payments": 500,
+    "total_revenue": 49950.00,
+    "successful_payments": 485,
+    "failed_payments": 10,
+    "pending_payments": 5,
+    "average_payment": 99.90
+  },
+  "methodBreakdown": [
+    {
+      "payment_method": "card",
+      "count": 300,
+      "total_amount": 29970.00
+    },
+    {
+      "payment_method": "bank_transfer",
+      "count": 200,
+      "total_amount": 19980.00
+    }
+  ],
+  "dailyStats": [
+    {
+      "date": "2024-01-01",
+      "payment_count": 15,
+      "daily_revenue": 1498.50
+    }
+  ]
+}
+```
 
 ### Discussions Endpoints
 

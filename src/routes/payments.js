@@ -1,165 +1,113 @@
 const express = require('express');
-const { body, validationResult } = require('express-validator');
-const { query, getRow, getRows } = require('../database/config');
-const { asyncHandler, AppError } = require('../middleware/errorHandler');
+const axios = require('axios');
 const { authenticateToken } = require('../middleware/auth');
-const { 
-  flw, 
-  verifyWebhookSignature, 
-  generateReference, 
-  formatAmount, 
-  parseAmount,
-  validatePaymentMethod,
-  getSupportedPaymentMethods,
-  handleFlutterwaveError
-} = require('../config/flutterwave');
+const { query, getRow } = require('../database/config');
 
 const router = express.Router();
 
-// Validation middleware
-const validatePaymentInitiation = [
-  body('paymentType').isIn(['course', 'class']).withMessage('Payment type must be course or class'),
-  body('itemId').isUUID().withMessage('Valid item ID is required'),
-  body('paymentMethod').optional().isIn(['card', 'bank_transfer', 'ussd', 'mobile_money', 'qr_code', 'barter', 'mpesa', 'gh_mobile_money', 'ug_mobile_money', 'franc_mobile_money', 'emalipay']).withMessage('Invalid payment method')
-];
-
-const validateWebhook = [
-  body('event').isString().withMessage('Event is required'),
-  body('data').isObject().withMessage('Data object is required')
-];
-
-// Initialize payment using Flutterwave Standard
-router.post('/initialize', authenticateToken, validatePaymentInitiation, asyncHandler(async (req, res) => {
-  const errors = validationResult(req);
-  if (!errors.isEmpty()) {
-    throw new AppError('Validation failed', 400, 'Validation Error');
+// Helper function to format amount (convert to kobo for Flutterwave)
+const formatAmount = (amount) => {
+  const numericAmount = typeof amount === 'string' ? parseFloat(amount) : Number(amount);
+  if (isNaN(numericAmount) || numericAmount <= 0) {
+    throw new Error('Invalid amount: must be a positive number');
   }
+  return Math.round(numericAmount * 100); // Convert to cents for USD
+};
 
-  // Check if Flutterwave is configured
-  if (!flw) {
-    console.error('Flutterwave not configured. Missing environment variables.');
-    throw new AppError('Payment processing is not configured. Please contact support.', 503, 'Payment Service Unavailable');
+// Helper function to parse amount (convert from kobo)
+const parseAmount = (amount) => {
+  const numericAmount = typeof amount === 'string' ? parseFloat(amount) : Number(amount);
+  if (isNaN(numericAmount) || numericAmount < 0) {
+    throw new Error('Invalid amount: must be a non-negative number');
   }
+  return numericAmount / 100; // Convert from cents for USD
+};
 
+// Helper function to handle Flutterwave errors
+const handleFlutterwaveError = (error) => {
+  const errorMessage = error.message || 'Payment processing error occurred';
+  const errorCode = error.code || 'PAYMENT_ERROR';
+  
+  // Map common Flutterwave errors to user-friendly messages
+  const errorMap = {
+    'CARD_DECLINED': 'Card was declined by bank',
+    'INSUFFICIENT_FUNDS': 'Insufficient funds on card',
+    'EXPIRED_CARD': 'Card has expired',
+    'INVALID_CARD': 'Invalid card details',
+    'NETWORK_ERROR': 'Network error occurred',
+    'TIMEOUT': 'Payment request timed out'
+  };
+
+  return {
+    message: errorMap[errorCode] || errorMessage,
+    code: errorCode,
+    details: error.details || {}
+  };
+};
+
+// POST /api/payments/initialize
+router.post('/initialize', authenticateToken, async (req, res) => {
   const { paymentType, itemId, paymentMethod } = req.body;
   const userId = req.user.id;
 
-  console.log('Payment initialization request:', {
-    userId,
-    paymentType,
-    itemId,
-    paymentMethod,
-    timestamp: new Date().toISOString()
-  });
-
-  // Get item details (course or class)
-  let item, itemTitle, itemDescription;
-  
-  if (paymentType === 'course') {
-    item = await getRow('SELECT * FROM courses WHERE id = $1 AND is_published = true', [itemId]);
-    if (!item) {
-      throw new AppError('Course not found or not published', 404, 'Course Not Found');
-    }
-    itemTitle = item.title;
-    itemDescription = `Payment for ${item.title} course`;
-  } else {
-    item = await getRow('SELECT * FROM classes WHERE id = $1 AND is_published = true', [itemId]);
-    if (!item) {
-      throw new AppError('Class not found or not published', 404, 'Class Not Found');
-    }
-    itemTitle = item.title;
-    itemDescription = `Payment for ${item.title} class`;
-  }
-
-  // Validate item price
-  if (!item.price || item.price <= 0) {
-    throw new AppError('Invalid item price', 400, 'Invalid Price');
-  }
-
-  // Check if user is already enrolled
-  const existingEnrollment = await getRow(
-    `SELECT * FROM enrollments WHERE user_id = $1 AND ${paymentType}_id = $2`,
-    [userId, itemId]
-  );
-
-  if (existingEnrollment) {
-    throw new AppError(`User is already enrolled in this ${paymentType}`, 400, 'Already Enrolled');
-  }
-
-  // Check if class has available slots
-  if (paymentType === 'class' && item.available_slots <= 0) {
-    throw new AppError('Class is full', 400, 'Class Full');
-  }
-
-  // Generate unique reference
-  const reference = generateReference();
-
-  // Create payment record
-  const paymentResult = await query(
-    `INSERT INTO payments (
-      user_id, ${paymentType}_id, payment_type, amount, currency, 
-      flutterwave_reference, payment_method, metadata
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-    RETURNING *`,
-    [
-      userId, 
-      itemId, 
-      paymentType, 
-      item.price, 
-      'NGN', 
-      reference, 
-      paymentMethod || null,
-      JSON.stringify({
-        itemTitle,
-        itemDescription,
-        userEmail: req.user.email,
-        userName: `${req.user.first_name} ${req.user.last_name}`
-      })
-    ]
-  );
-
-  const payment = paymentResult.rows[0];
-
-  // Build redirect URL dynamically
-  const baseUrl = req.headers.origin || `${req.protocol}://${req.headers.host}`;
-  const redirectUrl = `${baseUrl}/payment/verify`;
-
-  // Debug price value
-  console.log('Price debug:', {
-    price: item.price,
-    priceType: typeof item.price,
-    priceValue: item.price
-  });
-
-  // Initialize Flutterwave Standard v3.0.0 payment
-  const paymentData = {
-    tx_ref: reference,
-    amount: formatAmount(item.price),
-    currency: 'USD',
-    redirect_url: redirectUrl,
-    customer: {
-      email: req.user.email,
-      phone_number: req.user.phone || '',
-      name: `${req.user.first_name} ${req.user.last_name}`
-    },
-    customizations: {
-      title: 'TheMobileProf LMS',
-      description: itemDescription,
-      logo: 'https://themobileprof.com/assets/logo.jpg'
-    },
-    payment_options: 'card, ussd, banktransfer, mobilemoneyghana, mpesa',
-    meta: {
-      payment_id: payment.id,
-      user_id: userId,
-      item_id: itemId,
-      payment_type: paymentType
-    }
-  };
-
-  // Note: Flutterwave Standard v3.0.0 handles payment method selection automatically
-  // Payment method selection will be handled by Flutterwave's payment modal
-
   try {
+    // Validate payment type
+    if (!['course', 'class'].includes(paymentType)) {
+      return res.status(400).json({ error: 'Invalid payment type' });
+    }
+
+    // Get item details
+    let item, itemDescription;
+    if (paymentType === 'course') {
+      item = await getRow('SELECT * FROM courses WHERE id = $1 AND is_published = true', [itemId]);
+      itemDescription = `Payment for ${item.title} course`;
+    } else {
+      item = await getRow('SELECT * FROM classes WHERE id = $1 AND is_published = true', [itemId]);
+      itemDescription = `Payment for ${item.title} class`;
+    }
+
+    if (!item) {
+      return res.status(404).json({ error: 'Item not found' });
+    }
+
+    // Check if already enrolled
+    const existingEnrollment = await getRow(
+      `SELECT * FROM enrollments WHERE user_id = $1 AND ${paymentType}_id = $2`,
+      [userId, itemId]
+    );
+
+    if (existingEnrollment) {
+      return res.status(409).json({ error: 'Already enrolled in this item' });
+    }
+
+    // Generate unique reference
+    const reference = `TMP_${Date.now()}_${Math.random().toString(36).substr(2, 9)}_${Math.random().toString(36).substr(2, 8)}`;
+
+    // Debug logging for amount
+    console.log('Price debug:', { 
+      price: item.price, 
+      priceType: typeof item.price, 
+      priceValue: item.price 
+    });
+
+    // Create payment record
+    const payment = await getRow(
+      `INSERT INTO payments (user_id, ${paymentType}_id, payment_type, amount, currency, flutterwave_reference, payment_method, metadata)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+      [
+        userId, itemId, paymentType, item.price, 'USD', reference, paymentMethod || 'card',
+        JSON.stringify({
+          itemTitle: item.title,
+          itemDescription: itemDescription,
+          userEmail: req.user.email,
+          userName: `${req.user.first_name} ${req.user.last_name}`
+        })
+      ]
+    );
+
+    // Build redirect URL
+    const redirectUrl = `${req.protocol}://${req.get('host')}/payment/callback?reference=${reference}`;
+
     console.log('Initializing Flutterwave Standard v3.0.0 payment:', {
       reference,
       amount: item.price,
@@ -167,26 +115,48 @@ router.post('/initialize', authenticateToken, validatePaymentInitiation, asyncHa
       paymentMethod
     });
 
-    // Use Flutterwave Standard v3.0.0 REST API
-    const response = await fetch('https://api.flutterwave.com/v3/payments', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${process.env.FLUTTERWAVE_SECRET_KEY}`,
-        'Content-Type': 'application/json'
+    // Initialize Flutterwave payment
+    const response = await axios.post(
+      'https://api.flutterwave.com/v3/payments',
+      {
+        tx_ref: reference,
+        amount: formatAmount(item.price),
+        currency: 'USD',
+        redirect_url: redirectUrl,
+        customer: {
+          email: req.user.email,
+          phone_number: req.user.phone || '',
+          name: `${req.user.first_name} ${req.user.last_name}`
+        },
+        customizations: {
+          title: 'TheMobileProf LMS',
+          description: itemDescription,
+          logo: 'https://themobileprof.com/assets/logo.jpg'
+        },
+        payment_options: 'card, ussd, banktransfer, mobilemoneyghana, mpesa',
+        meta: {
+          payment_id: payment.id,
+          user_id: userId,
+          item_id: itemId,
+          payment_type: paymentType
+        }
       },
-      body: JSON.stringify(paymentData)
-    });
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.FLUTTERWAVE_SECRET_KEY}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
 
-    const responseData = await response.json();
-    
     console.log('Flutterwave Standard v3.0.0 response:', {
-      status: responseData.status,
-      message: responseData.message,
+      status: response.data.status,
+      message: response.data.message,
       reference
     });
-    
-    if (responseData.status === 'success') {
-      // Update payment record with Flutterwave reference
+
+    if (response.data.status === 'success') {
+      // Update payment with hosted link
       await query(
         'UPDATE payments SET flutterwave_reference = $1, status = $2 WHERE id = $3',
         ['hosted_link', 'pending', payment.id]
@@ -199,70 +169,90 @@ router.post('/initialize', authenticateToken, validatePaymentInitiation, asyncHa
           payment_id: payment.id,
           reference: reference,
           flutterwave_reference: 'hosted_link',
-          checkout_url: responseData.data.link,
+          checkout_url: response.data.data.link,
           amount: parseAmount(formatAmount(item.price)),
           currency: 'USD',
           payment_type: paymentType
         }
       });
     } else {
-      // Update payment status to failed
+      throw new Error(response.data.message || 'Payment initialization failed');
+    }
+
+  } catch (error) {
+    console.error('Payment initialization error:', error);
+    
+    // Update payment status to failed
+    if (payment) {
       await query(
         'UPDATE payments SET status = $1, error_message = $2 WHERE id = $3',
-        ['failed', responseData.message || 'Payment initialization failed', payment.id]
+        ['failed', error.message, payment.id]
       );
-
-      const errorInfo = handleFlutterwaveError({ message: responseData.message, code: 'PAYMENT_INIT_FAILED' });
-      throw new AppError(errorInfo.message, 400, 'Payment Error');
     }
-  } catch (error) {
-    console.error('Payment initialization error:', {
-      error: error.message,
-      stack: error.stack,
-      reference,
-      paymentId: payment.id
-    });
-
-    // Update payment status to failed
-    await query(
-      'UPDATE payments SET status = $1, error_message = $2 WHERE id = $3',
-      ['failed', error.message, payment.id]
-    );
 
     const errorInfo = handleFlutterwaveError(error);
-    throw new AppError(errorInfo.message, 400, 'Payment Error');
+    res.status(500).json({
+      error: 'Payment Error',
+      message: errorInfo.message,
+      code: errorInfo.code,
+      details: errorInfo.details
+    });
   }
-}));
+});
 
-// Primary payment verification (Frontend SDK verification)
-router.get('/verify/:reference', authenticateToken, asyncHandler(async (req, res) => {
+// GET /api/payments/methods
+router.get('/methods', async (req, res) => {
+  const { country = 'NG' } = req.query;
+
+  const supportedMethods = {
+    'NG': ['card', 'bank_transfer', 'ussd', 'mobile_money', 'qr_code'],
+    'GH': ['card', 'bank_transfer', 'mobile_money', 'gh_mobile_money'],
+    'KE': ['card', 'bank_transfer', 'mobile_money', 'mpesa'],
+    'UG': ['card', 'bank_transfer', 'mobile_money', 'ug_mobile_money'],
+    'CM': ['card', 'bank_transfer', 'mobile_money', 'franc_mobile_money'],
+    'ET': ['card', 'bank_transfer', 'mobile_money', 'emalipay']
+  };
+
+  const methods = supportedMethods[country] || supportedMethods['NG'];
+
+  res.json({
+    country: country,
+    supportedMethods: methods,
+    message: `Payment methods available for ${country}`
+  });
+});
+
+// GET /api/payments/verify/:reference (Primary Verification - Frontend SDK)
+router.get('/verify/:reference', authenticateToken, async (req, res) => {
   const { reference } = req.params;
   const userId = req.user.id;
 
-  // Check if Flutterwave is configured
-  if (!flw) {
-    throw new AppError('Payment processing is not configured', 503, 'Payment Service Unavailable');
-  }
-
-  // Get payment record
-  const payment = await getRow(
-    'SELECT * FROM payments WHERE flutterwave_reference = $1 AND user_id = $2',
-    [reference, userId]
-  );
-
-  if (!payment) {
-    throw new AppError('Payment not found', 404, 'Payment Not Found');
-  }
-
-  // Verify with Flutterwave
   try {
-    const response = await flw.Transaction.verify({ tx_ref: reference });
-    
-    if (response.status === 'success' && response.data.status === 'successful') {
+    // Get payment record
+    const payment = await getRow(
+      'SELECT * FROM payments WHERE flutterwave_reference = $1 AND user_id = $2',
+      [reference, userId]
+    );
+
+    if (!payment) {
+      return res.status(404).json({ error: 'Payment not found' });
+    }
+
+    // Primary verification with Flutterwave
+    const response = await axios.get(
+      `https://api.flutterwave.com/v3/transactions/${reference}/verify`,
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.FLUTTERWAVE_SECRET_KEY}`
+        }
+      }
+    );
+
+    if (response.data.status === 'success' && response.data.data.status === 'successful') {
       // Update payment status
       await query(
         'UPDATE payments SET status = $1, flutterwave_transaction_id = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3',
-        ['successful', response.data.id, payment.id]
+        ['successful', response.data.data.id, payment.id]
       );
 
       // Create enrollment
@@ -295,7 +285,7 @@ router.get('/verify/:reference', authenticateToken, asyncHandler(async (req, res
       console.log('Payment verified successfully (Primary Verification):', {
         paymentId: payment.id,
         reference: reference,
-        transactionId: response.data.id,
+        transactionId: response.data.data.id,
         verificationMethod: 'frontend_sdk'
       });
 
@@ -306,318 +296,276 @@ router.get('/verify/:reference', authenticateToken, asyncHandler(async (req, res
           id: payment.id,
           amount: payment.amount,
           status: 'successful',
-          transactionId: response.data.id
+          transactionId: response.data.data.id
         }
       });
     } else {
-      // Update payment status to failed
-      await query(
-        'UPDATE payments SET status = $1, error_message = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3',
-        ['failed', 'Payment verification failed', payment.id]
-      );
-
-      res.json({
-        success: false,
-        message: 'Payment verification failed',
-        payment: {
-          id: payment.id,
-          status: 'failed'
-        }
-      });
+      throw new Error('Payment verification failed');
     }
+
   } catch (error) {
-    // Update payment status to failed
-    await query(
-      'UPDATE payments SET status = $1, error_message = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3',
-      ['failed', error.message, payment.id]
-    );
-
-    throw new AppError('Payment verification failed', 400, 'Payment Error');
-  }
-}));
-
-// Webhook handler for Flutterwave Standard (Backup Verification)
-router.post('/webhook', validateWebhook, asyncHandler(async (req, res) => {
-  const errors = validationResult(req);
-  if (!errors.isEmpty()) {
-    throw new AppError('Invalid webhook data', 400, 'Validation Error');
-  }
-
-  // Check if Flutterwave is configured
-  if (!flw) {
-    throw new AppError('Payment processing is not configured', 503, 'Payment Service Unavailable');
-  }
-
-  const { event, data } = req.body;
-  const signature = req.headers['verif-hash'];
-
-  console.log('Webhook received (Backup Verification):', {
-    event,
-    tx_ref: data.tx_ref,
-    status: data.status,
-    timestamp: new Date().toISOString()
-  });
-
-  // Verify webhook signature
-  if (!verifyWebhookSignature(req.body, signature)) {
-    console.error('Invalid webhook signature:', {
-      event,
-      tx_ref: data.tx_ref,
-      signature: signature ? 'present' : 'missing'
-    });
-    throw new AppError('Invalid webhook signature', 401, 'Unauthorized');
-  }
-
-  // Log webhook for backup verification
-  await query(
-    'INSERT INTO payment_webhooks (flutterwave_reference, webhook_data) VALUES ($1, $2)',
-    [data.tx_ref, JSON.stringify(req.body)]
-  );
-
-  // Get payment record
-  const payment = await getRow(
-    'SELECT * FROM payments WHERE flutterwave_reference = $1',
-    [data.tx_ref]
-  );
-
-  if (!payment) {
-    console.error('Payment not found for webhook (Backup Verification):', {
-      tx_ref: data.tx_ref,
-      event
-    });
-    res.json({ status: 'success', message: 'Payment not found' });
-    return;
-  }
-
-  // Only process webhook if frontend verification hasn't already succeeded
-  // This serves as a backup verification mechanism
-  if (payment.status === 'pending') {
-    console.log('Processing webhook as backup verification:', {
-      paymentId: payment.id,
-      tx_ref: data.tx_ref,
-      event
-    });
-
-    // Process webhook based on event
-    switch (event) {
-      case 'charge.completed':
-        if (data.status === 'successful') {
-          await processSuccessfulPayment(payment, data);
-        } else if (data.status === 'failed') {
-          await processFailedPayment(payment, data);
-        }
-        break;
-
-      case 'charge.failed':
-        await processFailedPayment(payment, data);
-        break;
-
-      case 'transfer.completed':
-        // Handle bank transfer completion
-        if (data.status === 'successful') {
-          await processSuccessfulPayment(payment, data);
-        }
-        break;
-
-      case 'refund.processed':
-        // Handle refund processing
-        await processRefund(payment, data);
-        break;
-
-      default:
-        console.log('Unhandled webhook event:', event);
-    }
-  } else {
-    console.log('Payment already processed by frontend verification, webhook skipped:', {
-      paymentId: payment.id,
-      status: payment.status,
-      tx_ref: data.tx_ref
+    console.error('Payment verification error:', error);
+    
+    const errorInfo = handleFlutterwaveError(error);
+    res.status(400).json({
+      error: 'Payment Error',
+      message: errorInfo.message,
+      code: errorInfo.code,
+      details: {
+        paymentId: payment?.id,
+        reference: reference,
+        suggestedAction: 'try_alternative_payment_method'
+      }
     });
   }
+});
 
-  // Mark webhook as processed
-  await query(
-    'UPDATE payment_webhooks SET processed = true, processed_at = CURRENT_TIMESTAMP WHERE flutterwave_reference = $1',
-    [data.tx_ref]
-  );
-
-  res.json({ status: 'success' });
-}));
-
-// Helper function to process successful payment
-async function processSuccessfulPayment(payment, data) {
-  if (payment.status === 'pending') {
-    // Update payment status
-    await query(
-      'UPDATE payments SET status = $1, flutterwave_transaction_id = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3',
-      ['successful', data.id, payment.id]
-    );
-
-    // Create enrollment
-    if (payment.payment_type === 'course') {
-      await query(
-        `INSERT INTO enrollments (user_id, course_id, enrollment_type)
-         VALUES ($1, $2, 'course')`,
-        [payment.user_id, payment.course_id]
-      );
-
-      // Update course student count
-      await query(
-        'UPDATE courses SET student_count = student_count + 1 WHERE id = $1',
-        [payment.course_id]
-      );
-    } else {
-      await query(
-        `INSERT INTO enrollments (user_id, class_id, enrollment_type)
-         VALUES ($1, $2, 'class')`,
-        [payment.user_id, payment.class_id]
-      );
-
-      // Update class available slots
-      await query(
-        'UPDATE classes SET available_slots = available_slots - 1 WHERE id = $1',
-        [payment.class_id]
-      );
-    }
-
-    console.log('Payment processed successfully (Backup Verification):', {
-      paymentId: payment.id,
-      tx_ref: data.tx_ref,
-      transactionId: data.id,
-      verificationMethod: 'webhook'
-    });
-  }
-}
-
-// Helper function to process failed payment
-async function processFailedPayment(payment, data) {
-  await query(
-    'UPDATE payments SET status = $1, error_message = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3',
-    ['failed', data.failure_reason || 'Payment failed', payment.id]
-  );
-
-  console.log('Payment failed:', {
-    paymentId: payment.id,
-    tx_ref: data.tx_ref,
-    reason: data.failure_reason
-  });
-}
-
-// Helper function to process refund
-async function processRefund(payment, data) {
-  await query(
-    'UPDATE payments SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
-    ['refunded', payment.id]
-  );
-
-  console.log('Payment refunded:', {
-    paymentId: payment.id,
-    tx_ref: data.tx_ref,
-    refundId: data.id
-  });
-}
-
-// Get user payments
-router.get('/user', authenticateToken, asyncHandler(async (req, res) => {
+// GET /api/payments/user (User Payment History)
+router.get('/user', authenticateToken, async (req, res) => {
   const userId = req.user.id;
   const { limit = 20, offset = 0 } = req.query;
 
-  const payments = await getRows(
-    `SELECT p.*, 
-            c.title as course_title, c.topic as course_topic,
-            cl.title as class_title, cl.topic as class_topic
-     FROM payments p
-     LEFT JOIN courses c ON p.course_id = c.id
-     LEFT JOIN classes cl ON p.class_id = cl.id
-     WHERE p.user_id = $1
-     ORDER BY p.created_at DESC
-     LIMIT $2 OFFSET $3`,
-    [userId, parseInt(limit), parseInt(offset)]
-  );
+  try {
+    const payments = await query(
+      `SELECT p.*, c.title as course_title, cl.title as class_title
+       FROM payments p
+       LEFT JOIN courses c ON p.course_id = c.id
+       LEFT JOIN classes cl ON p.class_id = cl.id
+       WHERE p.user_id = $1
+       ORDER BY p.created_at DESC
+       LIMIT $2 OFFSET $3`,
+      [userId, limit, offset]
+    );
 
-  res.json({
-    payments: payments.map(p => ({
-      id: p.id,
-      paymentType: p.payment_type,
-      amount: p.amount,
-      currency: p.currency,
-      status: p.status,
-      paymentMethod: p.payment_method,
-      reference: p.flutterwave_reference,
-      transactionId: p.flutterwave_transaction_id,
-      course: p.course_id ? {
-        id: p.course_id,
-        title: p.course_title,
-        topic: p.course_topic
-      } : null,
-      class: p.class_id ? {
-        id: p.class_id,
-        title: p.class_title,
-        topic: p.class_topic
-      } : null,
-      createdAt: p.created_at,
-      updatedAt: p.updated_at
-    }))
-  });
-}));
+    res.json({ payments });
+  } catch (error) {
+    console.error('Error fetching user payments:', error);
+    res.status(500).json({ error: 'Failed to fetch payment history' });
+  }
+});
 
-// Get supported payment methods
-router.get('/methods', asyncHandler(async (req, res) => {
-  const { country = 'NG' } = req.query;
-  
-  const supportedMethods = getSupportedPaymentMethods(country);
-  
-  res.json({
-    country,
-    supportedMethods,
-    message: `Payment methods available for ${country}`
-  });
-}));
-
-// Get payment by ID
-router.get('/:id', authenticateToken, asyncHandler(async (req, res) => {
+// GET /api/payments/:id (Get Payment Details)
+router.get('/:id', authenticateToken, async (req, res) => {
   const { id } = req.params;
   const userId = req.user.id;
 
-  const payment = await getRow(
-    `SELECT p.*, 
-            c.title as course_title, c.topic as course_topic,
-            cl.title as class_title, cl.topic as class_topic
-     FROM payments p
-     LEFT JOIN courses c ON p.course_id = c.id
-     LEFT JOIN classes cl ON p.class_id = cl.id
-     WHERE p.id = $1 AND p.user_id = $2`,
-    [id, userId]
-  );
+  try {
+    const payment = await getRow(
+      `SELECT p.*, c.title as course_title, cl.title as class_title
+       FROM payments p
+       LEFT JOIN courses c ON p.course_id = c.id
+       LEFT JOIN classes cl ON p.class_id = cl.id
+       WHERE p.id = $1 AND p.user_id = $2`,
+      [id, userId]
+    );
 
-  if (!payment) {
-    throw new AppError('Payment not found', 404, 'Payment Not Found');
+    if (!payment) {
+      return res.status(404).json({ error: 'Payment not found' });
+    }
+
+    res.json(payment);
+  } catch (error) {
+    console.error('Error fetching payment details:', error);
+    res.status(500).json({ error: 'Failed to fetch payment details' });
+  }
+});
+
+// POST /api/payments/webhook (Backup Verification)
+router.post('/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+  try {
+    const event = JSON.parse(req.body.toString());
+    console.log('Webhook received:', event);
+
+    if (event.event === 'charge.completed' && event.data.status === 'successful') {
+      const txRef = event.data.tx_ref;
+      const transactionId = event.data.id;
+
+      // Find payment by reference
+      const payment = await getRow(
+        'SELECT * FROM payments WHERE flutterwave_reference = $1',
+        [txRef]
+      );
+
+      if (payment && payment.status === 'pending') {
+        // Update payment status
+        await query(
+          'UPDATE payments SET status = $1, flutterwave_transaction_id = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3',
+          ['successful', transactionId, payment.id]
+        );
+
+        // Create enrollment
+        const userId = payment.user_id;
+        if (payment.payment_type === 'course') {
+          await query(
+            `INSERT INTO enrollments (user_id, course_id, enrollment_type)
+             VALUES ($1, $2, 'course')`,
+            [userId, payment.course_id]
+          );
+
+          await query(
+            'UPDATE courses SET student_count = student_count + 1 WHERE id = $1',
+            [payment.course_id]
+          );
+        } else {
+          await query(
+            `INSERT INTO enrollments (user_id, class_id, enrollment_type)
+             VALUES ($1, $2, 'class')`,
+            [userId, payment.class_id]
+          );
+
+          await query(
+            'UPDATE classes SET available_slots = available_slots - 1 WHERE id = $1',
+            [payment.class_id]
+          );
+        }
+
+        console.log('Payment processed successfully via webhook (Backup Verification):', {
+          paymentId: payment.id,
+          reference: txRef,
+          transactionId: transactionId,
+          verificationMethod: 'webhook'
+        });
+      }
+    }
+
+    res.status(200).json({ status: 'success' });
+  } catch (error) {
+    console.error('Webhook error:', error);
+    res.status(500).json({ error: 'Webhook processing failed' });
+  }
+});
+
+// Admin endpoints (if needed)
+// GET /api/admin/payments (Admin Payment History)
+router.get('/admin/payments', authenticateToken, async (req, res) => {
+  // Check if user is admin
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Admin access required' });
   }
 
-  res.json({
-    id: payment.id,
-    paymentType: payment.payment_type,
-    amount: payment.amount,
-    currency: payment.currency,
-    status: payment.status,
-    paymentMethod: payment.payment_method,
-    reference: payment.flutterwave_reference,
-    transactionId: payment.flutterwave_transaction_id,
-    errorMessage: payment.error_message,
-    course: payment.course_id ? {
-      id: payment.course_id,
-      title: payment.course_title,
-      topic: payment.course_topic
-    } : null,
-    class: payment.class_id ? {
-      id: payment.class_id,
-      title: payment.class_title,
-      topic: payment.class_topic
-    } : null,
-    metadata: payment.metadata,
-    createdAt: payment.created_at,
-    updatedAt: payment.updated_at
-  });
-}));
+  const { page = 1, limit = 20, status, paymentMethod, search } = req.query;
+  const offset = (page - 1) * limit;
+
+  try {
+    let whereClause = 'WHERE 1=1';
+    const params = [];
+    let paramIndex = 1;
+
+    if (status) {
+      whereClause += ` AND p.status = $${paramIndex}`;
+      params.push(status);
+      paramIndex++;
+    }
+
+    if (paymentMethod) {
+      whereClause += ` AND p.payment_method = $${paramIndex}`;
+      params.push(paymentMethod);
+      paramIndex++;
+    }
+
+    if (search) {
+      whereClause += ` AND (u.first_name ILIKE $${paramIndex} OR u.last_name ILIKE $${paramIndex} OR p.flutterwave_reference ILIKE $${paramIndex})`;
+      const searchTerm = `%${search}%`;
+      params.push(searchTerm, searchTerm, searchTerm);
+      paramIndex += 3;
+    }
+
+    const payments = await query(
+      `SELECT p.*, u.first_name, u.last_name, u.email, c.title as course_title, cl.title as class_title
+       FROM payments p
+       LEFT JOIN users u ON p.user_id = u.id
+       LEFT JOIN courses c ON p.course_id = c.id
+       LEFT JOIN classes cl ON p.class_id = cl.id
+       ${whereClause}
+       ORDER BY p.created_at DESC
+       LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
+      [...params, limit, offset]
+    );
+
+    // Get total count
+    const countResult = await query(
+      `SELECT COUNT(*) as total
+       FROM payments p
+       LEFT JOIN users u ON p.user_id = u.id
+       ${whereClause}`,
+      params
+    );
+
+    const total = parseInt(countResult[0].total);
+    const pages = Math.ceil(total / limit);
+
+    res.json({
+      payments,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+        pages
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching admin payments:', error);
+    res.status(500).json({ error: 'Failed to fetch payment history' });
+  }
+});
+
+// GET /api/admin/payments/stats (Admin Payment Statistics)
+router.get('/admin/payments/stats', authenticateToken, async (req, res) => {
+  // Check if user is admin
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+
+  const { period = 30 } = req.query;
+
+  try {
+    // Get overview stats
+    const overviewResult = await query(
+      `SELECT 
+        COUNT(*) as total_payments,
+        SUM(amount) as total_revenue,
+        COUNT(CASE WHEN status = 'successful' THEN 1 END) as successful_payments,
+        COUNT(CASE WHEN status = 'failed' THEN 1 END) as failed_payments,
+        COUNT(CASE WHEN status = 'pending' THEN 1 END) as pending_payments,
+        AVG(amount) as average_payment
+       FROM payments
+       WHERE created_at >= NOW() - INTERVAL '${period} days'`
+    );
+
+    // Get method breakdown
+    const methodBreakdown = await query(
+      `SELECT 
+        payment_method,
+        COUNT(*) as count,
+        SUM(amount) as total_amount
+       FROM payments
+       WHERE created_at >= NOW() - INTERVAL '${period} days'
+       GROUP BY payment_method`
+    );
+
+    // Get daily stats
+    const dailyStats = await query(
+      `SELECT 
+        DATE(created_at) as date,
+        COUNT(*) as payment_count,
+        SUM(amount) as daily_revenue
+       FROM payments
+       WHERE created_at >= NOW() - INTERVAL '${period} days'
+       GROUP BY DATE(created_at)
+       ORDER BY date DESC`
+    );
+
+    const overview = overviewResult[0];
+
+    res.json({
+      overview,
+      methodBreakdown,
+      dailyStats
+    });
+  } catch (error) {
+    console.error('Error fetching payment statistics:', error);
+    res.status(500).json({ error: 'Failed to fetch payment statistics' });
+  }
+});
 
 module.exports = router; 
