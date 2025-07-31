@@ -47,7 +47,7 @@ const handleFlutterwaveError = (error) => {
 
 // POST /api/payments/initialize
 router.post('/initialize', authenticateToken, async (req, res) => {
-  const { paymentType, itemId, paymentMethod } = req.body;
+  const { paymentType, itemId, paymentMethod, sponsorshipCode } = req.body;
   const userId = req.user.id;
 
   try {
@@ -80,12 +80,90 @@ router.post('/initialize', authenticateToken, async (req, res) => {
       return res.status(409).json({ error: 'Already enrolled in this item' });
     }
 
+    // Handle sponsorship code if provided
+    let finalAmount = item.price;
+    let sponsorshipDetails = null;
+    let discountAmount = 0;
+
+    if (sponsorshipCode) {
+      // Validate sponsorship code
+      const sponsorship = await getRow(
+        `SELECT s.*, c.title as course_title, c.price as course_price
+         FROM sponsorships s
+         JOIN courses c ON s.course_id = c.id
+         WHERE s.discount_code = $1 AND s.status = 'active'`,
+        [sponsorshipCode]
+      );
+
+      if (!sponsorship) {
+        return res.status(400).json({ 
+          error: 'Invalid sponsorship code',
+          message: 'The sponsorship code is invalid or inactive'
+        });
+      }
+
+      // Check if sponsorship is for the correct course
+      if (sponsorship.course_id !== itemId) {
+        return res.status(400).json({ 
+          error: 'Invalid sponsorship code',
+          message: 'This sponsorship code is not valid for this course'
+        });
+      }
+
+      // Check if sponsorship is still valid
+      const now = new Date();
+      const isExpired = now < new Date(sponsorship.start_date) || now > new Date(sponsorship.end_date);
+      const isFull = sponsorship.students_used >= sponsorship.max_students;
+
+      if (isExpired || isFull) {
+        return res.status(400).json({ 
+          error: 'Invalid sponsorship code',
+          message: isExpired ? 'This sponsorship code has expired' : 'This sponsorship code is fully used'
+        });
+      }
+
+      // Check if user has already used this sponsorship
+      const existingUsage = await getRow(
+        'SELECT * FROM sponsorship_usage WHERE sponsorship_id = $1 AND student_id = $2',
+        [sponsorship.id, userId]
+      );
+
+      if (existingUsage) {
+        return res.status(400).json({ 
+          error: 'Invalid sponsorship code',
+          message: 'You have already used this sponsorship code'
+        });
+      }
+
+      // Calculate discount
+      if (sponsorship.discount_type === 'percentage') {
+        discountAmount = (item.price * sponsorship.discount_value) / 100;
+      } else {
+        discountAmount = sponsorship.discount_value;
+      }
+
+      finalAmount = Math.max(0, item.price - discountAmount);
+
+      sponsorshipDetails = {
+        id: sponsorship.id,
+        discountCode: sponsorship.discount_code,
+        discountType: sponsorship.discount_type,
+        discountValue: sponsorship.discount_value,
+        discountAmount: discountAmount,
+        originalPrice: item.price,
+        finalPrice: finalAmount
+      };
+    }
+
     // Generate unique reference
     const reference = `TMP_${Date.now()}_${Math.random().toString(36).substr(2, 9)}_${Math.random().toString(36).substr(2, 8)}`;
 
     // Debug logging for amount
     console.log('Price debug:', { 
       price: item.price, 
+      finalAmount: finalAmount,
+      discountAmount: discountAmount,
+      sponsorshipCode: sponsorshipCode,
       priceType: typeof item.price, 
       priceValue: item.price 
     });
@@ -95,12 +173,17 @@ router.post('/initialize', authenticateToken, async (req, res) => {
       `INSERT INTO payments (user_id, ${paymentType}_id, payment_type, amount, currency, flutterwave_reference, payment_method, metadata)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
       [
-        userId, itemId, paymentType, item.price, 'USD', reference, paymentMethod || 'card',
+        userId, itemId, paymentType, finalAmount, 'USD', reference, paymentMethod || 'card',
         JSON.stringify({
           itemTitle: item.title,
           itemDescription: itemDescription,
           userEmail: req.user.email,
-          userName: `${req.user.first_name} ${req.user.last_name}`
+          userName: `${req.user.first_name} ${req.user.last_name}`,
+          originalPrice: item.price,
+          finalPrice: finalAmount,
+          discountAmount: discountAmount,
+          sponsorshipCode: sponsorshipCode,
+          sponsorshipDetails: sponsorshipDetails
         })
       ]
     );
@@ -110,9 +193,12 @@ router.post('/initialize', authenticateToken, async (req, res) => {
 
     console.log('Initializing Flutterwave Standard v3.0.0 payment:', {
       reference,
-      amount: item.price,
+      originalAmount: item.price,
+      finalAmount: finalAmount,
+      discountAmount: discountAmount,
       paymentId: payment.id,
-      paymentMethod
+      paymentMethod,
+      sponsorshipCode
     });
 
     // Initialize Flutterwave payment
@@ -120,7 +206,7 @@ router.post('/initialize', authenticateToken, async (req, res) => {
       'https://api.flutterwave.com/v3/payments',
       {
         tx_ref: reference,
-        amount: formatAmount(item.price),
+        amount: formatAmount(finalAmount),
         currency: 'USD',
         redirect_url: redirectUrl,
         customer: {
@@ -138,7 +224,11 @@ router.post('/initialize', authenticateToken, async (req, res) => {
           payment_id: payment.id,
           user_id: userId,
           item_id: itemId,
-          payment_type: paymentType
+          payment_type: paymentType,
+          sponsorship_code: sponsorshipCode,
+          original_price: item.price,
+          final_price: finalAmount,
+          discount_amount: discountAmount
         }
       },
       {
@@ -170,9 +260,12 @@ router.post('/initialize', authenticateToken, async (req, res) => {
           reference: reference,
           flutterwave_reference: 'hosted_link',
           checkout_url: response.data.data.link,
-          amount: parseAmount(formatAmount(item.price)),
+          original_amount: item.price,
+          final_amount: parseAmount(formatAmount(finalAmount)),
+          discount_amount: discountAmount,
           currency: 'USD',
-          payment_type: paymentType
+          payment_type: paymentType,
+          sponsorship: sponsorshipDetails
         }
       });
     } else {
@@ -255,6 +348,50 @@ router.get('/verify/:reference', authenticateToken, async (req, res) => {
         ['successful', response.data.data.id, payment.id]
       );
 
+      // Handle sponsorship usage if applicable
+      if (payment.metadata && payment.metadata.sponsorshipCode) {
+        try {
+          // Get sponsorship details
+          const sponsorship = await getRow(
+            'SELECT * FROM sponsorships WHERE discount_code = $1',
+            [payment.metadata.sponsorshipCode]
+          );
+
+          if (sponsorship) {
+            // Record sponsorship usage
+            await query(
+              `INSERT INTO sponsorship_usage (
+                sponsorship_id, student_id, course_id, original_price, 
+                discount_amount, final_price, used_at
+              ) VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP)`,
+              [
+                sponsorship.id, 
+                userId, 
+                payment.course_id || payment.class_id,
+                payment.metadata.originalPrice,
+                payment.metadata.discountAmount,
+                payment.metadata.finalPrice
+              ]
+            );
+
+            // Update sponsorship usage count
+            await query(
+              'UPDATE sponsorships SET students_used = students_used + 1 WHERE id = $1',
+              [sponsorship.id]
+            );
+
+            console.log('Sponsorship usage recorded:', {
+              sponsorshipId: sponsorship.id,
+              studentId: userId,
+              discountAmount: payment.metadata.discountAmount
+            });
+          }
+        } catch (sponsorshipError) {
+          console.error('Error recording sponsorship usage:', sponsorshipError);
+          // Don't fail the payment if sponsorship recording fails
+        }
+      }
+
       // Create enrollment
       if (payment.payment_type === 'course') {
         await query(
@@ -286,7 +423,8 @@ router.get('/verify/:reference', authenticateToken, async (req, res) => {
         paymentId: payment.id,
         reference: reference,
         transactionId: response.data.data.id,
-        verificationMethod: 'frontend_sdk'
+        verificationMethod: 'frontend_sdk',
+        sponsorshipUsed: !!payment.metadata?.sponsorshipCode
       });
 
       res.json({
@@ -296,7 +434,8 @@ router.get('/verify/:reference', authenticateToken, async (req, res) => {
           id: payment.id,
           amount: payment.amount,
           status: 'successful',
-          transactionId: response.data.data.id
+          transactionId: response.data.data.id,
+          sponsorshipUsed: !!payment.metadata?.sponsorshipCode
         }
       });
     } else {
@@ -393,6 +532,50 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
           ['successful', transactionId, payment.id]
         );
 
+        // Handle sponsorship usage if applicable
+        if (payment.metadata && payment.metadata.sponsorshipCode) {
+          try {
+            // Get sponsorship details
+            const sponsorship = await getRow(
+              'SELECT * FROM sponsorships WHERE discount_code = $1',
+              [payment.metadata.sponsorshipCode]
+            );
+
+            if (sponsorship) {
+              // Record sponsorship usage
+              await query(
+                `INSERT INTO sponsorship_usage (
+                  sponsorship_id, student_id, course_id, original_price, 
+                  discount_amount, final_price, used_at
+                ) VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP)`,
+                [
+                  sponsorship.id, 
+                  payment.user_id, 
+                  payment.course_id || payment.class_id,
+                  payment.metadata.originalPrice,
+                  payment.metadata.discountAmount,
+                  payment.metadata.finalPrice
+                ]
+              );
+
+              // Update sponsorship usage count
+              await query(
+                'UPDATE sponsorships SET students_used = students_used + 1 WHERE id = $1',
+                [sponsorship.id]
+              );
+
+              console.log('Sponsorship usage recorded via webhook:', {
+                sponsorshipId: sponsorship.id,
+                studentId: payment.user_id,
+                discountAmount: payment.metadata.discountAmount
+              });
+            }
+          } catch (sponsorshipError) {
+            console.error('Error recording sponsorship usage via webhook:', sponsorshipError);
+            // Don't fail the payment if sponsorship recording fails
+          }
+        }
+
         // Create enrollment
         const userId = payment.user_id;
         if (payment.payment_type === 'course') {
@@ -423,7 +606,8 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
           paymentId: payment.id,
           reference: txRef,
           transactionId: transactionId,
-          verificationMethod: 'webhook'
+          verificationMethod: 'webhook',
+          sponsorshipUsed: !!payment.metadata?.sponsorshipCode
         });
       }
     }

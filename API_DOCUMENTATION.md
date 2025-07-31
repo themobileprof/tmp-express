@@ -3244,7 +3244,8 @@ Content-Type: application/json
 {
   "paymentType": "course",
   "itemId": "uuid-of-course-or-class",
-  "paymentMethod": "card"
+  "paymentMethod": "card",
+  "sponsorshipCode": "SPONSOR123456"
 }
 ```
 
@@ -3252,6 +3253,7 @@ Content-Type: application/json
 - `paymentType` (required): "course" or "class"
 - `itemId` (required): UUID of the course or class
 - `paymentMethod` (optional): Payment method to use
+- `sponsorshipCode` (optional): Sponsorship discount code
 
 **Supported Payment Methods:**
 - `card` - Credit/Debit cards
@@ -3276,9 +3278,20 @@ Content-Type: application/json
     "reference": "TMP_1234567890_ABC123_ABCD1234",
     "flutterwave_reference": "hosted_link",
     "checkout_url": "https://checkout.flutterwave.com/v3/hosted/pay/...",
-    "amount": 99.99,
+    "original_amount": 99.99,
+    "final_amount": 79.99,
+    "discount_amount": 20.00,
     "currency": "USD",
-    "payment_type": "course"
+    "payment_type": "course",
+    "sponsorship": {
+      "id": "uuid",
+      "discountCode": "SPONSOR123456",
+      "discountType": "percentage",
+      "discountValue": 20,
+      "discountAmount": 20.00,
+      "originalPrice": 99.99,
+      "finalPrice": 79.99
+    }
   }
 }
 ```
