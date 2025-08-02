@@ -3226,7 +3226,7 @@ Authorization: Bearer <jwt-token>
 
 ### Payments Endpoints (Flutterwave Standard v3.0.0)
 
-> **Note:** The payment system uses a **dual-verification approach**: Primary verification via frontend SDK and backup verification via webhook. The payment redirect URL is determined dynamically from the incoming request (using the request's origin or host), and the payment page logo is set to a static URL. You do **not** need to set `FRONTEND_URL` or `LOGO_URL` environment variables for payment integration.
+> **Note:** The payment system uses **inline payment integration** with Flutterwave, allowing the payment form to be embedded directly in your frontend. The system also uses a **dual-verification approach**: Primary verification via frontend SDK and backup verification via webhook. The callback URL can be provided by the frontend or will fall back to the `FRONTEND_URL` environment variable.
 
 #### Initialize Payment
 **POST** `/payments/initialize`
@@ -3245,7 +3245,8 @@ Content-Type: application/json
   "paymentType": "course",
   "itemId": "uuid-of-course-or-class",
   "paymentMethod": "card",
-  "sponsorshipCode": "SPONSOR123456"
+  "sponsorshipCode": "SPONSOR123456",
+  "callbackUrl": "https://themobileprof.com/payment/callback"
 }
 ```
 
@@ -3254,6 +3255,7 @@ Content-Type: application/json
 - `itemId` (required): UUID of the course or class
 - `paymentMethod` (optional): Payment method to use
 - `sponsorshipCode` (optional): Sponsorship discount code
+- `callbackUrl` (optional): URL where user will be redirected after payment completion. If not provided, uses FRONTEND_URL environment variable
 
 **Supported Payment Methods:**
 - `card` - Credit/Debit cards
@@ -3277,11 +3279,25 @@ Content-Type: application/json
     "payment_id": "uuid",
     "reference": "TMP_1234567890_ABC123_ABCD1234",
     "flutterwave_reference": "TMP_1234567890_ABC123_ABCD1234",
-    "checkout_url": "https://checkout.flutterwave.com/v3/hosted/pay/...",
+    "public_key": "FLWPUBK_TEST-...",
+    "tx_ref": "TMP_1234567890_ABC123_ABCD1234",
+    "amount": 7999,
+    "currency": "USD",
+    "customer": {
+      "email": "user@example.com",
+      "phone_number": "+1234567890",
+      "name": "John Doe"
+    },
+    "customizations": {
+      "title": "TheMobileProf LMS",
+      "description": "Payment for JavaScript Fundamentals course",
+      "logo": "https://themobileprof.com/assets/logo.jpg"
+    },
+    "payment_options": "card, ussd, banktransfer, mobilemoneyghana, mpesa",
+    "callback_url": "https://themobileprof.com/payment/callback?reference=TMP_1234567890_ABC123_ABCD1234",
     "original_amount": 99.99,
     "final_amount": 79.99,
     "discount_amount": 20.00,
-    "currency": "USD",
     "payment_type": "course",
     "sponsorship": {
       "id": "uuid",

@@ -55,7 +55,7 @@ const generateReference = (prefix = 'TMP') => {
   return `${prefix}_${timestamp}_${random}_${uuid}`.toUpperCase();
 };
 
-// Format amount for Flutterwave (in kobo)
+// Format amount for Flutterwave (for USD)
 const formatAmount = (amount) => {
   // Convert to number if it's a string or decimal
   const numericAmount = typeof amount === 'string' ? parseFloat(amount) : Number(amount);
@@ -63,10 +63,11 @@ const formatAmount = (amount) => {
   if (isNaN(numericAmount) || numericAmount <= 0) {
     throw new Error('Invalid amount: must be a positive number');
   }
-  return Math.round(numericAmount * 100); // Convert to kobo
+  // For USD, we don't multiply by 100 - Flutterwave expects the actual amount
+  return Math.round(numericAmount * 100) / 100; // Keep 2 decimal places for USD
 };
 
-// Parse amount from Flutterwave (from kobo)
+// Parse amount from Flutterwave (for USD)
 const parseAmount = (amount) => {
   // Convert to number if it's a string
   const numericAmount = typeof amount === 'string' ? parseFloat(amount) : Number(amount);
@@ -74,7 +75,8 @@ const parseAmount = (amount) => {
   if (isNaN(numericAmount) || numericAmount < 0) {
     throw new Error('Invalid amount: must be a non-negative number');
   }
-  return numericAmount / 100; // Convert from kobo
+  // For USD, no conversion needed since we're not multiplying by 100
+  return numericAmount;
 };
 
 // Validate payment method

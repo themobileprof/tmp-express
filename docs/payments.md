@@ -38,7 +38,8 @@ Content-Type: application/json
 {
   "paymentType": "course",
   "itemId": "uuid",
-  "paymentMethod": "card"
+  "paymentMethod": "card",
+  "callbackUrl": "https://themobileprof.com/payment/callback"
 }
 ```
 
@@ -46,6 +47,7 @@ Content-Type: application/json
 - `paymentType` (required): "course" or "class"
 - `itemId` (required): UUID of the course or class
 - `paymentMethod` (optional): Payment method to use
+- `callbackUrl` (optional): URL where user will be redirected after payment completion. If not provided, uses FRONTEND_URL environment variable
 
 **Supported Payment Methods:**
 - `card` - Credit/Debit cards
@@ -64,14 +66,41 @@ Content-Type: application/json
 ```json
 {
   "success": true,
-  "paymentId": "uuid",
-  "reference": "TMP_1234567890_ABC123_ABCD1234",
-  "authorizationUrl": "https://checkout.flutterwave.com/v3/hosted/pay/...",
-  "paymentData": {
-    "link": "https://checkout.flutterwave.com/v3/hosted/pay/...",
-    "status": "pending"
-  },
-  "message": "Payment initialized successfully. Redirect to Flutterwave to complete payment."
+  "message": "Payment initialized successfully",
+  "data": {
+    "payment_id": "uuid",
+    "reference": "TMP_1234567890_ABC123_ABCD1234",
+    "flutterwave_reference": "TMP_1234567890_ABC123_ABCD1234",
+    "public_key": "FLWPUBK_TEST-...",
+    "tx_ref": "TMP_1234567890_ABC123_ABCD1234",
+    "amount": 7999,
+    "currency": "USD",
+    "customer": {
+      "email": "user@example.com",
+      "phone_number": "+1234567890",
+      "name": "John Doe"
+    },
+    "customizations": {
+      "title": "TheMobileProf LMS",
+      "description": "Payment for JavaScript Fundamentals course",
+      "logo": "https://themobileprof.com/assets/logo.jpg"
+    },
+    "payment_options": "card, ussd, banktransfer, mobilemoneyghana, mpesa",
+    "callback_url": "https://themobileprof.com/payment/callback?reference=TMP_1234567890_ABC123_ABCD1234",
+    "original_amount": 99.99,
+    "final_amount": 79.99,
+    "discount_amount": 20.00,
+    "payment_type": "course",
+    "sponsorship": {
+      "id": "uuid",
+      "discountCode": "SPONSOR123456",
+      "discountType": "percentage",
+      "discountValue": 20,
+      "discountAmount": 20.00,
+      "originalPrice": 99.99,
+      "finalPrice": 79.99
+    }
+  }
 }
 ```
 

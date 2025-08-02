@@ -11,7 +11,8 @@ const formatAmount = (amount) => {
   if (isNaN(numericAmount) || numericAmount <= 0) {
     throw new Error('Invalid amount: must be a positive number');
   }
-  return Math.round(numericAmount * 100); // Convert to cents for USD
+  // For USD, we don't multiply by 100 - Flutterwave expects the actual amount
+  return Math.round(numericAmount * 100) / 100; // Keep 2 decimal places for USD
 };
 
 // Helper function to parse amount (convert from kobo)
@@ -20,7 +21,8 @@ const parseAmount = (amount) => {
   if (isNaN(numericAmount) || numericAmount < 0) {
     throw new Error('Invalid amount: must be a non-negative number');
   }
-  return numericAmount / 100; // Convert from cents for USD
+  // For USD, no conversion needed since we're not multiplying by 100
+  return numericAmount;
 };
 
 // Helper function to handle Flutterwave errors
@@ -47,7 +49,7 @@ const handleFlutterwaveError = (error) => {
 
 // POST /api/payments/initialize
 router.post('/initialize', authenticateToken, async (req, res) => {
-  const { paymentType, itemId, paymentMethod, sponsorshipCode } = req.body;
+  const { paymentType, itemId, paymentMethod, sponsorshipCode, callbackUrl } = req.body;
   const userId = req.user.id;
   let payment = null; // Declare payment variable at the top
 
@@ -55,6 +57,22 @@ router.post('/initialize', authenticateToken, async (req, res) => {
     // Validate payment type
     if (!['course', 'class'].includes(paymentType)) {
       return res.status(400).json({ error: 'Invalid payment type' });
+    }
+
+    // Validate callback URL or use fallback
+    let redirectUrl;
+    if (callbackUrl) {
+      // Validate callback URL format
+      try {
+        new URL(callbackUrl);
+        redirectUrl = `${callbackUrl}?reference=${reference}`;
+      } catch (error) {
+        return res.status(400).json({ error: 'Invalid callback URL format' });
+      }
+    } else {
+      // Fallback to environment variable
+      const frontendUrl = process.env.FRONTEND_URL || 'https://themobileprof.com';
+      redirectUrl = `${frontendUrl}/payment/callback?reference=${reference}`;
     }
 
     // Get item details
@@ -160,13 +178,16 @@ router.post('/initialize', authenticateToken, async (req, res) => {
     const reference = `TMP_${Date.now()}_${Math.random().toString(36).substr(2, 9)}_${Math.random().toString(36).substr(2, 8)}`;
 
     // Debug logging for amount
-    console.log('Price debug:', { 
+    console.log('Payment initialization debug:', { 
       price: item.price, 
       finalAmount: finalAmount,
       discountAmount: discountAmount,
       sponsorshipCode: sponsorshipCode,
       priceType: typeof item.price, 
-      priceValue: item.price 
+      priceValue: item.price,
+      formattedAmount: formatAmount(finalAmount),
+      callbackUrl: callbackUrl,
+      redirectUrl: redirectUrl
     });
 
     // Create payment record
@@ -189,8 +210,7 @@ router.post('/initialize', authenticateToken, async (req, res) => {
       ]
     );
 
-    // Build redirect URL
-    const redirectUrl = `${req.protocol}://${req.get('host')}/payment/callback?reference=${reference}`;
+    // Build redirect URL using callback URL from frontend (already set above)
 
     console.log('Initializing Flutterwave Standard v3.0.0 payment:', {
       reference,
@@ -202,14 +222,13 @@ router.post('/initialize', authenticateToken, async (req, res) => {
       sponsorshipCode
     });
 
-    // Initialize Flutterwave payment
+    // Initialize Flutterwave payment for inline integration
     const response = await axios.post(
       'https://api.flutterwave.com/v3/payments',
       {
         tx_ref: reference,
         amount: formatAmount(finalAmount),
         currency: 'USD',
-        redirect_url: redirectUrl,
         customer: {
           email: req.user.email,
           phone_number: req.user.phone || '',
@@ -260,11 +279,25 @@ router.post('/initialize', authenticateToken, async (req, res) => {
           payment_id: payment.id,
           reference: reference,
           flutterwave_reference: reference,
-          checkout_url: response.data.data.link,
-          original_amount: item.price,
-          final_amount: parseAmount(formatAmount(finalAmount)),
-          discount_amount: discountAmount,
+          public_key: process.env.FLUTTERWAVE_PUBLIC_KEY,
+          tx_ref: reference,
+          amount: formatAmount(finalAmount),
           currency: 'USD',
+          customer: {
+            email: req.user.email,
+            phone_number: req.user.phone || '',
+            name: `${req.user.first_name} ${req.user.last_name}`
+          },
+          customizations: {
+            title: 'TheMobileProf LMS',
+            description: itemDescription,
+            logo: 'https://themobileprof.com/assets/logo.jpg'
+          },
+          payment_options: 'card, ussd, banktransfer, mobilemoneyghana, mpesa',
+          callback_url: redirectUrl,
+          original_amount: item.price,
+          final_amount: finalAmount,
+          discount_amount: discountAmount,
           payment_type: paymentType,
           sponsorship: sponsorshipDetails
         }
