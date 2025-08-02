@@ -145,6 +145,13 @@ jobs:
           
           echo "🚀 Starting deployment..."
           
+          # Create and navigate to deployment directory
+          echo "📁 Setting up deployment directory..."
+          DEPLOY_DIR="/var/www/api.themobileprof.com"
+          mkdir -p "$DEPLOY_DIR"
+          cd "$DEPLOY_DIR"
+          echo "✅ Working in directory: $(pwd)"
+          
           # Check if Docker is installed
           if ! command -v docker &> /dev/null; then
             echo "❌ Docker is not installed on the server"
@@ -181,7 +188,7 @@ jobs:
           
           # Check uploads directory
           echo "📁 Checking uploads directory..."
-          UPLOADS_DIR="/var/www/api.themobileprof.com/uploads"
+          UPLOADS_DIR="$DEPLOY_DIR/uploads"
           
           # Only create directory if it doesn't exist
           if [ ! -d "$UPLOADS_DIR" ]; then
@@ -189,7 +196,7 @@ jobs:
             if mkdir -p "$UPLOADS_DIR" 2>/dev/null; then
               echo "✅ Created uploads directory"
             else
-              echo "⚠️  Cannot create /var/www/api.themobileprof.com/uploads, using home directory"
+              echo "⚠️  Cannot create $UPLOADS_DIR, using home directory"
               UPLOADS_DIR="$HOME/themobileprof-uploads"
               mkdir -p "$UPLOADS_DIR"
               echo "✅ Created uploads directory in home: $UPLOADS_DIR"
@@ -276,7 +283,7 @@ jobs:
           docker logs themobileprof-backend --tail 20 || true
           
           # Clean up .env file
-          rm -f .env
+          rm -rf .env
           
           # Wait a moment for container to fully start
           echo "⏳ Waiting for container to start..."
