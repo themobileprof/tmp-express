@@ -59,20 +59,13 @@ router.post('/initialize', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'Invalid payment type' });
     }
 
-    // Validate callback URL or use fallback
-    let redirectUrl;
+    // Validate callback URL format if provided
     if (callbackUrl) {
-      // Validate callback URL format
       try {
         new URL(callbackUrl);
-        redirectUrl = `${callbackUrl}?reference=${reference}`;
       } catch (error) {
         return res.status(400).json({ error: 'Invalid callback URL format' });
       }
-    } else {
-      // Fallback to environment variable
-      const frontendUrl = process.env.FRONTEND_URL || 'https://themobileprof.com';
-      redirectUrl = `${frontendUrl}/payment/callback?reference=${reference}`;
     }
 
     // Get item details
@@ -177,6 +170,16 @@ router.post('/initialize', authenticateToken, async (req, res) => {
     // Generate unique reference
     const reference = `TMP_${Date.now()}_${Math.random().toString(36).substr(2, 9)}_${Math.random().toString(36).substr(2, 8)}`;
 
+    // Build redirect URL using callback URL from frontend or fallback
+    let redirectUrl;
+    if (callbackUrl) {
+      redirectUrl = `${callbackUrl}?reference=${reference}`;
+    } else {
+      // Fallback to environment variable
+      const frontendUrl = process.env.FRONTEND_URL || 'https://themobileprof.com';
+      redirectUrl = `${frontendUrl}/payment/callback?reference=${reference}`;
+    }
+
     // Debug logging for amount
     console.log('Payment initialization debug:', { 
       price: item.price, 
@@ -210,7 +213,7 @@ router.post('/initialize', authenticateToken, async (req, res) => {
       ]
     );
 
-    // Build redirect URL using callback URL from frontend (already set above)
+
 
     console.log('Initializing Flutterwave Standard v3.0.0 payment:', {
       reference,
