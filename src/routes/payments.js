@@ -194,24 +194,57 @@ router.post('/initialize', authenticateToken, async (req, res) => {
     });
 
     // Create payment record
-    payment = await getRow(
-      `INSERT INTO payments (user_id, ${paymentType}_id, payment_type, amount, currency, flutterwave_reference, payment_method, metadata)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
-      [
-        userId, itemId, paymentType, finalAmount, 'USD', reference, paymentMethod || 'card',
-        JSON.stringify({
-          itemTitle: item.title,
-          itemDescription: itemDescription,
-          userEmail: req.user.email,
-          userName: `${req.user.firstName} ${req.user.lastName}`,
-          originalPrice: item.price,
-          finalPrice: finalAmount,
-          discountAmount: discountAmount,
-          sponsorshipCode: sponsorshipCode,
-          sponsorshipDetails: sponsorshipDetails
-        })
-      ]
-    );
+    console.log('Creating payment record with params:', {
+      userId,
+      itemId,
+      paymentType,
+      finalAmount,
+      reference,
+      paymentMethod: paymentMethod || 'card'
+    });
+
+    try {
+      payment = await getRow(
+        `INSERT INTO payments (user_id, ${paymentType}_id, payment_type, amount, currency, flutterwave_reference, payment_method, metadata)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+        [
+          userId, itemId, paymentType, finalAmount, 'USD', reference, paymentMethod || 'card',
+          JSON.stringify({
+            itemTitle: item.title,
+            itemDescription: itemDescription,
+            userEmail: req.user.email,
+            userName: `${req.user.firstName} ${req.user.lastName}`,
+            originalPrice: item.price,
+            finalPrice: finalAmount,
+            discountAmount: discountAmount,
+            sponsorshipCode: sponsorshipCode,
+            sponsorshipDetails: sponsorshipDetails
+          })
+        ]
+      );
+    } catch (dbError) {
+      console.error('Database insertion error:', dbError);
+      throw new Error(`Failed to create payment record: ${dbError.message}`);
+    }
+
+    console.log('Payment record created:', {
+      paymentId: payment?.id,
+      paymentType: payment?.payment_type,
+      amount: payment?.amount,
+      reference: payment?.flutterwave_reference,
+      userId: payment?.user_id,
+      itemId: payment?.[`${paymentType}_id`]
+    });
+
+    // Validate payment record
+    if (!payment) {
+      throw new Error('Payment record creation failed - no record returned');
+    }
+
+    if (!payment.id) {
+      console.error('Payment record missing ID:', payment);
+      throw new Error('Payment record creation failed - missing ID');
+    }
 
 
 
@@ -275,7 +308,13 @@ router.post('/initialize', authenticateToken, async (req, res) => {
         ['pending', payment.id]
       );
 
-      res.json({
+      // Ensure we have a valid payment ID
+      if (!payment || !payment.id) {
+        console.error('Payment record missing or invalid:', payment);
+        throw new Error('Failed to create payment record');
+      }
+
+      const responseData = {
         success: true,
         message: 'Payment initialized successfully',
         data: {
@@ -290,7 +329,22 @@ router.post('/initialize', authenticateToken, async (req, res) => {
           payment_type: paymentType,
           sponsorship: sponsorshipDetails
         }
+      };
+
+      console.log('Payment initialization successful:', {
+        paymentId: payment.id,
+        reference: reference,
+        checkoutUrl: response.data.data.link,
+        timestamp: new Date().toISOString()
       });
+
+      console.log('Response data being sent:', {
+        payment_id: responseData.data.payment_id,
+        reference: responseData.data.reference,
+        checkout_url: responseData.data.checkout_url
+      });
+
+      res.json(responseData);
     } else {
       throw new Error(response.data.message || 'Payment initialization failed');
     }
@@ -342,6 +396,18 @@ router.get('/methods', async (req, res) => {
 router.get('/verify/:reference', authenticateToken, async (req, res) => {
   const { reference } = req.params;
   const userId = req.user.id;
+
+  // Validate reference parameter
+  if (!reference || reference === 'undefined' || reference === 'null') {
+    return res.status(400).json({
+      error: 'Invalid Reference',
+      message: 'Payment reference is required. Please ensure you have a valid payment reference from Flutterwave.',
+      details: {
+        suggestion: 'Check that the payment reference is properly passed from the payment flow',
+        receivedValue: reference
+      }
+    });
+  }
 
   try {
     // Get payment record
@@ -646,6 +712,34 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
 router.get('/modal-config/:paymentId', authenticateToken, async (req, res) => {
   const { paymentId } = req.params;
   const userId = req.user.id;
+
+  console.log('Modal config request:', {
+    paymentId,
+    userId,
+    userAgent: req.headers['user-agent'],
+    timestamp: new Date().toISOString()
+  });
+
+  // Validate paymentId parameter
+  if (!paymentId || paymentId === 'undefined' || paymentId === 'null') {
+    return res.status(400).json({
+      error: 'Invalid Payment ID',
+      message: 'Payment ID is required and must be a valid UUID. Please ensure you have initialized a payment first.',
+      details: {
+        suggestion: 'Call /api/payments/initialize first to get a valid payment ID',
+        receivedValue: paymentId
+      }
+    });
+  }
+
+  // Validate UUID format
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  if (!uuidRegex.test(paymentId)) {
+    return res.status(400).json({
+      error: 'Invalid Payment ID',
+      message: 'Payment ID must be a valid UUID format'
+    });
+  }
 
   try {
     // Get payment details
