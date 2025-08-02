@@ -203,7 +203,7 @@ router.post('/initialize', authenticateToken, async (req, res) => {
           itemTitle: item.title,
           itemDescription: itemDescription,
           userEmail: req.user.email,
-          userName: `${req.user.first_name} ${req.user.last_name}`,
+          userName: `${req.user.firstName} ${req.user.lastName}`,
           originalPrice: item.price,
           finalPrice: finalAmount,
           discountAmount: discountAmount,
@@ -235,8 +235,7 @@ router.post('/initialize', authenticateToken, async (req, res) => {
         redirect_url: redirectUrl,
         customer: {
           email: req.user.email,
-          phone_number: req.user.phone || '',
-          name: `${req.user.first_name || ''} ${req.user.last_name || ''}`.trim() || 'Customer'
+          name: `${req.user.firstName || ''} ${req.user.lastName || ''}`.trim() || 'Customer'
         },
         customizations: {
           title: 'TheMobileProf LMS',
@@ -687,8 +686,7 @@ router.get('/modal-config/:paymentId', authenticateToken, async (req, res) => {
         currency: payment.currency,
         customer: {
           email: req.user.email,
-          phone_number: req.user.phone || '',
-          name: `${req.user.first_name || ''} ${req.user.last_name || ''}`.trim() || 'Customer'
+          name: `${req.user.firstName || ''} ${req.user.lastName || ''}`.trim() || 'Customer'
         },
         customizations: {
           title: 'TheMobileProf LMS',
