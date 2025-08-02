@@ -232,10 +232,11 @@ router.post('/initialize', authenticateToken, async (req, res) => {
         tx_ref: reference,
         amount: formatAmount(finalAmount),
         currency: 'USD',
+        redirect_url: redirectUrl,
         customer: {
           email: req.user.email,
           phone_number: req.user.phone || '',
-          name: `${req.user.first_name} ${req.user.last_name}`
+          name: `${req.user.first_name || ''} ${req.user.last_name || ''}`.trim() || 'Customer'
         },
         customizations: {
           title: 'TheMobileProf LMS',
@@ -282,25 +283,11 @@ router.post('/initialize', authenticateToken, async (req, res) => {
           payment_id: payment.id,
           reference: reference,
           flutterwave_reference: reference,
-          public_key: process.env.FLUTTERWAVE_PUBLIC_KEY,
-          tx_ref: reference,
-          amount: formatAmount(finalAmount),
-          currency: 'USD',
-          customer: {
-            email: req.user.email,
-            phone_number: req.user.phone || '',
-            name: `${req.user.first_name} ${req.user.last_name}`
-          },
-          customizations: {
-            title: 'TheMobileProf LMS',
-            description: itemDescription,
-            logo: 'https://themobileprof.com/assets/logo.jpg'
-          },
-          payment_options: 'card, ussd, banktransfer, mobilemoneyghana, mpesa',
-          callback_url: redirectUrl,
+          checkout_url: response.data.data.link,
           original_amount: item.price,
           final_amount: finalAmount,
           discount_amount: discountAmount,
+          currency: 'USD',
           payment_type: paymentType,
           sponsorship: sponsorshipDetails
         }
@@ -653,6 +640,76 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
   } catch (error) {
     console.error('Webhook error:', error);
     res.status(500).json({ error: 'Webhook processing failed' });
+  }
+});
+
+// GET /api/payments/modal-config/:paymentId
+router.get('/modal-config/:paymentId', authenticateToken, async (req, res) => {
+  const { paymentId } = req.params;
+  const userId = req.user.id;
+
+  try {
+    // Get payment details
+    const payment = await getRow(
+      'SELECT * FROM payments WHERE id = $1 AND user_id = $2',
+      [paymentId, userId]
+    );
+
+    if (!payment) {
+      return res.status(404).json({ error: 'Payment not found' });
+    }
+
+    // Get item details
+    let item, itemDescription;
+    if (payment.payment_type === 'course') {
+      item = await getRow('SELECT * FROM courses WHERE id = $1', [payment.course_id]);
+      itemDescription = `Payment for ${item.title} course`;
+    } else {
+      item = await getRow('SELECT * FROM classes WHERE id = $1', [payment.class_id]);
+      itemDescription = `Payment for ${item.title} class`;
+    }
+
+    if (!item) {
+      return res.status(404).json({ error: 'Item not found' });
+    }
+
+    // Build callback URL
+    const frontendUrl = process.env.FRONTEND_URL || 'https://themobileprof.com';
+    const callbackUrl = `${frontendUrl}/payment/callback?reference=${payment.flutterwave_reference}`;
+
+    // Return modal configuration
+    res.json({
+      success: true,
+      data: {
+        payment_id: payment.id,
+        reference: payment.flutterwave_reference,
+        amount: formatAmount(payment.amount),
+        currency: payment.currency,
+        customer: {
+          email: req.user.email,
+          phone_number: req.user.phone || '',
+          name: `${req.user.first_name || ''} ${req.user.last_name || ''}`.trim() || 'Customer'
+        },
+        customizations: {
+          title: 'TheMobileProf LMS',
+          description: itemDescription,
+          logo: 'https://themobileprof.com/assets/logo.jpg'
+        },
+        payment_options: 'card, ussd, banktransfer, mobilemoneyghana, mpesa',
+        redirect_url: callbackUrl,
+        public_key: process.env.FLUTTERWAVE_PUBLIC_KEY,
+        item_title: item.title,
+        item_price: payment.amount,
+        payment_type: payment.payment_type
+      }
+    });
+
+  } catch (error) {
+    console.error('Payment modal config error:', error);
+    res.status(500).json({
+      error: 'Payment Error',
+      message: 'Failed to get payment modal configuration'
+    });
   }
 });
 

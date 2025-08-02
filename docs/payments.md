@@ -71,22 +71,7 @@ Content-Type: application/json
     "payment_id": "uuid",
     "reference": "TMP_1234567890_ABC123_ABCD1234",
     "flutterwave_reference": "TMP_1234567890_ABC123_ABCD1234",
-    "public_key": "FLWPUBK_TEST-...",
-    "tx_ref": "TMP_1234567890_ABC123_ABCD1234",
-    "amount": 7999,
-    "currency": "USD",
-    "customer": {
-      "email": "user@example.com",
-      "phone_number": "+1234567890",
-      "name": "John Doe"
-    },
-    "customizations": {
-      "title": "TheMobileProf LMS",
-      "description": "Payment for JavaScript Fundamentals course",
-      "logo": "https://themobileprof.com/assets/logo.jpg"
-    },
-    "payment_options": "card, ussd, banktransfer, mobilemoneyghana, mpesa",
-    "callback_url": "https://themobileprof.com/payment/callback?reference=TMP_1234567890_ABC123_ABCD1234",
+    "checkout_url": "https://checkout.flutterwave.com/v3/hosted/pay/...",
     "original_amount": 99.99,
     "final_amount": 79.99,
     "discount_amount": 20.00,
