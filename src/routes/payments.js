@@ -3,7 +3,7 @@ const axios = require('axios');
 const { v4: uuidv4 } = require('uuid');
 const { authenticateToken } = require('../middleware/auth');
 const { asyncHandler } = require('../middleware/errorHandler');
-const { getRow, query } = require('../database/config');
+const { getRow, query, getRows } = require('../database/config');
 const {
   generateReference,
   formatAmount,
@@ -337,7 +337,7 @@ router.get('/user', authenticateToken, asyncHandler(async (req, res) => {
   const userId = req.user.id;
   const { limit = 20, offset = 0 } = req.query;
 
-  const payments = await query(
+  const payments = await getRows(
     `SELECT p.*, c.title as course_title, cl.title as class_title
      FROM payments p
      LEFT JOIN courses c ON p.course_id = c.id

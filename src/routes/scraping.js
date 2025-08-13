@@ -1,5 +1,5 @@
 const express = require('express');
-const { query } = require('../database/config');
+const { query, getRow, getRows } = require('../database/config');
 const { authenticateToken, requireRole } = require('../middleware/auth');
 const router = express.Router();
 
@@ -48,8 +48,8 @@ router.get('/urls', authenticateToken, requireRole(['admin']), async (req, res) 
       FROM scraped_urls 
       ${whereClause}
     `;
-    const countResult = await query(countQuery, params);
-    const total = parseInt(countResult.rows[0].total);
+    const countResult = await getRow(countQuery, params);
+    const total = parseInt(countResult.total);
 
     // Get paginated results
     const dataQuery = `
@@ -59,12 +59,12 @@ router.get('/urls', authenticateToken, requireRole(['admin']), async (req, res) 
       LIMIT $${params.length + 1} OFFSET $${params.length + 2}
     `;
     const dataParams = [...params, limit, offset];
-    const dataResult = await query(dataQuery, dataParams);
+    const urls = await getRows(dataQuery, dataParams);
 
     res.json({
       success: true,
       data: {
-        urls: dataResult.rows,
+        urls,
         pagination: {
           page: parseInt(page),
           limit: parseInt(limit),
@@ -182,18 +182,18 @@ router.post('/urls/bulk', authenticateToken, requireRole(['admin']), async (req,
         }
 
         // Check if URL already exists
-        const existingUrl = await query(
+        const existingUrl = await getRow(
           'SELECT id, status FROM scraped_urls WHERE url = $1',
           [url]
         );
 
-        if (existingUrl.rows.length > 0) {
+        if (existingUrl) {
           errors.push({
             url,
             error: 'URL already exists',
             data: {
-              id: existingUrl.rows[0].id,
-              status: existingUrl.rows[0].status
+              id: existingUrl.id,
+              status: existingUrl.status
             }
           });
           continue;
@@ -244,7 +244,7 @@ router.get('/urls/pending', authenticateToken, requireRole(['admin']), async (re
   try {
     const { limit = 10 } = req.query;
 
-    const result = await query(`
+    const urls = await getRows(`
       SELECT * FROM scraped_urls 
       WHERE status = 'pending' 
       ORDER BY created_at ASC 
@@ -253,7 +253,7 @@ router.get('/urls/pending', authenticateToken, requireRole(['admin']), async (re
 
     res.json({
       success: true,
-      data: result.rows
+      data: urls
     });
   } catch (error) {
     console.error('Error fetching pending URLs:', error);
@@ -411,7 +411,7 @@ router.delete('/urls/:id', authenticateToken, requireRole(['admin']), async (req
 // Get scraping statistics
 router.get('/stats', authenticateToken, requireRole(['admin']), async (req, res) => {
   try {
-    const statsResult = await query(`
+    const statsResult = await getRows(`
       SELECT 
         status,
         COUNT(*) as count
@@ -419,8 +419,8 @@ router.get('/stats', authenticateToken, requireRole(['admin']), async (req, res)
       GROUP BY status
     `);
 
-    const totalResult = await query('SELECT COUNT(*) as total FROM scraped_urls');
-    const total = parseInt(totalResult.rows[0].total);
+    const totalResult = await getRow('SELECT COUNT(*) as total FROM scraped_urls');
+    const total = parseInt(totalResult.total);
 
     const stats = {
       total,
@@ -434,13 +434,13 @@ router.get('/stats', authenticateToken, requireRole(['admin']), async (req, res)
       }
     };
 
-    statsResult.rows.forEach(row => {
+    statsResult.forEach(row => {
       stats.by_status[row.status] = parseInt(row.count);
       stats.summary[row.status] = parseInt(row.count);
     });
 
     // Get recent activity
-    const recentActivity = await query(`
+    const recentActivity = await getRows(`
       SELECT * FROM scraped_urls 
       ORDER BY updated_at DESC 
       LIMIT 10
@@ -450,7 +450,7 @@ router.get('/stats', authenticateToken, requireRole(['admin']), async (req, res)
       success: true,
       data: {
         stats,
-        recent_activity: recentActivity.rows
+        recent_activity: recentActivity
       }
     });
   } catch (error) {

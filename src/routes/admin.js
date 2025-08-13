@@ -1,6 +1,6 @@
 const express = require('express');
 const { body, validationResult } = require('express-validator');
-const { query, getRow } = require('../database/config');
+const { query, getRow, getRows } = require('../database/config');
 const { asyncHandler, AppError } = require('../middleware/errorHandler');
 const { authenticateToken } = require('../middleware/auth');
 
@@ -47,14 +47,14 @@ router.get('/users', asyncHandler(async (req, res) => {
   }
 
   // Get total count
-  const countResult = await query(
+  const countResult = await getRow(
     `SELECT COUNT(*) as total FROM users u ${whereClause}`,
     params
   );
-  const total = parseInt(countResult.rows[0].total);
+  const total = parseInt(countResult.total);
 
   // Get users
-  const usersResult = await query(
+  const users = await getRows(
     `SELECT u.id, u.email, u.first_name, u.last_name, u.role, u.avatar_url, 
             u.created_at, u.is_active, u.auth_provider, u.email_verified,
             COUNT(e.id) as enrollment_count,
@@ -70,7 +70,7 @@ router.get('/users', asyncHandler(async (req, res) => {
   );
 
   res.json({
-    users: usersResult.rows,
+    users,
     pagination: {
       page: parseInt(page),
       limit: parseInt(limit),
@@ -264,15 +264,15 @@ router.get('/courses', asyncHandler(async (req, res) => {
   }
 
   // Get total count
-  const countResult = await query(
+  const countResult = await getRow(
     `SELECT COUNT(*) as total FROM courses c 
      LEFT JOIN users u ON c.instructor_id = u.id ${whereClause}`,
     params
   );
-  const total = parseInt(countResult.rows[0].total);
+  const total = parseInt(countResult.total);
 
   // Get courses
-  const coursesResult = await query(
+  const courses = await getRows(
     `SELECT c.*, u.first_name as instructor_first_name, u.last_name as instructor_last_name,
             COUNT(e.id) as enrollment_count,
             COUNT(l.id) as lesson_count,
@@ -290,7 +290,7 @@ router.get('/courses', asyncHandler(async (req, res) => {
   );
 
   res.json({
-    courses: coursesResult.rows,
+    courses,
     pagination: {
       page: parseInt(page),
       limit: parseInt(limit),
@@ -552,7 +552,7 @@ router.delete('/courses/:id', asyncHandler(async (req, res) => {
 // Get system overview stats
 router.get('/stats/overview', asyncHandler(async (req, res) => {
   // User stats
-  const userStats = await query(`
+  const userStats = await getRow(`
     SELECT 
       COUNT(*) as total,
       COUNT(CASE WHEN role = 'student' THEN 1 END) as students,
@@ -564,7 +564,7 @@ router.get('/stats/overview', asyncHandler(async (req, res) => {
   `);
 
   // Course stats
-  const courseStats = await query(`
+  const courseStats = await getRow(`
     SELECT 
       COUNT(*) as total,
       COUNT(CASE WHEN is_published = true THEN 1 END) as published,
@@ -573,7 +573,7 @@ router.get('/stats/overview', asyncHandler(async (req, res) => {
   `);
 
   // Test stats
-  const testStats = await query(`
+  const testStats = await getRow(`
     SELECT 
       COUNT(*) as total,
       COUNT(CASE WHEN is_published = true THEN 1 END) as published,
@@ -582,7 +582,7 @@ router.get('/stats/overview', asyncHandler(async (req, res) => {
   `);
 
   // Enrollment stats
-  const enrollmentStats = await query(`
+  const enrollmentStats = await getRow(`
     SELECT 
       COUNT(*) as total_enrollments,
       COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed,
@@ -591,7 +591,7 @@ router.get('/stats/overview', asyncHandler(async (req, res) => {
   `);
 
   // Sponsorship stats
-  const sponsorshipStats = await query(`
+  const sponsorshipStats = await getRow(`
     SELECT 
       COUNT(*) as total_sponsorships,
       COUNT(CASE WHEN status = 'active' THEN 1 END) as active,
@@ -600,11 +600,11 @@ router.get('/stats/overview', asyncHandler(async (req, res) => {
   `);
 
   res.json({
-    users: userStats.rows[0],
-    courses: courseStats.rows[0],
-    tests: testStats.rows[0],
-    enrollments: enrollmentStats.rows[0],
-    sponsorships: sponsorshipStats.rows[0]
+    users: userStats,
+    courses: courseStats,
+    tests: testStats,
+    enrollments: enrollmentStats,
+    sponsorships: sponsorshipStats
   });
 }));
 
@@ -612,7 +612,7 @@ router.get('/stats/overview', asyncHandler(async (req, res) => {
 router.get('/stats/users', asyncHandler(async (req, res) => {
   const { period = '30' } = req.query;
 
-  const userStats = await query(`
+  const userStats = await getRows(`
     SELECT 
       DATE_TRUNC('day', created_at) as date,
       COUNT(*) as new_users,
@@ -625,7 +625,7 @@ router.get('/stats/users', asyncHandler(async (req, res) => {
     ORDER BY date DESC
   `);
 
-  const roleDistribution = await query(`
+  const roleDistribution = await getRows(`
     SELECT 
       role,
       COUNT(*) as count,
@@ -635,22 +635,22 @@ router.get('/stats/users', asyncHandler(async (req, res) => {
     ORDER BY count DESC
   `);
 
-  const activeUsers = await query(`
+  const activeUsers = await getRow(`
     SELECT COUNT(DISTINCT user_id) as active_users
     FROM enrollments 
     WHERE enrolled_at >= CURRENT_DATE - INTERVAL '${period} days'
   `);
 
   res.json({
-    dailyStats: userStats.rows,
-    roleDistribution: roleDistribution.rows,
-    activeUsers: activeUsers.rows[0].active_users
+    dailyStats: userStats,
+    roleDistribution: roleDistribution,
+    activeUsers: activeUsers.active_users
   });
 }));
 
 // Get detailed course statistics
 router.get('/stats/courses', asyncHandler(async (req, res) => {
-  const courseStats = await query(`
+  const courseStats = await getRows(`
     SELECT 
       c.id,
       c.title,
@@ -674,7 +674,7 @@ router.get('/stats/courses', asyncHandler(async (req, res) => {
     ORDER BY enrollment_count DESC
   `);
 
-  const topicStats = await query(`
+  const topicStats = await getRows(`
     SELECT 
       topic,
       COUNT(*) as course_count,
@@ -686,8 +686,8 @@ router.get('/stats/courses', asyncHandler(async (req, res) => {
   `);
 
   res.json({
-    courseDetails: courseStats.rows,
-    topicStats: topicStats.rows
+    courseDetails: courseStats,
+    topicStats: topicStats
   });
 }));
 
@@ -695,7 +695,7 @@ router.get('/stats/courses', asyncHandler(async (req, res) => {
 router.get('/stats/revenue', asyncHandler(async (req, res) => {
   const { period = '30' } = req.query;
 
-  const revenueStats = await query(`
+  const revenueStats = await getRows(`
     SELECT 
       DATE_TRUNC('day', p.created_at) as date,
       SUM(p.amount) as daily_revenue,
@@ -708,7 +708,7 @@ router.get('/stats/revenue', asyncHandler(async (req, res) => {
     ORDER BY date DESC
   `);
 
-  const totalRevenue = await query(`
+  const totalRevenue = await getRow(`
     SELECT 
       SUM(amount) as total_revenue,
       COUNT(*) as total_transactions,
@@ -717,7 +717,7 @@ router.get('/stats/revenue', asyncHandler(async (req, res) => {
     WHERE status = 'successful'
   `);
 
-  const sponsorshipSavings = await query(`
+  const sponsorshipSavings = await getRow(`
     SELECT 
       SUM(su.discount_amount) as total_savings,
       COUNT(su.id) as total_sponsorships_used
@@ -727,9 +727,9 @@ router.get('/stats/revenue', asyncHandler(async (req, res) => {
   `);
 
   res.json({
-    dailyRevenue: revenueStats.rows,
-    totalRevenue: totalRevenue.rows[0],
-    sponsorshipSavings: sponsorshipSavings.rows[0]
+    dailyRevenue: revenueStats,
+    totalRevenue: totalRevenue,
+    sponsorshipSavings: sponsorshipSavings
   });
 }));
 
@@ -752,14 +752,14 @@ router.get('/courses/:courseId/lessons', asyncHandler(async (req, res) => {
   }
 
   // Get total count
-  const countResult = await query(
+  const countResult = await getRow(
     `SELECT COUNT(*) as total FROM lessons l ${whereClause}`,
     params
   );
-  const total = parseInt(countResult.rows[0].total);
+  const total = parseInt(countResult.total);
 
   // Get lessons
-  const lessonsResult = await query(
+  const lessons = await getRows(
     `SELECT l.*, COUNT(t.id) as test_count
      FROM lessons l
      LEFT JOIN tests t ON l.id = t.lesson_id
@@ -771,7 +771,7 @@ router.get('/courses/:courseId/lessons', asyncHandler(async (req, res) => {
   );
 
   res.json({
-    lessons: lessonsResult.rows,
+    lessons,
     pagination: {
       page: parseInt(page),
       limit: parseInt(limit),
@@ -810,11 +810,11 @@ router.post('/courses/:courseId/lessons', [
   }
 
   // Get next order index
-  const orderResult = await query(
+  const orderResult = await getRow(
     'SELECT COALESCE(MAX(order_index), 0) + 1 as next_order FROM lessons WHERE course_id = $1',
     [courseId]
   );
-  const orderIndex = orderResult.rows[0].next_order;
+  const orderIndex = orderResult.next_order;
 
   const result = await query(
     `INSERT INTO lessons (course_id, title, description, content, duration_minutes, order_index, is_published)
@@ -1370,16 +1370,16 @@ router.get('/sponsorships', asyncHandler(async (req, res) => {
   }
 
   // Get total count
-  const countResult = await query(
+  const countResult = await getRow(
     `SELECT COUNT(*) as total FROM sponsorships s 
      LEFT JOIN users u ON s.sponsor_id = u.id
      LEFT JOIN courses c ON s.course_id = c.id ${whereClause}`,
     params
   );
-  const total = parseInt(countResult.rows[0].total);
+  const total = parseInt(countResult.total);
 
   // Get sponsorships
-  const sponsorshipsResult = await query(
+  const sponsorships = await getRows(
     `SELECT s.*, 
             u.first_name as sponsor_first_name, u.last_name as sponsor_last_name,
             c.title as course_title,
@@ -1396,7 +1396,7 @@ router.get('/sponsorships', asyncHandler(async (req, res) => {
   );
 
   res.json({
-    sponsorships: sponsorshipsResult.rows,
+    sponsorships,
     pagination: {
       page: parseInt(page),
       limit: parseInt(limit),
@@ -1631,15 +1631,15 @@ router.get('/classes', asyncHandler(async (req, res) => {
   }
 
   // Get total count
-  const countResult = await query(
+  const countResult = await getRow(
     `SELECT COUNT(*) as total FROM classes c 
      LEFT JOIN users u ON c.instructor_id = u.id ${whereClause}`,
     params
   );
-  const total = parseInt(countResult.rows[0].total);
+  const total = parseInt(countResult.total);
 
   // Get classes
-  const classesResult = await query(
+  const classes = await getRows(
     `SELECT c.*, 
             u.first_name as instructor_first_name, u.last_name as instructor_last_name,
             COUNT(e.id) as enrollment_count,
@@ -1655,7 +1655,7 @@ router.get('/classes', asyncHandler(async (req, res) => {
   );
 
   res.json({
-    classes: classesResult.rows,
+    classes,
     pagination: {
       page: parseInt(page),
       limit: parseInt(limit),
@@ -1903,15 +1903,15 @@ router.get('/discussions', asyncHandler(async (req, res) => {
   }
 
   // Get total count
-  const countResult = await query(
+  const countResult = await getRow(
     `SELECT COUNT(*) as total FROM discussions d 
      LEFT JOIN users u ON d.author_id = u.id ${whereClause}`,
     params
   );
-  const total = parseInt(countResult.rows[0].total);
+  const total = parseInt(countResult.total);
 
   // Get discussions
-  const discussionsResult = await query(
+  const discussions = await getRows(
     `SELECT d.*, 
             u.first_name as author_first_name, u.last_name as author_last_name,
             c.title as course_title,
@@ -1930,7 +1930,7 @@ router.get('/discussions', asyncHandler(async (req, res) => {
   );
 
   res.json({
-    discussions: discussionsResult.rows,
+    discussions,
     pagination: {
       page: parseInt(page),
       limit: parseInt(limit),
@@ -2099,15 +2099,15 @@ router.get('/certifications', asyncHandler(async (req, res) => {
   }
 
   // Get total count
-  const countResult = await query(
+  const countResult = await getRow(
     `SELECT COUNT(*) as total FROM certifications c 
      LEFT JOIN users u ON c.student_id = u.id ${whereClause}`,
     params
   );
-  const total = parseInt(countResult.rows[0].total);
+  const total = parseInt(countResult.total);
 
   // Get certifications
-  const certificationsResult = await query(
+  const certifications = await getRows(
     `SELECT c.*, 
             u.first_name as student_first_name, u.last_name as student_last_name,
             u.email as student_email
@@ -2120,7 +2120,7 @@ router.get('/certifications', asyncHandler(async (req, res) => {
   );
 
   res.json({
-    certifications: certificationsResult.rows,
+    certifications,
     pagination: {
       page: parseInt(page),
       limit: parseInt(limit),
@@ -2349,15 +2349,15 @@ router.get('/payments', asyncHandler(async (req, res) => {
   }
 
   // Get total count
-  const countResult = await query(
+  const countResult = await getRow(
     `SELECT COUNT(*) as total FROM payments p 
      LEFT JOIN users u ON p.user_id = u.id ${whereClause}`,
     params
   );
-  const total = parseInt(countResult.rows[0].total);
+  const total = parseInt(countResult.total);
 
   // Get payments
-  const paymentsResult = await query(
+  const payments = await getRows(
     `SELECT p.*, 
             u.first_name, u.last_name, u.email,
             c.title as course_title,
@@ -2373,7 +2373,7 @@ router.get('/payments', asyncHandler(async (req, res) => {
   );
 
   res.json({
-    payments: paymentsResult.rows,
+    payments,
     pagination: {
       page: parseInt(page),
       limit: parseInt(limit),
@@ -2387,7 +2387,7 @@ router.get('/payments', asyncHandler(async (req, res) => {
 router.get('/payments/stats', asyncHandler(async (req, res) => {
   const { period = '30' } = req.query;
 
-  const paymentStats = await query(`
+  const paymentStats = await getRow(`
     SELECT 
       COUNT(*) as total_payments,
       SUM(CASE WHEN status = 'successful' THEN amount ELSE 0 END) as total_revenue,
@@ -2399,7 +2399,7 @@ router.get('/payments/stats', asyncHandler(async (req, res) => {
     WHERE created_at >= CURRENT_DATE - INTERVAL '${period} days'
   `);
 
-  const methodStats = await query(`
+  const methodStats = await getRows(`
     SELECT 
       payment_method,
       COUNT(*) as count,
@@ -2410,7 +2410,7 @@ router.get('/payments/stats', asyncHandler(async (req, res) => {
     ORDER BY total_amount DESC
   `);
 
-  const dailyStats = await query(`
+  const dailyStats = await getRows(`
     SELECT 
       DATE_TRUNC('day', created_at) as date,
       COUNT(*) as payment_count,
@@ -2422,9 +2422,9 @@ router.get('/payments/stats', asyncHandler(async (req, res) => {
   `);
 
   res.json({
-    overview: paymentStats.rows[0],
-    methodBreakdown: methodStats.rows,
-    dailyStats: dailyStats.rows
+    overview: paymentStats,
+    methodBreakdown: methodStats,
+    dailyStats: dailyStats
   });
 }));
 
@@ -2512,7 +2512,7 @@ router.get('/lessons/:lessonId/tests', asyncHandler(async (req, res) => {
   }
 
   // Get all tests for this lesson with additional statistics
-  const tests = await query(
+  const tests = await getRows(
     `SELECT t.*, 
             COUNT(DISTINCT tq.id) as question_count,
             COUNT(DISTINCT ta.id) as attempt_count,
@@ -2533,7 +2533,7 @@ router.get('/lessons/:lessonId/tests', asyncHandler(async (req, res) => {
       title: lesson.title,
       courseId: lesson.course_id
     },
-    tests: tests.rows.map(t => ({
+    tests: tests.map(t => ({
       id: t.id,
       title: t.title,
       description: t.description,
@@ -2555,11 +2555,11 @@ router.get('/lessons/:lessonId/tests', asyncHandler(async (req, res) => {
 // Get a single system setting
 router.get('/settings/:key', asyncHandler(async (req, res) => {
   const { key } = req.params;
-  const result = await query('SELECT * FROM system_settings WHERE key = $1', [key]);
-  if (result.rows.length === 0) {
+  const result = await getRow('SELECT * FROM system_settings WHERE key = $1', [key]);
+  if (!result) {
     return res.status(404).json({ error: 'Setting not found' });
   }
-  res.json(result.rows[0]);
+  res.json(result);
 }));
 
 // Create a new system setting
@@ -2573,8 +2573,8 @@ router.post('/settings', [
   }
   const { key, value } = req.body;
   // Check if exists
-  const exists = await query('SELECT 1 FROM system_settings WHERE key = $1', [key]);
-  if (exists.rows.length > 0) {
+  const exists = await getRow('SELECT 1 FROM system_settings WHERE key = $1', [key]);
+  if (exists) {
     return res.status(409).json({ error: 'Setting already exists' });
   }
   await query('INSERT INTO system_settings (key, value) VALUES ($1, $2)', [key, value]);
