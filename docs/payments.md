@@ -2,22 +2,22 @@
 
 ## Payment Verification Architecture
 
-### Dual-Verification System
+### Clean v3 Verification System
 
-The payment system uses a **dual-verification approach** to ensure reliable payment processing:
+The payment system uses **Flutterwave Standard v3.0.0** for reliable, direct payment processing:
 
-1. **Primary Verification (Frontend SDK)** - Immediate verification when user returns from Flutterwave
-2. **Backup Verification (Webhook)** - Server-side verification as fallback
+1. **Direct Verification** - Immediate verification when user returns from Flutterwave
+2. **Webhook Backup** - Server-side verification as additional security
 
 ### Verification Flow
 
 ```
 User Payment Flow:
 1. User completes payment on Flutterwave
-2. User redirected back to frontend with tx_ref
-3. Frontend calls /api/payments/verify/:reference (Primary)
-4. If primary fails, webhook processes payment (Backup)
-5. User sees payment result
+2. User redirected back to frontend with clean parameters
+3. Frontend calls /api/payments/verify/:reference
+4. Payment verified directly with Flutterwave v3 API
+5. User sees payment result and enrollment completed
 ```
 
 ## Payment Endpoints
@@ -69,7 +69,7 @@ Content-Type: application/json
   "message": "Payment initialized successfully",
   "data": {
     "payment_id": "uuid",
-    "reference": "TMP_1234567890_ABC123_ABCD1234",
+  "reference": "TMP_1234567890_ABC123_ABCD1234",
     "flutterwave_reference": "TMP_1234567890_ABC123_ABCD1234",
     "checkout_url": "https://checkout.flutterwave.com/v3/hosted/pay/...",
     "original_amount": 99.99,
@@ -210,11 +210,11 @@ verif-hash: <webhook-signature>
 }
 ```
 
-**Backup Verification Logic:**
+**Webhook Processing Logic:**
 - Only processes payments with `pending` status
-- Skips if payment already verified by frontend SDK
-- Provides fallback for failed frontend verification
-- Logs all webhook events for debugging
+- Updates payment status to `successful` when confirmed
+- Provides additional security layer for payment confirmation
+- Logs all webhook events for monitoring
 
 ### Get User Payments
 **GET** `/payments/user`
@@ -357,18 +357,18 @@ Authorization: Bearer <jwt-token>
 
 ## Payment Flow
 
-### Dual-Verification Payment Flow
+### Clean v3 Payment Flow
 1. **User selects course/class** - Chooses item to purchase
 2. **Payment initialization** - Creates payment record with unique reference
-3. **Redirect to Flutterwave Standard** - User completes payment on hosted page
-4. **Primary verification** - Frontend SDK verifies payment immediately
-5. **Backup verification** - Webhook processes payment if primary fails
+3. **Redirect to Flutterwave Standard v3** - User completes payment on hosted page
+4. **Direct verification** - Frontend verifies payment with Flutterwave v3 API
+5. **Webhook confirmation** - Additional security layer for payment confirmation
 6. **Enrollment creation** - User automatically enrolled on successful payment
 7. **Confirmation** - Payment and enrollment confirmed
 
-### Verification Priority
-1. **Primary (Frontend SDK)** - Immediate verification when user returns
-2. **Backup (Webhook)** - Server-side verification as fallback
+### Verification Approach
+1. **Direct (Frontend)** - Immediate verification when user returns
+2. **Webhook (Security)** - Additional confirmation layer for security
 3. **Database Check** - Prevents duplicate processing
 
 ### Enhanced Webhook Processing
@@ -391,13 +391,13 @@ Authorization: Bearer <jwt-token>
 ## Payment Security
 
 ### Security Measures
-- **Enhanced Webhook Verification** - SHA512 signature validation
+- **Flutterwave v3 Security** - Latest security standards and encryption
 - **HTTPS Encryption** - Secure data transmission
 - **Token-based Authentication** - JWT for API access
 - **Input Validation** - Sanitize all payment data
 - **Fraud Detection** - Monitor suspicious transactions
 - **Unique References** - Improved reference generation with UUID
-- **Dual Verification** - Multiple verification methods
+- **Direct Verification** - Clean, reliable payment verification
 
 ### Data Protection
 - **PCI Compliance** - Payment card industry standards
@@ -412,7 +412,7 @@ Authorization: Bearer <jwt-token>
 
 ### Transaction Analytics
 - **Payment Success Rates** - Track completion rates
-- **Verification Method Usage** - Primary vs backup verification
+- **Verification Success Rates** - Monitor payment verification success
 - **Revenue Tracking** - Monitor income generation
 - **Payment Method Usage** - Popular payment options by country
 - **Geographic Distribution** - Payment by location
@@ -436,7 +436,7 @@ Authorization: Bearer <jwt-token>
 - **Invalid Card Details** - Incorrect card information
 - **Transaction Timeout** - Payment session expired
 - **Unsupported Payment Method** - Method not available for country
-- **Verification Failure** - Both primary and backup verification failed
+- **Verification Failure** - Payment verification with Flutterwave failed
 
 ### Enhanced Error Response Format
 ```json

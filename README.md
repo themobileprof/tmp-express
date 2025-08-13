@@ -98,6 +98,7 @@ For detailed API documentation, see our comprehensive guides:
 ### Core Documentation
 - **[API Overview & Setup](docs/README.md)** - Complete API documentation and setup guides
 - **[Authentication & Users](docs/auth-users.md)** - User registration, login, profiles, and authentication flows
+- **[Frontend Integration](FRONTEND_INTEGRATION.md)** - Complete frontend implementation guide for Flutterwave v3 payments
 - **[Courses & Classes](docs/courses-classes.md)** - Course and class management, enrollment, and content organization
 - **[Lessons & Tests](docs/lessons-tests.md)** - Educational content, lessons, tests, and assessments
 - **[Sponsorships](docs/sponsorships.md)** - Sponsorship system, discount codes, and funding opportunities

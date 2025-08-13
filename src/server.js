@@ -33,8 +33,23 @@ const PORT = process.env.PORT || 3000;
 // Trust proxy configuration for rate limiting
 app.set('trust proxy', 1);
 
-// Security middleware
-app.use(helmet());
+// Security middleware with custom CSP for uploads
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      imgSrc: ["'self'", "data:", "https:", "http://localhost:3000", "http://localhost:8080"],
+      scriptSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https:"],
+      fontSrc: ["'self'", "https:", "data:"],
+      connectSrc: ["'self'"],
+      frameSrc: ["'none'"],
+      objectSrc: ["'none'"],
+      upgradeInsecureRequests: []
+    }
+  },
+  crossOriginResourcePolicy: { policy: "cross-origin" }
+}));
 app.use(cors({
   origin: process.env.CORS_ORIGIN || '*',
   credentials: true
@@ -60,12 +75,48 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // Compression middleware
 app.use(compression());
 
-// Static file serving for uploads
+// Static file serving for uploads (conditional based on environment)
 const uploadPath = (process.env.UPLOAD_PATH || './uploads').trim();
 const resolvedUploadPath = path.resolve(uploadPath);
-console.log('🌐 Static file serving for uploads:', uploadPath);
+console.log('🌐 Upload path configured:', uploadPath);
 console.log('🌐 Resolved upload path:', resolvedUploadPath);
-// app.use('/uploads', express.static(resolvedUploadPath)); // Commented out so Nginx can serve static files
+
+// Only serve static files in development (let Nginx handle in production)
+if (process.env.NODE_ENV !== 'production') {
+  console.log('🌐 Static file serving enabled (development mode)');
+  
+  app.use('/uploads', (req, res, next) => {
+    // Set CORS headers for static files
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+    
+    // Handle preflight requests
+    if (req.method === 'OPTIONS') {
+      return res.status(200).end();
+    }
+    
+    next();
+  }, express.static(resolvedUploadPath));
+} else {
+  console.log('🌐 Static file serving disabled (production mode - Nginx will handle)');
+  
+  // In production, just handle CORS preflight for uploads
+  app.use('/uploads', (req, res, next) => {
+    // Set CORS headers for preflight requests only
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+    
+    // Handle preflight requests
+    if (req.method === 'OPTIONS') {
+      return res.status(200).end();
+    }
+    
+    // In production, let Nginx handle the actual file serving
+    next();
+  });
+}
 
 // Logging middleware
 app.use(morgan('combined'));

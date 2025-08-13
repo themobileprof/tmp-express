@@ -74,6 +74,44 @@ Common HTTP status codes:
 - `409` - Conflict
 - `500` - Internal Server Error
 
+### Validation Errors
+
+When validation fails, the API returns detailed error information:
+
+```json
+{
+  "error": "VALIDATION_ERROR",
+  "message": "Validation failed",
+  "details": {
+    "fieldName": "Specific error message for this field",
+    "anotherField": "Another specific error message"
+  }
+}
+```
+
+**Common Validation Rules:**
+- **Required Fields**: Must be provided and non-empty
+- **String Fields**: Must be non-empty strings if provided
+- **Number Fields**: Must be valid numbers within specified ranges
+- **Array Fields**: Must be arrays with valid content
+- **UUID Fields**: Must be valid UUID format
+- **Enum Fields**: Must be one of the allowed values
+
+**Example Validation Error:**
+```json
+{
+  "error": "VALIDATION_ERROR",
+  "message": "Validation failed",
+  "details": {
+    "duration": "Duration is required and must not be empty",
+    "prerequisites": "Prerequisites must be a non-empty string if provided",
+    "syllabus": "Syllabus must be a non-empty string if provided"
+  }
+}
+```
+
+This error occurs when creating a course without providing required fields or with empty string values.
+
 ---
 
 ## Endpoints
@@ -1026,6 +1064,31 @@ Content-Type: application/json
 }
 ```
 
+**Required Fields:**
+- `title` - Course title (string, non-empty)
+- `description` - Course description (string, non-empty)
+- `topic` - Course topic (string, non-empty)
+- `type` - Course type: "online" or "offline"
+- `price` - Course price (number, positive)
+- `duration` - Course duration (string, non-empty)
+- `certification` - Certification type (string, non-empty)
+- `difficulty` - Difficulty level: "beginner", "intermediate", "advanced"
+- `objectives` - Learning objectives (string, non-empty)
+- `prerequisites` - Prerequisites (string, non-empty)
+- `syllabus` - Course syllabus (string, non-empty)
+- `tags` - Course tags (array of strings, non-empty)
+
+**Optional Fields:**
+- `instructorId` - Instructor ID (UUID, can be null)
+- `imageUrl` - Course image URL (string, valid URL format)
+
+**Validation Rules:**
+- All string fields must be non-empty if provided
+- `price` must be a positive number
+- `type` must be one of: "online", "offline"
+- `difficulty` must be one of: "beginner", "intermediate", "advanced"
+- `tags` must be an array of non-empty strings
+
 **Response (201):**
 ```json
 {
@@ -1053,12 +1116,26 @@ Content-Type: application/json
 }
 ```
 
+**Error Response (400):**
+```json
+{
+  "error": "VALIDATION_ERROR",
+  "message": "Validation failed",
+  "details": {
+    "duration": "Duration is required and must not be empty",
+    "prerequisites": "Prerequisites must be a non-empty string if provided",
+    "syllabus": "Syllabus must be a non-empty string if provided"
+  }
+}
+```
+
 **Notes:**
-- All fields except `instructorId` are required
+- All fields except `instructorId` and `imageUrl` are required
 - `difficulty` must be one of: "beginner", "intermediate", "advanced"
 - `type` must be one of: "online", "offline"
 - `tags` should be an array of strings
 - `instructorId` is optional (can be null)
+- `imageUrl` is optional but must be a valid URL if provided
 
 ##### Update Course (Admin)
 **PUT** `/api/admin/courses/:id`
@@ -1085,6 +1162,30 @@ Content-Type: application/json
 }
 ```
 
+**Updateable Fields:**
+- `title` - Course title (string, non-empty)
+- `description` - Course description (string, non-empty)
+- `topic` - Course topic (string, non-empty)
+- `type` - Course type: "online" or "offline"
+- `price` - Course price (number, positive)
+- `duration` - Course duration (string, non-empty)
+- `certification` - Certification type (string, non-empty)
+- `difficulty` - Difficulty level: "beginner", "intermediate", "advanced"
+- `objectives` - Learning objectives (string, non-empty)
+- `prerequisites` - Prerequisites (string, non-empty)
+- `syllabus` - Course syllabus (string, non-empty)
+- `tags` - Course tags (array of strings, non-empty)
+- `isPublished` - Publication status (boolean)
+- `imageUrl` - Course image URL (string, valid URL format)
+
+**Validation Rules:**
+- All fields are optional for updates
+- If provided, string fields must be non-empty
+- `price` must be a positive number if provided
+- `type` must be one of: "online", "offline"
+- `difficulty` must be one of: "beginner", "intermediate", "advanced"
+- `tags` must be an array of non-empty strings if provided
+
 **Response (200):**
 ```json
 {
@@ -1099,6 +1200,18 @@ Content-Type: application/json
     "tags": ["updated", "tags"],
     "isPublished": true,
     "updatedAt": "2024-07-01T12:00:00Z"
+  }
+}
+```
+
+**Error Response (400):**
+```json
+{
+  "error": "VALIDATION_ERROR",
+  "message": "Validation failed",
+  "details": {
+    "title": "Title must be a non-empty string",
+    "price": "Price must be a positive number"
   }
 }
 ```
@@ -1348,6 +1461,27 @@ The test script will:
 - Verify file deletion
 - Test admin file listing
 - Clean up test files
+
+## Flutterwave v3 API Status
+
+### Current Status
+- **Flutterwave v3 API** is the **stable and production-ready** version
+- **Direct API Key Authentication** - No OAuth required
+- **Payment Endpoint**: `https://api.flutterwave.com/v3/payments` for payment initialization
+- **Verification Endpoint**: `https://api.flutterwave.com/v3/transactions/verify_by_reference` for payment verification
+
+### Troubleshooting Payment Issues
+
+#### Common Errors:
+1. **Invalid credentials**: Ensure `FLUTTERWAVE_PUBLIC_KEY` and `FLUTTERWAVE_SECRET_KEY` are correctly set
+2. **Network issues**: Check internet connectivity and Flutterwave API status
+3. **Invalid amount**: Ensure amount is in the correct format (e.g., "200.00" for USD)
+
+#### Solutions:
+1. **Verify credentials** in your `.env` file
+2. **Check Flutterwave dashboard** for API status
+3. **Use correct amount format** (string with 2 decimal places)
+4. **Contact Flutterwave support** if issues persist
 
 ## Support
 
@@ -1773,14 +1907,15 @@ SPONSORSHIP_CODE_LENGTH=10
 MAX_SPONSORSHIP_DURATION_MONTHS=12
 UPLOAD_MAX_FILE_SIZE=26214400
 UPLOAD_PATH=./uploads
-API_BASE_URL=https://api.themobileprof.com
+BASE_URL=https://api.themobileprof.com
 CORS_ORIGIN=https://themobileprof.com
 TINYMCE_API_KEY=your-tinymce-api-key
 ADMIN_DEFAULT_EMAIL=admin@themobileprof.com
 ADMIN_DEFAULT_PASSWORD=secure_admin_password
-FLUTTERWAVE_PUBLIC_KEY=your-flutterwave-public-key
-FLUTTERWAVE_SECRET_KEY=your-flutterwave-secret-key
-FLUTTERWAVE_WEBHOOK_SECRET=your-webhook-secret
+# Flutterwave v3 (Stable) - API-based authentication
+FLUTTERWAVE_PUBLIC_KEY=your_flutterwave_public_key
+FLUTTERWAVE_SECRET_KEY=your_flutterwave_secret_key
+FLUTTERWAVE_SECRET_HASH=your-webhook-secret-hash
 GOOGLE_CLIENT_ID=your-google-client-id
 GOOGLE_CLIENT_SECRET=your-google-client-secret
 ```
@@ -3226,7 +3361,9 @@ Authorization: Bearer <jwt-token>
 
 ### Payments Endpoints (Flutterwave Standard v3.0.0)
 
-> **Note:** The payment system uses **hosted payment integration** with Flutterwave Standard v3.0.0, providing a secure and reliable payment experience. The system also uses a **dual-verification approach**: Primary verification via frontend SDK and backup verification via webhook. The callback URL can be provided by the frontend or will fall back to the `FRONTEND_URL` environment variable.
+> **Note:** The payment system uses **hosted payment integration** with Flutterwave Standard v3.0.0, providing a clean, reliable, and secure payment experience. The system uses **direct API authentication** and **verification** with Flutterwave's v3 API for reliable transaction tracking.
+
+> **✅ Current Implementation:** The system uses **Flutterwave v3 API** (stable and production-ready) for reliable payment processing.
 
 #### Initialize Payment
 **POST** `/payments/initialize`
@@ -3305,54 +3442,7 @@ Content-Type: application/json
 }
 ```
 
-#### Get Payment Modal Configuration
-**GET** `/payments/modal-config/:paymentId`
 
-Get payment configuration for modal/popup integration.
-
-**Headers:**
-```
-Authorization: Bearer <jwt-token>
-```
-
-**Parameters:**
-- `paymentId` (required): UUID of the payment
-
-**Response (200):**
-```json
-{
-  "success": true,
-  "data": {
-    "payment_id": "uuid",
-    "reference": "TMP_1234567890_ABC123_ABCD1234",
-    "amount": 20000,
-    "currency": "USD",
-    "customer": {
-      "email": "user@example.com",
-      "phone_number": "+1234567890",
-      "name": "John Doe"
-    },
-    "customizations": {
-      "title": "TheMobileProf LMS",
-      "description": "Payment for Mobile Security Mastery course",
-      "logo": "https://themobileprof.com/assets/logo.jpg"
-    },
-    "payment_options": "card, ussd, banktransfer, mobilemoneyghana, mpesa",
-    "redirect_url": "https://themobileprof.com/payment/callback?reference=TMP_1234567890_ABC123_ABCD1234",
-    "public_key": "FLWPUBK_TEST-...",
-    "item_title": "Mobile Security Mastery",
-    "item_price": 200.00,
-    "payment_type": "course"
-  }
-}
-```
-
-**Error Response (404):**
-```json
-{
-  "error": "Payment not found"
-}
-```
 
 #### Get Supported Payment Methods
 **GET** `/payments/methods`
@@ -3385,10 +3475,10 @@ Get supported payment methods for a specific country.
 - **CM** (Cameroon): card, bank_transfer, mobile_money, franc_mobile_money
 - **ET** (Ethiopia): card, bank_transfer, mobile_money, emalipay
 
-#### Primary Payment Verification (Frontend SDK)
+#### Payment Verification
 **GET** `/payments/verify/:reference`
 
-Primary payment verification method. Called by frontend when user returns from Flutterwave.
+Payment verification method. Called by frontend when user returns from Flutterwave.
 
 **Headers:**
 ```
@@ -3396,9 +3486,9 @@ Authorization: Bearer <jwt-token>
 ```
 
 **Parameters:**
-- `reference` (required): Payment reference from Flutterwave
+- `reference` (required): Payment reference from our system (TMP_...)
 
-**Response (200):**
+**Response (200) - Success:**
 ```json
 {
   "success": true,
@@ -3416,9 +3506,22 @@ Authorization: Bearer <jwt-token>
 ```json
 {
   "error": "Payment Error",
-  "message": "Payment verification failed"
+  "message": "Payment verification failed",
+  "code": "PAYMENT_ERROR",
+  "details": {
+    "reference": "TMP_1234567890_ABC123",
+    "suggestedAction": "try_alternative_payment_method"
+  }
 }
 ```
+
+**Important Notes:**
+- **Flutterwave v3**: Stable, publicly available configuration
+- **Direct API Authentication**: Uses secret key for secure API access
+- **Direct Verification**: Payments are verified directly with Flutterwave's v3 API
+- **Clean Callbacks**: Redirect URLs include proper parameters for reliable tracking
+- **No Reference Mismatches**: Consistent reference handling throughout the payment flow
+- **Reliable**: v3 is production-ready and widely used
 
 **Enhanced Error Responses:**
 ```json
@@ -3494,7 +3597,8 @@ Authorization: Bearer <jwt-token>
   "status": "successful",
   "paymentMethod": "card",
   "reference": "TMP_1234567890_ABC123_ABCD1234",
-  "transactionId": "FLW123456789",
+  "flutterwaveReference": "TMP_1234567890_ABC123_ABCD1234",
+  "flutterwaveTransactionId": "FLW-MOCK-c83e69e60f6cda5fc89da7389bd20fe1",
   "errorMessage": null,
   "course": {
     "id": "uuid",
@@ -3520,6 +3624,8 @@ Authorization: Bearer <jwt-token>
   "message": "Payment not found"
 }
 ```
+
+
 
 #### Admin Payment Management
 

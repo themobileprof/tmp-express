@@ -3,7 +3,7 @@
 # Test script for TheMobileProf LMS API endpoints
 # This script tests courses, lessons, and tests endpoints
 
-BASE_URL="https://api.themobileprof.com"
+BASE_URL="http://localhost:3000"
 EMAIL="info@themobileprof.com"
 PASSWORD="tummy654"
 

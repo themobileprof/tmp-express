@@ -94,7 +94,7 @@ const certificateUpload = createMulterConfig([...allowedImageTypes, ...allowedDo
 
 // Helper function to build file URL
 const buildFileUrl = (filename, subfolder) => {
-  const baseUrl = process.env.API_BASE_URL || 'https://api.themobileprof.com';
+  const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
   const url = `${baseUrl}/uploads/${subfolder}/${filename}`;
   console.log('🔗 Building URL:', { filename, subfolder, baseUrl, url });
   return url;
@@ -255,7 +255,7 @@ router.get('/debug', authenticateToken, asyncHandler(async (req, res) => {
     uploadDirs,
     env: {
       UPLOAD_PATH: process.env.UPLOAD_PATH,
-      API_BASE_URL: process.env.API_BASE_URL
+      BASE_URL: process.env.BASE_URL
     },
     directories: {}
   };

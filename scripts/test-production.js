@@ -5,7 +5,7 @@ const fs = require('fs');
 const path = require('path');
 
 // Configuration
-const BASE_URL = process.env.API_URL || 'https://your-domain.com/api';
+const BASE_URL = process.env.BASE_URL || 'https://api.themobileprof.com';
 const TEST_USER = {
   email: 'test@example.com',
   password: 'testpassword123'
