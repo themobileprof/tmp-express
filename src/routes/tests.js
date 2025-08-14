@@ -9,6 +9,88 @@ const fs = require('fs');
 
 const router = express.Router();
 
+// Helper function to update progress based on passed tests
+async function updateProgressFromTest(testId, userId, passed, forcedProceed = false) {
+  // Update progress for both passed tests and forced progression
+  if (!passed && !forcedProceed) return;
+
+  try {
+    // Get test details to determine if it's course-level or lesson-level
+    const test = await getRow(
+      `SELECT t.*, l.course_id as lesson_course_id 
+       FROM tests t 
+       LEFT JOIN lessons l ON t.lesson_id = l.id 
+       WHERE t.id = $1`,
+      [testId]
+    );
+
+    if (!test) return;
+
+    const courseId = test.course_id || test.lesson_course_id;
+    if (!courseId) return;
+
+    // Update lesson progress if this is a lesson test
+    if (test.lesson_id) {
+      try {
+        await query(
+          `INSERT INTO lesson_progress (user_id, lesson_id, status, completed_at, progress_percentage)
+           VALUES ($1, $2, 'completed', CURRENT_TIMESTAMP, 100)
+           ON CONFLICT (user_id, lesson_id) 
+           DO UPDATE SET 
+             status = 'completed',
+             completed_at = CURRENT_TIMESTAMP,
+             progress_percentage = 100,
+             updated_at = CURRENT_TIMESTAMP`,
+          [userId, test.lesson_id]
+        );
+      } catch (error) {
+        console.warn('Failed to update lesson_progress table:', error.message);
+        // Continue with course progress update even if lesson progress fails
+      }
+    }
+
+    // Calculate and update course progress
+    const courseProgress = await getRow(
+      `SELECT 
+         COUNT(DISTINCT l.id) as total_lessons,
+         COUNT(DISTINCT CASE WHEN lp.status = 'completed' THEN l.id END) as completed_lessons,
+         COUNT(DISTINCT t.id) as total_tests,
+         COUNT(DISTINCT CASE WHEN ta.status = 'completed' THEN t.id END) as completed_tests
+       FROM courses c
+       LEFT JOIN lessons l ON c.id = l.course_id AND l.is_published = true
+       LEFT JOIN lesson_progress lp ON l.id = lp.lesson_id AND lp.user_id = $1
+       LEFT JOIN tests t ON (t.course_id = c.id OR l.id = t.lesson_id)
+       LEFT JOIN test_attempts ta ON t.id = ta.test_id AND ta.user_id = $1
+       WHERE c.id = $2`,
+      [userId, courseId]
+    );
+
+    // Calculate progress percentage (50% from lessons, 50% from tests)
+    const lessonProgress = courseProgress.total_lessons > 0 
+      ? (courseProgress.completed_lessons / courseProgress.total_lessons) * 50 
+      : 0;
+    
+    const testProgress = courseProgress.total_tests > 0 
+      ? (courseProgress.completed_tests / courseProgress.total_tests) * 50 
+      : 0;
+    
+    const totalProgress = Math.round(lessonProgress + testProgress);
+
+    // Update course enrollment progress
+    await query(
+      `UPDATE enrollments 
+       SET progress = $1,
+           status = CASE WHEN $1 >= 100 THEN 'completed' ELSE status END,
+           completed_at = CASE WHEN $1 >= 100 THEN CURRENT_TIMESTAMP ELSE completed_at END
+       WHERE user_id = $2 AND course_id = $3`,
+      [totalProgress, userId, courseId]
+    );
+  } catch (error) {
+    console.error('Error updating progress from test:', error);
+    // Don't throw error to prevent test submission from failing
+  }
+}
+
 // Validation middleware
 const validateTest = [
   body('title').optional().trim().isLength({ min: 1 }).withMessage('Test title must not be empty if provided'),
@@ -347,8 +429,31 @@ router.post('/:id/start', authenticateToken, asyncHandler(async (req, res) => {
     [id, userId]
   );
 
-  if (parseInt(attemptCount.count) >= test.max_attempts) {
-    throw new AppError('Maximum attempts reached for this test', 400, 'Max Attempts Reached');
+  const currentAttempts = parseInt(attemptCount.count);
+  
+  if (currentAttempts >= test.max_attempts) {
+    // Check if user has any completed attempts
+    const lastAttempt = await getRow(
+      'SELECT * FROM test_attempts WHERE test_id = $1 AND user_id = $2 AND status = $3 ORDER BY completed_at DESC LIMIT 1',
+      [id, userId, 'completed']
+    );
+
+    if (lastAttempt) {
+      return res.status(400).json({
+        error: 'MAX_ATTEMPTS_REACHED',
+        message: 'Maximum attempts reached for this test',
+        details: {
+          maxAttempts: test.max_attempts,
+          currentAttempts: currentAttempts,
+          lastScore: lastAttempt.score,
+          passed: lastAttempt.score >= test.passing_score,
+          canProceed: true,
+          lastAttemptId: lastAttempt.id
+        }
+      });
+    } else {
+      throw new AppError('Maximum attempts reached for this test', 400, 'Max Attempts Reached');
+    }
   }
 
   // Check if user has an in-progress attempt
@@ -372,34 +477,126 @@ router.post('/:id/start', authenticateToken, asyncHandler(async (req, res) => {
   }
 
   // Create new attempt
-  const attemptNumber = parseInt(attemptCount.count) + 1;
-  const result = await query(
-    `INSERT INTO test_attempts (
-      test_id, user_id, attempt_number, total_questions, status
-    ) VALUES ($1, $2, $3, $4, $5)
-    RETURNING *`,
-    [id, userId, attemptNumber, questions.length, 'in_progress']
+  const attemptNumber = currentAttempts + 1;
+  
+  try {
+    const result = await query(
+      `INSERT INTO test_attempts (
+        test_id, user_id, attempt_number, total_questions, status
+      ) VALUES ($1, $2, $3, $4, $5)
+      RETURNING *`,
+      [id, userId, attemptNumber, questions.length, 'in_progress']
+    );
+
+    const attempt = result.rows[0];
+
+    console.log(`Created test attempt: ${attempt.id} with status: ${attempt.status}`);
+
+    // Verify the attempt was created correctly
+    if (attempt.status !== 'in_progress') {
+      console.error(`Warning: Attempt created with wrong status: ${attempt.status}`);
+    }
+
+    res.json({
+      attempt: {
+        id: attempt.id,
+        testId: attempt.test_id,
+        userId: attempt.user_id,
+        attemptNumber: attempt.attempt_number,
+        status: attempt.status,
+        startedAt: attempt.started_at
+      },
+      questions: questions.map(q => ({
+        id: q.id,
+        question: q.question,
+        questionType: q.question_type,
+        options: q.question_type === 'multiple_choice' ? q.options : undefined,
+        points: q.points,
+        orderIndex: q.order_index
+      }))
+    });
+  } catch (error) {
+    console.error('Error creating test attempt:', error);
+    throw new AppError('Failed to create test attempt', 500, 'Database Error');
+  }
+}));
+
+// Get test attempt status (for debugging)
+router.get('/:id/attempts/:attemptId/status', authenticateToken, asyncHandler(async (req, res) => {
+  const { id, attemptId } = req.params;
+  const userId = req.user.id;
+
+  const attempt = await getRow(
+    'SELECT * FROM test_attempts WHERE id = $1 AND test_id = $2 AND user_id = $3',
+    [attemptId, id, userId]
   );
 
-  const attempt = result.rows[0];
+  if (!attempt) {
+    throw new AppError('Attempt not found', 404, 'Attempt Not Found');
+  }
 
   res.json({
-    attempt: {
-      id: attempt.id,
-      testId: attempt.test_id,
-      userId: attempt.user_id,
-      attemptNumber: attempt.attempt_number,
-      status: attempt.status,
-      startedAt: attempt.started_at
-    },
-    questions: questions.map(q => ({
-      id: q.id,
-      question: q.question,
-      questionType: q.question_type,
-      options: q.question_type === 'multiple_choice' ? q.options : undefined,
-      points: q.points,
-      orderIndex: q.order_index
-    }))
+    attemptId: attempt.id,
+    status: attempt.status,
+    startedAt: attempt.started_at,
+    completedAt: attempt.completed_at,
+    score: attempt.score,
+    totalQuestions: attempt.total_questions,
+    correctAnswers: attempt.correct_answers
+  });
+}));
+
+// Force proceed after max attempts
+router.post('/:id/proceed', authenticateToken, asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const userId = req.user.id;
+
+  // Verify test exists and is published
+  const test = await getRow('SELECT * FROM tests WHERE id = $1 AND is_published = true', [id]);
+  if (!test) {
+    throw new AppError('Test not found or not published', 404, 'Test Not Found');
+  }
+
+  // Check if user has reached max attempts
+  const attemptCount = await getRow(
+    'SELECT COUNT(*) as count FROM test_attempts WHERE test_id = $1 AND user_id = $2',
+    [id, userId]
+  );
+
+  const currentAttempts = parseInt(attemptCount.count);
+  
+  if (currentAttempts < test.max_attempts) {
+    throw new AppError('You still have attempts remaining for this test', 400, 'Attempts Remaining');
+  }
+
+  // Get the last completed attempt
+  const lastAttempt = await getRow(
+    'SELECT * FROM test_attempts WHERE test_id = $1 AND user_id = $2 AND status = $3 ORDER BY completed_at DESC LIMIT 1',
+    [id, userId, 'completed']
+  );
+
+  if (!lastAttempt) {
+    throw new AppError('No completed attempts found to proceed with', 400, 'No Completed Attempts');
+  }
+
+  // Mark the test as passed for progress calculation (even if score is below passing)
+  const passed = lastAttempt.score >= test.passing_score;
+  
+  // Update progress based on the last attempt score
+  await updateProgressFromTest(id, userId, passed, true);
+
+  res.json({
+    message: 'Proceeding with last attempt score',
+    details: {
+      lastAttemptId: lastAttempt.id,
+      score: lastAttempt.score,
+      totalQuestions: lastAttempt.total_questions,
+      correctAnswers: lastAttempt.correct_answers,
+      timeTakenMinutes: lastAttempt.time_taken_minutes,
+      completedAt: lastAttempt.completed_at,
+      passed: passed,
+      forcedProceed: true
+    }
   });
 }));
 
@@ -493,16 +690,46 @@ router.put('/:id/attempts/:attemptId/answer', authenticateToken, validateAnswer,
 // Submit test
 router.post('/:id/attempts/:attemptId/submit', authenticateToken, asyncHandler(async (req, res) => {
   const { id, attemptId } = req.params;
+  const { forceProceed = false } = req.body;
   const userId = req.user.id;
 
-  // Verify attempt exists and belongs to user
+  console.log(`Submitting test attempt: ${attemptId} for test: ${id} by user: ${userId}`);
+
+  // Verify attempt exists and belongs to user (check for any status)
   const attempt = await getRow(
-    'SELECT * FROM test_attempts WHERE id = $1 AND test_id = $2 AND user_id = $3 AND status = $4',
-    [attemptId, id, userId, 'in_progress']
+    'SELECT * FROM test_attempts WHERE id = $1 AND test_id = $2 AND user_id = $3',
+    [attemptId, id, userId]
   );
 
   if (!attempt) {
-    throw new AppError('Attempt not found or not in progress', 404, 'Attempt Not Found');
+    console.log(`Attempt not found: ${attemptId}`);
+    throw new AppError('Attempt not found', 404, 'Attempt Not Found');
+  }
+
+  console.log(`Found attempt: ${attempt.id} with status: ${attempt.status}`);
+
+  // Check if attempt is already completed
+  if (attempt.status === 'completed') {
+    console.log(`Attempt already completed: ${attempt.id}`);
+    return res.json({
+      results: {
+        attemptId: attempt.id,
+        score: attempt.score,
+        totalQuestions: attempt.total_questions,
+        correctAnswers: attempt.correct_answers,
+        timeTakenMinutes: attempt.time_taken_minutes,
+        completedAt: attempt.completed_at,
+        passed: attempt.score >= (await getRow('SELECT passing_score FROM tests WHERE id = $1', [id])).passing_score,
+        alreadyCompleted: true,
+        message: 'Test was already completed'
+      }
+    });
+  }
+
+  // Check if attempt is in progress
+  if (attempt.status !== 'in_progress') {
+    console.log(`Invalid attempt status: ${attempt.status}`);
+    throw new AppError(`Attempt is in ${attempt.status} status and cannot be submitted`, 400, 'Invalid Attempt Status');
   }
 
   // Get test details
@@ -514,6 +741,8 @@ router.post('/:id/attempts/:attemptId/submit', authenticateToken, asyncHandler(a
     [attemptId]
   );
 
+  console.log(`Found ${answers.length} answers for attempt: ${attemptId}`);
+
   const totalPoints = answers.reduce((sum, answer) => sum + answer.points_earned, 0);
   const maxPoints = answers.reduce((sum, answer) => sum + answer.points_earned, 0);
   const correctAnswers = answers.filter(answer => answer.is_correct).length;
@@ -521,6 +750,8 @@ router.post('/:id/attempts/:attemptId/submit', authenticateToken, asyncHandler(a
   // Calculate percentage score
   const score = maxPoints > 0 ? Math.round((totalPoints / maxPoints) * 100) : 0;
   const passed = score >= test.passing_score;
+
+  console.log(`Calculated score: ${score}/${maxPoints}, passed: ${passed}`);
 
   // Calculate time taken
   const timeTakenMinutes = Math.round((Date.now() - new Date(attempt.started_at).getTime()) / (1000 * 60));
@@ -533,6 +764,14 @@ router.post('/:id/attempts/:attemptId/submit', authenticateToken, asyncHandler(a
     [score, correctAnswers, 'completed', timeTakenMinutes, attemptId]
   );
 
+  console.log(`Updated attempt status to completed: ${attemptId}`);
+
+  // Update progress if the test was passed OR if user is forcing progression
+  if (passed || forceProceed) {
+    console.log(`Updating progress for test: ${id}`);
+    await updateProgressFromTest(id, userId, passed, forceProceed);
+  }
+
   res.json({
     results: {
       attemptId: attempt.id,
@@ -541,7 +780,9 @@ router.post('/:id/attempts/:attemptId/submit', authenticateToken, asyncHandler(a
       correctAnswers,
       timeTakenMinutes,
       completedAt: new Date().toISOString(),
-      passed
+      passed,
+      forceProceed: forceProceed && !passed,
+      message: forceProceed && !passed ? 'Proceeding despite not passing' : (passed ? 'Test passed!' : 'Test completed')
     }
   });
 }));

@@ -2229,6 +2229,27 @@ Authorization: Bearer <jwt-token>
 }
 ```
 
+**Error Response (400) - Max Attempts Reached:**
+```json
+{
+  "error": "MAX_ATTEMPTS_REACHED",
+  "message": "Maximum attempts reached for this test",
+  "details": {
+    "maxAttempts": 3,
+    "currentAttempts": 3,
+    "lastScore": 65,
+    "passed": false,
+    "canProceed": true,
+    "lastAttemptId": "uuid"
+  }
+}
+```
+
+**Notes:**
+- When max attempts are reached, the response includes details about the last attempt
+- Users can use the `/proceed` endpoint to continue with their last score
+- This prevents users from getting completely stuck on a test
+
 #### Submit Answer
 **PUT** `/api/tests/:id/attempts/:attemptId/answer`
 
@@ -2267,7 +2288,18 @@ Submit completed test.
 **Headers:**
 ```
 Authorization: Bearer <jwt-token>
+Content-Type: application/json
 ```
+
+**Request Body:**
+```json
+{
+  "forceProceed": false
+}
+```
+
+**Optional Fields:**
+- `forceProceed` - Allow progression even if test is not passed (boolean, default: false)
 
 **Response (200):**
 ```json
@@ -2279,10 +2311,53 @@ Authorization: Bearer <jwt-token>
     "correctAnswers": 17,
     "timeTakenMinutes": 45,
     "completedAt": "2024-01-01T01:00:00.000Z",
-    "passed": true
+    "passed": true,
+    "forceProceed": false,
+    "message": "Test passed!"
   }
 }
 ```
+
+**Notes:**
+- When a test is passed, course and lesson progress are automatically updated
+- For lesson tests: the lesson is marked as completed and course progress is recalculated
+- For course tests: course progress is updated based on test completion
+- Progress calculation: 50% from completed lessons, 50% from completed tests
+- Use `forceProceed: true` to allow progression even with failing scores
+- Forced progression still updates course progress but marks the test as completed
+
+#### Force Proceed After Max Attempts
+**POST** `/api/tests/:id/proceed`
+
+Force progression after reaching maximum attempts. This allows users to proceed with their last attempt score even if they didn't pass.
+
+**Headers:**
+```
+Authorization: Bearer <jwt-token>
+```
+
+**Response (200):**
+```json
+{
+  "message": "Proceeding with last attempt score",
+  "details": {
+    "lastAttemptId": "uuid",
+    "score": 65,
+    "totalQuestions": 20,
+    "correctAnswers": 13,
+    "timeTakenMinutes": 45,
+    "completedAt": "2024-01-01T01:00:00.000Z",
+    "passed": false,
+    "forcedProceed": true
+  }
+}
+```
+
+**Notes:**
+- Only available after reaching maximum attempts
+- Uses the last completed attempt score for progression
+- Updates course progress even if the test wasn't passed
+- Useful for preventing users from getting stuck on a test
 
 #### Get Test Results
 **GET** `/api/tests/:id/attempts/:attemptId/results`
@@ -2473,9 +2548,9 @@ Authorization: Bearer <jwt-token>
 ```
 
 #### Create Course Test
-**POST** `/api/courses/:id/tests`
+**Note:** This endpoint is not currently implemented. Tests are created at the lesson level instead.
 
-Create a new test for a course (instructor/admin only).
+**Alternative:** Use `POST /api/admin/lessons/:lessonId/tests` to create tests for individual lessons within a course.
 
 **Headers:**
 ```
@@ -2486,14 +2561,14 @@ Content-Type: application/json
 **Request Body:**
 ```json
 {
-  "title": "Course Final Exam",
-  "description": "Comprehensive test covering all course material",
-  "durationMinutes": 120,
-  "passingScore": 70,
-  "maxAttempts": 2,
+  "title": "Lesson Quiz",
+  "description": "Test covering lesson material",
+  "durationMinutes": 30,
+  "passingScore": 80,
+  "maxAttempts": 3,
   "questions": [
     {
-      "question": "What is the main purpose of this course?",
+      "question": "What did you learn in this lesson?",
       "questionType": "multiple_choice",
       "options": ["Option A", "Option B", "Option C", "Option D"],
       "correctAnswer": 0,
@@ -3858,6 +3933,57 @@ Authorization: Bearer <jwt-token>
 }
 ```
 
+#### Mark Lesson as Completed
+**POST** `/api/lessons/:id/complete`
+
+Mark a lesson as completed for the authenticated user. This will automatically update course progress.
+
+**Headers:**
+```
+Authorization: Bearer <jwt-token>
+Content-Type: application/json
+```
+
+**Request Body:**
+```json
+{
+  "timeSpentMinutes": 45
+}
+```
+
+**Optional Fields:**
+- `timeSpentMinutes` - Time spent on the lesson in minutes (number, default: 0)
+
+**Response (200):**
+```json
+{
+  "message": "Lesson marked as completed",
+  "lessonId": "uuid",
+  "completedAt": "2024-01-01T00:00:00.000Z"
+}
+```
+
+#### Get Lesson Progress
+**GET** `/api/lessons/:id/progress`
+
+Get the current progress for a lesson for the authenticated user.
+
+**Headers:**
+```
+Authorization: Bearer <jwt-token>
+```
+
+**Response (200):**
+```json
+{
+  "lessonId": "uuid",
+  "isCompleted": true,
+  "progressPercentage": 100,
+  "timeSpentMinutes": 45,
+  "completedAt": "2024-01-01T00:00:00.000Z"
+}
+```
+
 #### Get All Lessons for a Course (Admin)
 **GET** `/admin/courses/:courseId/lessons`
 
@@ -4040,3 +4166,41 @@ Authorization: Bearer <jwt-token>
 **Error Responses:**
 - `404` - Course not found
 - `401` - Unauthorized (invalid or missing token)
+
+#### Update Course Enrollment Progress
+**PUT** `/api/courses/:id/enrollments/:enrollmentId`
+
+Update the progress of a course enrollment for the authenticated user. This endpoint allows manual progress updates and is also used automatically by the progress tracking system.
+
+**Headers:**
+```
+Authorization: Bearer <jwt-token>
+Content-Type: application/json
+```
+
+**Request Body:**
+```json
+{
+  "progress": 75,
+  "status": "in_progress"
+}
+```
+
+**Fields:**
+- `progress` - Progress percentage (0-100, number, optional)
+- `status` - Enrollment status: "pending", "in_progress", "completed", "dropped" (string, optional)
+
+**Response (200):**
+```json
+{
+  "id": "uuid",
+  "progress": 75,
+  "status": "in_progress",
+  "completedAt": null
+}
+```
+
+**Notes:**
+- Progress is automatically calculated when lessons are completed or tests are passed
+- Setting status to "completed" will automatically set `completedAt` timestamp
+- Progress of 100% will automatically set status to "completed"

@@ -6,6 +6,59 @@ const { authenticateToken, authorizeOwnerOrAdmin } = require('../middleware/auth
 
 const router = express.Router();
 
+// Helper function to update course progress when lesson is completed
+async function updateCourseProgressFromLesson(lessonId, userId) {
+  try {
+    // Get lesson details
+    const lesson = await getRow(
+      'SELECT l.*, c.id as course_id FROM lessons l JOIN courses c ON l.course_id = c.id WHERE l.id = $1',
+      [lessonId]
+    );
+
+    if (!lesson) return;
+
+    // Calculate and update course progress
+    const courseProgress = await getRow(
+      `SELECT 
+         COUNT(DISTINCT l.id) as total_lessons,
+         COUNT(DISTINCT CASE WHEN lp.status = 'completed' THEN l.id END) as completed_lessons,
+         COUNT(DISTINCT t.id) as total_tests,
+         COUNT(DISTINCT CASE WHEN ta.status = 'completed' AND ta.score >= t.passing_score THEN t.id END) as passed_tests
+       FROM courses c
+       LEFT JOIN lessons l ON c.id = l.course_id AND l.is_published = true
+       LEFT JOIN lesson_progress lp ON l.id = lp.lesson_id AND lp.user_id = $1
+       LEFT JOIN tests t ON (t.course_id = c.id OR l.id = t.lesson_id)
+       LEFT JOIN test_attempts ta ON t.id = ta.test_id AND ta.user_id = $1
+       WHERE c.id = $2`,
+      [userId, lesson.course_id]
+    );
+
+    // Calculate progress percentage (50% from lessons, 50% from tests)
+    const lessonProgress = courseProgress.total_lessons > 0 
+      ? (courseProgress.completed_lessons / courseProgress.total_lessons) * 50 
+      : 0;
+    
+    const testProgress = courseProgress.total_tests > 0 
+      ? (courseProgress.passed_tests / courseProgress.total_tests) * 50 
+      : 0;
+    
+    const totalProgress = Math.round(lessonProgress + testProgress);
+
+    // Update course enrollment progress
+    await query(
+      `UPDATE enrollments 
+       SET progress = $1,
+           status = CASE WHEN $1 >= 100 THEN 'completed' ELSE status END,
+           completed_at = CASE WHEN $1 >= 100 THEN CURRENT_TIMESTAMP ELSE completed_at END
+       WHERE user_id = $2 AND course_id = $3`,
+      [totalProgress, userId, lesson.course_id]
+    );
+  } catch (error) {
+    console.error('Error updating course progress from lesson:', error);
+    // Don't throw error to prevent lesson completion from failing
+  }
+}
+
 // Validation middleware
 const validateLesson = [
   body('title').trim().isLength({ min: 1 }).withMessage('Lesson title is required'),
@@ -156,6 +209,84 @@ router.get('/:id/tests', authenticateToken, asyncHandler(async (req, res) => {
       createdAt: t.created_at,
       updatedAt: t.updated_at
     }))
+  });
+}));
+
+// Mark lesson as completed for user
+router.post('/:id/complete', authenticateToken, asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const userId = req.user.id;
+  const { timeSpentMinutes = 0 } = req.body;
+
+  // Verify lesson exists and user is enrolled in the course
+  const lesson = await getRow(
+    `SELECT l.*, c.id as course_id 
+     FROM lessons l 
+     JOIN courses c ON l.course_id = c.id
+     JOIN enrollments e ON c.id = e.course_id
+     WHERE l.id = $1 AND e.user_id = $2 AND l.is_published = true`,
+    [id, userId]
+  );
+
+  if (!lesson) {
+    throw new AppError('Lesson not found or you are not enrolled in this course', 404, 'Lesson Not Found');
+  }
+
+  // Update or insert lesson progress
+  await query(
+    `INSERT INTO lesson_progress (user_id, lesson_id, status, completed_at, progress_percentage, time_spent_minutes)
+     VALUES ($1, $2, 'completed', CURRENT_TIMESTAMP, 100, $3)
+     ON CONFLICT (user_id, lesson_id) 
+     DO UPDATE SET 
+       status = 'completed',
+       completed_at = CURRENT_TIMESTAMP,
+       progress_percentage = 100,
+       time_spent_minutes = $3,
+       updated_at = CURRENT_TIMESTAMP`,
+    [userId, id, timeSpentMinutes]
+  );
+
+  // Update course progress
+  await updateCourseProgressFromLesson(id, userId);
+
+  res.json({
+    message: 'Lesson marked as completed',
+    lessonId: id,
+    completedAt: new Date().toISOString()
+  });
+}));
+
+// Get lesson progress for user
+router.get('/:id/progress', authenticateToken, asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const userId = req.user.id;
+
+  // Verify lesson exists and user is enrolled in the course
+  const lesson = await getRow(
+    `SELECT l.*, c.id as course_id 
+     FROM lessons l 
+     JOIN courses c ON l.course_id = c.id
+     JOIN enrollments e ON c.id = e.course_id
+     WHERE l.id = $1 AND e.user_id = $2`,
+    [id, userId]
+  );
+
+  if (!lesson) {
+    throw new AppError('Lesson not found or you are not enrolled in this course', 404, 'Lesson Not Found');
+  }
+
+  // Get lesson progress
+  const progress = await getRow(
+    'SELECT * FROM lesson_progress WHERE user_id = $1 AND lesson_id = $2',
+    [userId, id]
+  );
+
+  res.json({
+    lessonId: id,
+    isCompleted: progress ? progress.status === 'completed' : false,
+    progressPercentage: progress ? progress.progress_percentage : 0,
+    timeSpentMinutes: progress ? progress.time_spent_minutes : 0,
+    completedAt: progress ? progress.completed_at : null
   });
 }));
 
