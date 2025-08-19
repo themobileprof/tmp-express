@@ -402,7 +402,7 @@ Authorization: Bearer <jwt-token>
 #### Sponsorship Management
 
 ##### Get All Sponsorships (Admin)
-**GET** `/admin/sponsorships`
+**GET** `/api/admin/sponsorships`
 
 Get list of all sponsorships with admin details.
 
@@ -448,7 +448,7 @@ Authorization: Bearer <jwt-token>
 ```
 
 ##### Create Sponsorship (Admin)
-**POST** `/admin/sponsorships`
+**POST** `/api/admin/sponsorships`
 
 Create a new sponsorship.
 
@@ -491,7 +491,7 @@ Authorization: Bearer <jwt-token>
 ```
 
 ##### Get Sponsorship Usage (Admin)
-**GET** `/admin/sponsorships/:id/usage`
+**GET** `/api/admin/sponsorships/:id/usage`
 
 Get usage details for a specific sponsorship.
 
@@ -518,7 +518,7 @@ Authorization: Bearer <jwt-token>
 ```
 
 ##### Update Sponsorship Status (Admin)
-**PUT** `/admin/sponsorships/:id/status`
+**PUT** `/api/admin/sponsorships/:id/status`
 
 Update sponsorship status (admin only).
 
@@ -547,10 +547,10 @@ Authorization: Bearer <jwt-token>
 }
 ```
 
-##### Get Sponsorship Statistics (Admin)
-**GET** `/admin/sponsorships/stats`
+##### Get Admin Overview (Includes Sponsorship Stats)
+**GET** `/api/admin/stats/overview`
 
-Get comprehensive sponsorship statistics (admin only).
+Get overall admin statistics including users, courses, tests, enrollments, and sponsorships.
 
 **Headers:**
 ```
@@ -560,38 +560,41 @@ Authorization: Bearer <jwt-token>
 **Response (200):**
 ```json
 {
-  "overview": {
-    "totalSponsorships": 45,
-    "activeSponsorships": 32,
-    "pausedSponsorships": 8,
-    "expiredSponsorships": 5,
-    "totalStudentsHelped": 1250,
-    "totalSavings": 45200.25
+  "users": {
+    "total": 2542,
+    "students": 2245,
+    "instructors": 285,
+    "admins": 3,
+    "sponsors": 12,
+    "new_this_month": 156
   },
-  "topSponsors": [
-    {
-      "sponsorId": "uuid",
-      "sponsorName": "TechCorp Inc",
-      "sponsorshipsCreated": 12,
-      "studentsHelped": 450,
-      "totalSavings": 15000.00
-    }
-  ],
-  "monthlyStats": [
-    {
-      "month": "2024-01",
-      "newSponsorships": 8,
-      "studentsEnrolled": 125,
-      "totalSavings": 8500.00
-    }
-  ]
+  "courses": {
+    "total": 124,
+    "published": 98,
+    "draft": 26
+  },
+  "tests": {
+    "total": 856,
+    "published": 734,
+    "draft": 122
+  },
+  "enrollments": {
+    "total_enrollments": 15420,
+    "completed": 8560,
+    "in_progress": 6860
+  },
+  "sponsorships": {
+    "total_sponsorships": 45,
+    "active": 32,
+    "total_students_helped": 1250
+  }
 }
 ```
 
 #### Discussion Management
 
 ##### Get All Discussions (Admin)
-**GET** `/admin/discussions`
+**GET** `/api/admin/discussions`
 
 Get list of all discussions with admin details.
 
@@ -635,7 +638,7 @@ Authorization: Bearer <jwt-token>
 ```
 
 ##### Update Discussion (Admin)
-**PUT** `/admin/discussions/:id`
+**PUT** `/api/admin/discussions/:id`
 
 Update discussion (moderation).
 
@@ -669,7 +672,7 @@ Authorization: Bearer <jwt-token>
 #### Certification Management
 
 ##### Get All Certifications (Admin)
-**GET** `/admin/certifications`
+**GET** `/api/admin/certifications`
 
 Get list of all certifications with admin details.
 
@@ -715,7 +718,7 @@ Authorization: Bearer <jwt-token>
 ```
 
 ##### Create Certification (Admin)
-**POST** `/admin/certifications`
+**POST** `/api/admin/certifications`
 
 Create a new certification.
 
@@ -759,7 +762,7 @@ Authorization: Bearer <jwt-token>
 #### Payment Management
 
 ##### Get Payment History (Admin)
-**GET** `/admin/payments`
+**GET** `/api/admin/payments`
 
 Get payment history with admin details.
 
@@ -854,7 +857,7 @@ Authorization: Bearer <jwt-token>
 #### System Statistics
 
 ##### Get System Overview (Admin)
-**GET** `/admin/stats/overview`
+**GET** `/api/admin/stats/overview`
 
 Get comprehensive system overview statistics.
 
@@ -900,7 +903,7 @@ Authorization: Bearer <jwt-token>
 ```
 
 ##### Get User Statistics (Admin)
-**GET** `/admin/stats/users`
+**GET** `/api/admin/stats/users`
 
 Get detailed user statistics and analytics.
 
@@ -946,7 +949,7 @@ Authorization: Bearer <jwt-token>
 ```
 
 ##### Get Course Statistics (Admin)
-**GET** `/admin/stats/courses`
+**GET** `/api/admin/stats/courses`
 
 Get detailed course statistics and analytics.
 
@@ -2452,8 +2455,55 @@ Authorization: Bearer <jwt-token>
 }
 ```
 
-#### List All Attempts for a Test (Admin/Instructor)
+#### List All Attempts for a Test (Admin/Instructor Only)
 **GET** `/api/tests/:id/attempts`
+
+**Note:** This endpoint is restricted to test owners (instructors) and admins only. Students should use `/api/tests/:id/my-attempts` to view their own attempts.
+
+**Headers:**
+```
+Authorization: Bearer <jwt-token>
+```
+
+**Query Parameters:**
+- `limit` - Number of results to return (default: 20, max: 100)
+- `offset` - Number of results to skip (default: 0)
+
+**Response (200):**
+```json
+{
+  "test": {
+    "id": "uuid",
+    "title": "JavaScript Quiz",
+    "passingScore": 70
+  },
+  "attempts": [
+    {
+      "id": "uuid",
+      "userId": "uuid",
+      "userName": "John Doe",
+      "userEmail": "john@example.com",
+      "attemptNumber": 1,
+      "score": 85,
+      "totalQuestions": 20,
+      "correctAnswers": 17,
+      "status": "completed",
+      "startedAt": "2024-01-01T00:00:00.000Z",
+      "completedAt": "2024-01-01T01:00:00.000Z",
+      "timeTakenMinutes": 60,
+      "passed": true
+    }
+  ],
+  "pagination": {
+    "total": 25,
+    "limit": 20,
+    "offset": 0
+  }
+}
+```
+
+#### Get User's Own Test Attempts (Student View)
+**GET** `/api/tests/:id/my-attempts`
 
 **Headers:**
 ```
@@ -2463,18 +2513,28 @@ Authorization: Bearer <jwt-token>
 **Response (200):**
 ```json
 {
+  "test": {
+    "id": "uuid",
+    "title": "JavaScript Quiz",
+    "passingScore": 70,
+    "maxAttempts": 3
+  },
   "attempts": [
     {
       "id": "uuid",
-      "studentName": "John Doe",
-      "studentEmail": "john@example.com",
-      "score": 85,
-      "timeSpent": 42,
       "attemptNumber": 1,
-      "completedAt": "2024-07-01T12:00:00Z",
-      "status": "completed"
+      "score": 85,
+      "totalQuestions": 20,
+      "correctAnswers": 17,
+      "status": "completed",
+      "startedAt": "2024-01-01T00:00:00.000Z",
+      "completedAt": "2024-01-01T01:00:00.000Z",
+      "timeTakenMinutes": 60,
+      "passed": true
     }
-  ]
+  ],
+  "currentAttempts": 1,
+  "canStartNew": true
 }
 ```
 
@@ -3434,6 +3494,489 @@ Authorization: Bearer <jwt-token>
 
 > **Note:** The `studyTimeThisMonth` field has been removed and is no longer returned by this endpoint.
 
+### Sponsorships Endpoints
+
+#### Get All Sponsorships (Sponsor)
+**GET** `/api/sponsorships`
+
+Get list of sponsorships for the authenticated sponsor.
+
+**Headers:**
+```
+Authorization: Bearer <jwt-token>
+```
+
+**Query Parameters:**
+- `status` - Filter by status (active, paused, expired, completed)
+- `courseId` - Filter by course ID
+
+**Response (200):**
+```json
+{
+  "sponsorships": [
+    {
+      "id": "uuid",
+      "courseId": "uuid",
+      "courseTitle": "JavaScript Fundamentals",
+      "coursePrice": 99.99,
+      "discountCode": "SPONSOR123",
+      "discountType": "percentage",
+      "discountValue": 20,
+      "maxStudents": 50,
+      "studentsUsed": 25,
+      "remainingSpots": 25,
+      "startDate": "2024-01-01",
+      "endDate": "2024-12-31",
+      "status": "active",
+      "completionRate": 75.5,
+      "notes": "Special discount for students",
+      "createdAt": "2024-01-01T00:00:00.000Z"
+    }
+  ]
+}
+```
+
+#### Create Sponsorship
+**POST** `/api/sponsorships`
+
+Create a new sponsorship (sponsor only).
+
+**Headers:**
+```
+Authorization: Bearer <jwt-token>
+Content-Type: application/json
+```
+
+**Request Body:**
+```json
+{
+  "courseId": "uuid",
+  "discountType": "percentage",
+  "discountValue": 20,
+  "maxStudents": 50,
+  "duration": 6,
+  "notes": "Special discount for students"
+}
+```
+
+**Response (201):**
+```json
+{
+  "id": "uuid",
+  "sponsorId": "uuid",
+  "courseId": "uuid",
+  "discountCode": "SPONSOR123",
+  "discountType": "percentage",
+  "discountValue": 20,
+  "maxStudents": 50,
+  "studentsUsed": 0,
+  "startDate": "2024-01-01",
+  "endDate": "2024-07-01",
+  "status": "active",
+  "completionRate": 0,
+  "createdAt": "2024-01-01T00:00:00.000Z"
+}
+```
+
+#### Get Specific Sponsorship
+**GET** `/api/sponsorships/:id`
+
+Get details of a specific sponsorship.
+
+**Headers:**
+```
+Authorization: Bearer <jwt-token>
+```
+
+**Response (200):**
+```json
+{
+  "id": "uuid",
+  "sponsorId": "uuid",
+  "sponsorName": "John Doe",
+  "courseId": "uuid",
+  "courseTitle": "JavaScript Fundamentals",
+  "coursePrice": 99.99,
+  "courseDescription": "Learn JavaScript from scratch",
+  "discountCode": "SPONSOR123",
+  "discountType": "percentage",
+  "discountValue": 20,
+  "maxStudents": 50,
+  "studentsUsed": 25,
+  "remainingSpots": 25,
+  "startDate": "2024-01-01",
+  "endDate": "2024-12-31",
+  "status": "active",
+  "completionRate": 75.5,
+  "notes": "Special discount for students",
+  "createdAt": "2024-01-01T00:00:00.000Z"
+}
+```
+
+#### Update Sponsorship
+**PUT** `/sponsorships/:id`
+
+Update sponsorship details (owner/admin only).
+
+**Headers:**
+```
+Authorization: Bearer <jwt-token>
+Content-Type: application/json
+```
+
+**Request Body:**
+```json
+{
+  "status": "paused",
+  "notes": "Updated notes"
+}
+```
+
+**Response (200):**
+```json
+{
+  "id": "uuid",
+  "status": "paused",
+  "notes": "Updated notes",
+  "updatedAt": "2024-01-01T00:00:00.000Z"
+}
+```
+
+#### Delete Sponsorship
+**DELETE** `/api/sponsorships/:id`
+
+Delete a sponsorship (owner/admin only).
+
+**Headers:**
+```
+Authorization: Bearer <jwt-token>
+```
+
+**Response (200):**
+```json
+{
+  "message": "Sponsorship deleted successfully"
+}
+```
+
+#### Use Sponsorship Code
+**POST** `/api/sponsorships/:id/use`
+
+Use a sponsorship code for enrollment.
+
+**Headers:**
+```
+Authorization: Bearer <jwt-token>
+Content-Type: application/json
+```
+
+**Request Body:**
+```json
+{
+  "studentId": "uuid",
+  "courseId": "uuid"
+}
+```
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "originalPrice": 99.99,
+  "discountAmount": 19.99,
+  "finalPrice": 80.00,
+  "message": "Sponsorship code applied successfully"
+}
+```
+
+#### Validate Sponsorship Code
+**GET** `/api/sponsorships/code/:discountCode`
+
+Validate a sponsorship discount code (public endpoint).
+
+**Response (200):**
+```json
+{
+  "valid": true,
+  "sponsorship": {
+    "id": "uuid",
+    "courseName": "JavaScript Fundamentals",
+    "coursePrice": 99.99,
+    "discountType": "percentage",
+    "discountValue": 20,
+    "maxStudents": 50,
+    "studentsUsed": 25,
+    "remainingSpots": 25,
+    "startDate": "2024-01-01",
+    "endDate": "2024-12-31",
+    "isExpired": false,
+    "isFull": false
+  }
+}
+```
+
+#### Get Sponsorship Statistics
+**GET** `/api/sponsorships/:id/stats`
+
+Get detailed sponsorship statistics (owner/admin only).
+
+**Headers:**
+```
+Authorization: Bearer <jwt-token>
+```
+
+**Response (200):**
+```json
+{
+  "sponsorship": {
+    "id": "uuid",
+    "courseTitle": "JavaScript Fundamentals",
+    "discountCode": "SPONSOR123",
+    "discountType": "percentage",
+    "discountValue": 20,
+    "maxStudents": 50,
+    "studentsUsed": 25,
+    "completionRate": 75.5,
+    "status": "active"
+  },
+  "stats": {
+    "totalUsage": 25,
+    "totalDiscountGiven": 499.75,
+    "averageFinalPrice": 80.00,
+    "utilizationRate": "50.0"
+  },
+  "monthlyStats": [
+    {
+      "month": "2024-01",
+      "studentsEnrolled": 15
+    }
+  ]
+}
+```
+
+#### Send Sponsorship Email
+**POST** `/api/sponsorships/:id/email`
+
+Send sponsorship details via email (owner/admin only).
+
+**Headers:**
+```
+Authorization: Bearer <jwt-token>
+Content-Type: application/json
+```
+
+**Request Body:**
+```json
+{
+  "recipientEmail": "student@example.com",
+  "isForRecipient": true,
+  "customMessage": "Congratulations! You've been selected for this educational sponsorship."
+}
+```
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "message": "Sponsorship details sent successfully"
+}
+```
+
+### Sponsorship Opportunities Endpoints
+
+#### Get All Opportunities
+**GET** `/api/sponsorship-opportunities`
+
+Get list of sponsorship opportunities (public endpoint).
+
+**Query Parameters:**
+- `isActive` - Filter by active status
+- `urgency` - Filter by urgency level (low, medium, high)
+- `limit` - Number of results (default: 20)
+- `offset` - Number to skip (default: 0)
+
+**Response (200):**
+```json
+{
+  "opportunities": [
+    {
+      "id": "uuid",
+      "courseId": "uuid",
+      "courseName": "JavaScript Fundamentals",
+      "courseDescription": "Learn JavaScript from scratch",
+      "courseDuration": "8 weeks",
+      "courseTopic": "Programming",
+      "instructor": "John Doe",
+      "instructorAvatar": "https://example.com/avatar.jpg",
+      "targetStudents": 100,
+      "fundingGoal": 5000.00,
+      "fundingRaised": 2500.00,
+      "fundingProgress": "50.00",
+      "urgency": "high",
+      "demographics": "Students aged 18-25",
+      "impactDescription": "Help students learn programming",
+      "isActive": true,
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z"
+    }
+  ]
+}
+```
+
+#### Create Opportunity
+**POST** `/api/sponsorship-opportunities`
+
+Create a new sponsorship opportunity (instructor/admin only).
+
+**Headers:**
+```
+Authorization: Bearer <jwt-token>
+Content-Type: application/json
+```
+
+**Request Body:**
+```json
+{
+  "courseId": "uuid",
+  "targetStudents": 100,
+  "fundingGoal": 5000.00,
+  "urgency": "high",
+  "demographics": "Students aged 18-25",
+  "impactDescription": "Help students learn programming"
+}
+```
+
+**Response (201):**
+```json
+{
+  "id": "uuid",
+  "courseId": "uuid",
+  "targetStudents": 100,
+  "fundingGoal": 5000.00,
+  "fundingRaised": 0,
+  "urgency": "high",
+  "demographics": "Students aged 18-25",
+  "impactDescription": "Help students learn programming",
+  "isActive": true,
+  "createdAt": "2024-01-01T00:00:00.000Z"
+}
+```
+
+#### Get Specific Opportunity
+**GET** `/api/sponsorship-opportunities/:id`
+
+Get details of a specific opportunity (public endpoint).
+
+**Response (200):**
+```json
+{
+  "id": "uuid",
+  "courseId": "uuid",
+  "courseName": "JavaScript Fundamentals",
+  "courseDescription": "Learn JavaScript from scratch",
+  "courseDuration": "8 weeks",
+  "courseTopic": "Programming",
+  "coursePrice": 99.99,
+  "instructor": "John Doe",
+  "instructorAvatar": "https://example.com/avatar.jpg",
+  "instructorBio": "Experienced JavaScript developer",
+  "targetStudents": 100,
+  "fundingGoal": 5000.00,
+  "fundingRaised": 2500.00,
+  "fundingProgress": "50.00",
+  "urgency": "high",
+  "demographics": "Students aged 18-25",
+  "impactDescription": "Help students learn programming",
+  "isActive": true,
+  "createdAt": "2024-01-01T00:00:00.000Z",
+  "updatedAt": "2024-01-01T00:00:00.000Z"
+}
+```
+
+#### Update Opportunity
+**PUT** `/api/sponsorship-opportunities/:id`
+
+Update opportunity details (owner/admin only).
+
+**Headers:**
+```
+Authorization: Bearer <jwt-token>
+Content-Type: application/json
+```
+
+**Request Body:**
+```json
+{
+  "targetStudents": 150,
+  "fundingGoal": 7500.00,
+  "urgency": "medium",
+  "demographics": "Students aged 18-30",
+  "impactDescription": "Updated impact description",
+  "isActive": true
+}
+```
+
+**Response (200):**
+```json
+{
+  "id": "uuid",
+  "targetStudents": 150,
+  "fundingGoal": 7500.00,
+  "fundingRaised": 2500.00,
+  "urgency": "medium",
+  "demographics": "Students aged 18-30",
+  "impactDescription": "Updated impact description",
+  "isActive": true,
+  "updatedAt": "2024-01-01T00:00:00.000Z"
+}
+```
+
+#### Delete Opportunity
+**DELETE** `/api/sponsorship-opportunities/:id`
+
+Delete an opportunity (owner/admin only).
+
+**Headers:**
+```
+Authorization: Bearer <jwt-token>
+```
+
+**Response (200):**
+```json
+{
+  "message": "Sponsorship opportunity deleted successfully"
+}
+```
+
+#### Contribute to Opportunity
+**POST** `/api/sponsorship-opportunities/:id/contribute`
+
+Contribute to a sponsorship opportunity.
+
+**Headers:**
+```
+Authorization: Bearer <jwt-token>
+Content-Type: application/json
+```
+
+**Request Body:**
+```json
+{
+  "amount": 100.00,
+  "message": "Supporting education"
+}
+```
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "amount": 100.00,
+  "newFundingRaised": 2600.00,
+  "message": "Contribution recorded successfully"
+}
+```
+
 ### Payments Endpoints (Flutterwave Standard v3.0.0)
 
 > **Note:** The payment system uses **hosted payment integration** with Flutterwave Standard v3.0.0, providing a clean, reliable, and secure payment experience. The system uses **direct API authentication** and **verification** with Flutterwave's v3 API for reliable transaction tracking.
@@ -4122,6 +4665,8 @@ Authorization: Bearer <jwt-token>
 }
 ```
 
+### Courses Endpoints
+
 #### Get Course by ID
 **GET** `/api/courses/:id`
 
@@ -4160,6 +4705,175 @@ Authorization: Bearer <jwt-token>
   "testCount": 3,
   "createdAt": "2024-07-01T10:00:00Z",
   "updatedAt": "2024-07-01T12:00:00Z"
+}
+```
+
+#### Enroll in Course
+**POST** `/api/courses/:id/enroll`
+
+Enroll in a course. Supports sponsorship codes for discounted enrollment.
+
+**Headers:**
+```
+Authorization: Bearer <jwt-token>
+Content-Type: application/json
+```
+
+**Parameters:**
+- `id` (string, required): Course ID
+
+**Request Body:**
+```json
+{
+  "sponsorshipId": "uuid"
+}
+```
+
+**Fields:**
+- `sponsorshipId` (string, optional): Sponsorship ID for discounted enrollment
+
+**Response (201):**
+```json
+{
+  "id": "uuid",
+  "userId": "uuid",
+  "courseId": "uuid",
+  "enrollmentType": "course",
+  "progress": 0,
+  "status": "enrolled",
+  "sponsorshipId": "uuid",
+  "enrolledAt": "2024-01-01T00:00:00.000Z"
+}
+```
+
+**Error Responses:**
+- `400` - User is already enrolled in this course
+- `400` - Invalid or inactive sponsorship
+- `400` - Sponsorship has not been used by this user
+- `404` - Course not found or not published
+
+**Notes:**
+- If `sponsorshipId` is provided, the system validates that the sponsorship is active and has been used by the student
+- The sponsorship must be valid for the specific course
+- Enrollment automatically updates the course student count
+
+#### Get Course Lessons with Unlock Status
+**GET** `/api/courses/:id/lessons`
+
+Get all lessons for a course with their unlock and completion status. Lessons are unlocked sequentially based on test completion.
+
+**Headers:**
+```
+Authorization: Bearer <jwt-token>
+```
+
+**Response (200):**
+```json
+{
+  "courseId": "uuid",
+  "lessons": [
+    {
+      "id": "uuid",
+      "title": "Introduction to JavaScript",
+      "description": "Learn the basics of JavaScript",
+      "orderIndex": 1,
+      "durationMinutes": 45,
+      "isUnlocked": true,
+      "isCompleted": false,
+      "testPassed": false,
+      "progress": 0,
+      "timeSpentMinutes": 0,
+      "completedAt": null,
+      "test": {
+        "id": "uuid",
+        "title": "JavaScript Basics Quiz",
+        "passingScore": 70,
+        "maxAttempts": 3
+      },
+      "canAccess": true,
+      "nextUnlocked": true
+    },
+    {
+      "id": "uuid",
+      "title": "Variables and Data Types",
+      "description": "Understanding variables and data types",
+      "orderIndex": 2,
+      "durationMinutes": 60,
+      "isUnlocked": false,
+      "isCompleted": false,
+      "testPassed": false,
+      "progress": 0,
+      "timeSpentMinutes": 0,
+      "completedAt": null,
+      "test": {
+        "id": "uuid",
+        "title": "Variables Quiz",
+        "passingScore": 70,
+        "maxAttempts": 3
+      },
+      "canAccess": false,
+      "nextUnlocked": false
+    }
+  ],
+  "courseStats": {
+    "totalLessons": 19,
+    "unlockedLessons": 1,
+    "completedLessons": 0,
+    "passedTests": 0,
+    "totalProgress": 0
+  }
+}
+```
+
+#### Get Course Progression Status
+**GET** `/api/courses/:id/progression`
+
+Get detailed progression status for a course, showing which lessons are locked/unlocked and overall progress.
+
+**Headers:**
+```
+Authorization: Bearer <jwt-token>
+```
+
+**Response (200):**
+```json
+{
+  "courseId": "uuid",
+  "progression": [
+    {
+      "id": "uuid",
+      "title": "Introduction to JavaScript",
+      "orderIndex": 1,
+      "isUnlocked": true,
+      "isCompleted": false,
+      "testPassed": false,
+      "progress": 0,
+      "timeSpentMinutes": 0,
+      "completedAt": null,
+      "test": {
+        "id": "uuid",
+        "title": "JavaScript Basics Quiz",
+        "passingScore": 70,
+        "maxAttempts": 3
+      },
+      "nextUnlocked": true
+    }
+  ],
+  "courseStats": {
+    "totalLessons": 19,
+    "unlockedLessons": 1,
+    "completedLessons": 0,
+    "passedTests": 0,
+    "totalProgress": 0
+  },
+  "currentLesson": {
+    "id": "uuid",
+    "title": "Introduction to JavaScript"
+  },
+  "nextUnlockedLesson": {
+    "id": "uuid",
+    "title": "Variables and Data Types"
+  }
 }
 ```
 

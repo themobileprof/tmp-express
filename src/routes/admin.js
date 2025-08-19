@@ -1408,18 +1408,23 @@ router.get('/sponsorships', asyncHandler(async (req, res) => {
 
 // Create sponsorship
 router.post('/sponsorships', [
-  body('sponsorId').isUUID(),
-  body('courseId').isUUID(),
-  body('discountType').isIn(['percentage', 'fixed']),
-  body('discountValue').isFloat({ min: 0 }),
-  body('maxStudents').isInt({ min: 1 }),
-  body('startDate').isDate(),
-  body('endDate').isDate(),
-  body('notes').optional().trim()
+  body('sponsorId').isUUID().withMessage('Valid sponsor ID is required'),
+  body('courseId').isUUID().withMessage('Valid course ID is required'),
+  body('discountType').isIn(['percentage', 'fixed']).withMessage('Discount type must be percentage or fixed'),
+  body('discountValue').isFloat({ min: 0 }).withMessage('Discount value must be a positive number'),
+  body('maxStudents').isInt({ min: 1 }).withMessage('Maximum students must be at least 1'),
+  body('startDate').isDate().withMessage('Valid start date is required'),
+  body('endDate').isDate().withMessage('Valid end date is required'),
+  body('notes').optional().trim().isString().withMessage('Notes must be a string')
 ], asyncHandler(async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
-    throw new AppError('Validation failed', 400, 'Validation Error');
+    console.log('Validation errors:', errors.array());
+    const errorDetails = errors.array().reduce((acc, error) => {
+      acc[error.path] = error.msg;
+      return acc;
+    }, {});
+    throw new AppError('Validation failed', 400, 'Validation Error', errorDetails);
   }
 
   const { sponsorId, courseId, discountType, discountValue, maxStudents, startDate, endDate, notes } = req.body;
@@ -1553,6 +1558,40 @@ router.put('/sponsorships/:id', [
   const result = await query(
     `UPDATE sponsorships SET ${updates.join(', ')} WHERE id = $${paramCount} RETURNING *`,
     params
+  );
+
+  res.json({
+    sponsorship: result.rows[0]
+  });
+}));
+
+// Update sponsorship status
+router.put('/sponsorships/:id/status', [
+  body('status')
+    .isIn(['active', 'paused', 'expired', 'completed'])
+    .withMessage('Status must be one of active, paused, expired, completed')
+], asyncHandler(async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    const errorDetails = errors.array().reduce((acc, error) => {
+      acc[error.path] = error.msg;
+      return acc;
+    }, {});
+    throw new AppError('Validation failed', 400, 'Validation Error', errorDetails);
+  }
+
+  const { id } = req.params;
+  const { status } = req.body;
+
+  // Check if sponsorship exists
+  const existingSponsorship = await getRow('SELECT id FROM sponsorships WHERE id = $1', [id]);
+  if (!existingSponsorship) {
+    throw new AppError('Sponsorship not found', 404, 'Sponsorship Not Found');
+  }
+
+  const result = await query(
+    'UPDATE sponsorships SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *',
+    [status, id]
   );
 
   res.json({

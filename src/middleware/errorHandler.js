@@ -45,6 +45,8 @@ const errorHandler = (err, req, res, next) => {
   // Handle validation errors with details
   if (error === 'VALIDATION_ERROR' && err.details) {
     details = err.details;
+  } else if (err.details) {
+    details = err.details;
   }
 
   // Don't leak error details in production
@@ -67,10 +69,11 @@ const errorHandler = (err, req, res, next) => {
 
 // Custom error class
 class AppError extends Error {
-  constructor(message, statusCode, error = 'Error') {
+  constructor(message, statusCode, error = 'Error', details = null) {
     super(message);
     this.statusCode = statusCode;
     this.error = error;
+    this.details = details;
     this.isOperational = true;
 
     Error.captureStackTrace(this, this.constructor);

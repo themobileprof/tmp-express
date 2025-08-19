@@ -17,7 +17,7 @@ async function updateProgressFromTest(testId, userId, passed, forcedProceed = fa
   try {
     // Get test details to determine if it's course-level or lesson-level
     const test = await getRow(
-      `SELECT t.*, l.course_id as lesson_course_id 
+      `SELECT t.*, l.course_id as lesson_course_id, l.order_index as lesson_order
        FROM tests t 
        LEFT JOIN lessons l ON t.lesson_id = l.id 
        WHERE t.id = $1`,
@@ -43,6 +43,8 @@ async function updateProgressFromTest(testId, userId, passed, forcedProceed = fa
              updated_at = CURRENT_TIMESTAMP`,
           [userId, test.lesson_id]
         );
+
+        console.log(`Lesson ${test.lesson_id} marked as completed for user ${userId}`);
       } catch (error) {
         console.warn('Failed to update lesson_progress table:', error.message);
         // Continue with course progress update even if lesson progress fails
@@ -55,7 +57,7 @@ async function updateProgressFromTest(testId, userId, passed, forcedProceed = fa
          COUNT(DISTINCT l.id) as total_lessons,
          COUNT(DISTINCT CASE WHEN lp.status = 'completed' THEN l.id END) as completed_lessons,
          COUNT(DISTINCT t.id) as total_tests,
-         COUNT(DISTINCT CASE WHEN ta.status = 'completed' THEN t.id END) as completed_tests
+         COUNT(DISTINCT CASE WHEN ta.status = 'completed' AND ta.score >= t.passing_score THEN t.id END) as passed_tests
        FROM courses c
        LEFT JOIN lessons l ON c.id = l.course_id AND l.is_published = true
        LEFT JOIN lesson_progress lp ON l.id = lp.lesson_id AND lp.user_id = $1
@@ -71,7 +73,7 @@ async function updateProgressFromTest(testId, userId, passed, forcedProceed = fa
       : 0;
     
     const testProgress = courseProgress.total_tests > 0 
-      ? (courseProgress.completed_tests / courseProgress.total_tests) * 50 
+      ? (courseProgress.passed_tests / courseProgress.total_tests) * 50 
       : 0;
     
     const totalProgress = Math.round(lessonProgress + testProgress);
@@ -85,6 +87,15 @@ async function updateProgressFromTest(testId, userId, passed, forcedProceed = fa
        WHERE user_id = $2 AND course_id = $3`,
       [totalProgress, userId, courseId]
     );
+
+    console.log(`Course progress updated to ${totalProgress}% for user ${userId}`);
+
+    // If this was a lesson test and it was passed, the next lesson is now automatically unlocked
+    // The unlock logic is handled in the lesson access endpoint
+    if (test.lesson_id && passed) {
+      console.log(`Test passed for lesson ${test.lesson_id}, next lesson will be unlocked for user ${userId}`);
+    }
+
   } catch (error) {
     console.error('Error updating progress from test:', error);
     // Don't throw error to prevent test submission from failing
@@ -510,7 +521,8 @@ router.post('/:id/start', authenticateToken, asyncHandler(async (req, res) => {
         id: q.id,
         question: q.question,
         questionType: q.question_type,
-        options: q.question_type === 'multiple_choice' ? q.options : undefined,
+        options: q.question_type === 'multiple_choice' ? q.options : 
+                 q.question_type === 'true_false' ? ['False', 'True'] : undefined,
         points: q.points,
         orderIndex: q.order_index
       }))
@@ -608,7 +620,12 @@ router.put('/:id/attempts/:attemptId/answer', authenticateToken, validateAnswer,
   }
 
   const { id, attemptId } = req.params;
-  const { questionId, selectedAnswer, answerText } = req.body;
+  let { questionId, selectedAnswer, answerText } = req.body;
+  
+  // Ensure selectedAnswer is a number for multiple choice and true/false questions
+  if (selectedAnswer !== undefined) {
+    selectedAnswer = parseInt(selectedAnswer);
+  }
   const userId = req.user.id;
 
   // Verify attempt exists and belongs to user
@@ -662,6 +679,15 @@ router.put('/:id/attempts/:attemptId/answer', authenticateToken, validateAnswer,
 
   if (question.question_type === 'multiple_choice' || question.question_type === 'true_false') {
     isCorrect = selectedAnswer === question.correct_answer;
+    
+    // Debug logging for true/false questions
+    if (question.question_type === 'true_false') {
+      console.log(`True/False Question Debug: Question ID ${questionId}`);
+      console.log(`  Question: ${question.question}`);
+      console.log(`  Correct Answer: ${question.correct_answer} (${question.correct_answer === 1 ? 'true' : 'false'})`);
+      console.log(`  User Answer: ${selectedAnswer} (${selectedAnswer === 1 ? 'true' : 'false'})`);
+      console.log(`  Is Correct: ${isCorrect}`);
+    }
   } else if (question.question_type === 'short_answer') {
     // Simple case-insensitive comparison for short answer
     isCorrect = answerText.trim().toLowerCase() === question.correct_answer_text.trim().toLowerCase();
@@ -743,8 +769,14 @@ router.post('/:id/attempts/:attemptId/submit', authenticateToken, asyncHandler(a
 
   console.log(`Found ${answers.length} answers for attempt: ${attemptId}`);
 
+  // Get total possible points for this test
+  const totalPossiblePoints = await getRow(
+    'SELECT COALESCE(SUM(points), 0) as total FROM test_questions WHERE test_id = $1',
+    [id]
+  );
+
   const totalPoints = answers.reduce((sum, answer) => sum + answer.points_earned, 0);
-  const maxPoints = answers.reduce((sum, answer) => sum + answer.points_earned, 0);
+  const maxPoints = parseInt(totalPossiblePoints.total);
   const correctAnswers = answers.filter(answer => answer.is_correct).length;
 
   // Calculate percentage score
@@ -930,32 +962,103 @@ router.get('/:id/analytics', authenticateToken, authorizeOwnerOrAdmin('tests', '
   });
 }));
 
-// List all attempts for a test (admin/instructor only)
+// Get test attempts (admin/instructor only - all attempts)
 router.get('/:id/attempts', authenticateToken, authorizeOwnerOrAdmin('tests', 'id'), asyncHandler(async (req, res) => {
   const { id } = req.params;
+  const { limit = 20, offset = 0 } = req.query;
 
-  // Get all attempts for the test, joined with user info
+  // Verify test exists
+  const test = await getRow('SELECT * FROM tests WHERE id = $1', [id]);
+  if (!test) {
+    throw new AppError('Test not found', 404, 'Test Not Found');
+  }
+
+  // Get all attempts for this test (admin/instructor view)
   const attempts = await getRows(
-    `SELECT a.id, a.user_id, a.attempt_number, a.score, a.time_taken_minutes, a.completed_at, a.status,
-            u.first_name, u.last_name, u.email
-     FROM test_attempts a
-     JOIN users u ON a.user_id = u.id
-     WHERE a.test_id = $1
-     ORDER BY a.completed_at DESC NULLS LAST, a.started_at DESC` ,
+    `SELECT ta.*, u.first_name, u.last_name, u.email
+     FROM test_attempts ta
+     JOIN users u ON ta.user_id = u.id
+     WHERE ta.test_id = $1
+     ORDER BY ta.started_at DESC
+     LIMIT $2 OFFSET $3`,
+    [id, parseInt(limit), parseInt(offset)]
+  );
+
+  // Get total count
+  const countResult = await getRow(
+    'SELECT COUNT(*) as total FROM test_attempts WHERE test_id = $1',
     [id]
   );
 
   res.json({
-    attempts: attempts.map(a => ({
-      id: a.id,
-      studentName: `${a.first_name} ${a.last_name}`,
-      studentEmail: a.email,
-      score: a.score,
-      timeSpent: a.time_taken_minutes,
-      attemptNumber: a.attempt_number,
-      completedAt: a.completed_at,
-      status: a.status
-    }))
+    test: {
+      id: test.id,
+      title: test.title,
+      passingScore: test.passing_score
+    },
+    attempts: attempts.map(ta => ({
+      id: ta.id,
+      userId: ta.user_id,
+      userName: `${ta.first_name} ${ta.last_name}`,
+      userEmail: ta.email,
+      attemptNumber: ta.attempt_number,
+      score: ta.score,
+      totalQuestions: ta.total_questions,
+      correctAnswers: ta.correct_answers,
+      status: ta.status,
+      startedAt: ta.started_at,
+      completedAt: ta.completed_at,
+      timeTakenMinutes: ta.time_taken_minutes,
+      passed: ta.score ? ta.score >= test.passing_score : null
+    })),
+    pagination: {
+      total: parseInt(countResult.total),
+      limit: parseInt(limit),
+      offset: parseInt(offset)
+    }
+  });
+}));
+
+// Get user's own test attempts (student view)
+router.get('/:id/my-attempts', authenticateToken, asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const userId = req.user.id;
+
+  // Verify test exists
+  const test = await getRow('SELECT * FROM tests WHERE id = $1', [id]);
+  if (!test) {
+    throw new AppError('Test not found', 404, 'Test Not Found');
+  }
+
+  // Get user's own attempts for this test
+  const attempts = await getRows(
+    `SELECT * FROM test_attempts 
+     WHERE test_id = $1 AND user_id = $2
+     ORDER BY started_at DESC`,
+    [id, userId]
+  );
+
+  res.json({
+    test: {
+      id: test.id,
+      title: test.title,
+      passingScore: test.passing_score,
+      maxAttempts: test.max_attempts
+    },
+    attempts: attempts.map(ta => ({
+      id: ta.id,
+      attemptNumber: ta.attempt_number,
+      score: ta.score,
+      totalQuestions: ta.total_questions,
+      correctAnswers: ta.correct_answers,
+      status: ta.status,
+      startedAt: ta.started_at,
+      completedAt: ta.completed_at,
+      timeTakenMinutes: ta.time_taken_minutes,
+      passed: ta.score ? ta.score >= test.passing_score : null
+    })),
+    currentAttempts: attempts.length,
+    canStartNew: attempts.length < test.max_attempts
   });
 }));
 

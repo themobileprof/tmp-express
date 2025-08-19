@@ -59,6 +59,86 @@ async function updateCourseProgressFromLesson(lessonId, userId) {
   }
 }
 
+// Helper function to check if a lesson is unlocked for a user
+async function isLessonUnlocked(lessonId, userId) {
+  try {
+    // Get lesson details and order
+    const lesson = await getRow(
+      'SELECT l.*, c.id as course_id FROM lessons l JOIN courses c ON l.course_id = c.id WHERE l.id = $1',
+      [lessonId]
+    );
+
+    if (!lesson) return false;
+
+    // First lesson is always unlocked
+    if (lesson.order_index === 1) return true;
+
+    // Check if previous lesson exists
+    const previousLesson = await getRow(
+      'SELECT id FROM lessons WHERE course_id = $1 AND order_index = $2',
+      [lesson.course_id, lesson.order_index - 1]
+    );
+
+    if (!previousLesson) return false;
+
+    // Unlock when previous lesson is completed (either by passing test or forced proceed)
+    const prevCompleted = await getRow(
+      'SELECT 1 FROM lesson_progress WHERE user_id = $1 AND lesson_id = $2 AND status = $3 LIMIT 1',
+      [userId, previousLesson.id, 'completed']
+    );
+
+    return !!prevCompleted;
+  } catch (error) {
+    console.error('Error checking lesson unlock status:', error);
+    return false;
+  }
+}
+
+// Helper function to get next unlocked lesson
+async function getNextUnlockedLesson(courseId, userId) {
+  try {
+    const lessons = await getRows(
+      'SELECT id, order_index FROM lessons WHERE course_id = $1 AND is_published = true ORDER BY order_index',
+      [courseId]
+    );
+
+    for (const lesson of lessons) {
+      if (await isLessonUnlocked(lesson.id, userId)) {
+        return lesson;
+      }
+    }
+
+    return null;
+  } catch (error) {
+    console.error('Error getting next unlocked lesson:', error);
+    return null;
+  }
+}
+
+// Helper function to unlock next lesson after test completion
+async function unlockNextLesson(courseId, userId) {
+  try {
+    const currentLesson = await getRow(
+      'SELECT order_index FROM lessons WHERE course_id = $1 AND order_index = (SELECT MAX(order_index) FROM lessons WHERE course_id = $1)',
+      [courseId]
+    );
+
+    if (!currentLesson) return;
+
+    const nextLesson = await getRow(
+      'SELECT id FROM lessons WHERE course_id = $1 AND order_index = $2',
+      [courseId, currentLesson.order_index + 1]
+    );
+
+    if (nextLesson) {
+      // The next lesson will be automatically unlocked when the user passes the current lesson's test
+      console.log(`Next lesson ${nextLesson.id} will be unlocked after current test completion`);
+    }
+  } catch (error) {
+    console.error('Error unlocking next lesson:', error);
+  }
+}
+
 // Validation middleware
 const validateLesson = [
   body('title').trim().isLength({ min: 1 }).withMessage('Lesson title is required'),
@@ -72,9 +152,11 @@ const validateLesson = [
 // Get lesson by ID
 router.get('/:id', authenticateToken, asyncHandler(async (req, res) => {
   const { id } = req.params;
+  const userId = req.user.id;
 
+  // Verify lesson exists
   const lesson = await getRow(
-    `SELECT l.*, c.title as course_title, c.id as course_id
+    `SELECT l.*, c.id as course_id, c.title as course_title
      FROM lessons l
      JOIN courses c ON l.course_id = c.id
      WHERE l.id = $1`,
@@ -84,6 +166,47 @@ router.get('/:id', authenticateToken, asyncHandler(async (req, res) => {
   if (!lesson) {
     throw new AppError('Lesson not found', 404, 'Lesson Not Found');
   }
+
+  // Check if user is enrolled in the course
+  const enrollment = await getRow(
+    'SELECT * FROM enrollments WHERE user_id = $1 AND course_id = $2',
+    [userId, lesson.course_id]
+  );
+
+  if (!enrollment) {
+    throw new AppError('You must be enrolled in this course to access lessons', 403, 'Not Enrolled');
+  }
+
+  // Check if lesson is unlocked for this user
+  const isUnlocked = await isLessonUnlocked(id, userId);
+  
+  if (!isUnlocked) {
+    // Get previous lesson info for better user experience
+    const previousLesson = await getRow(
+      'SELECT id, title FROM lessons WHERE course_id = $1 AND order_index = $2',
+      [lesson.course_id, lesson.order_index - 1]
+    );
+
+    throw new AppError(
+      previousLesson 
+        ? `Complete the test for "${previousLesson.title}" to unlock this lesson`
+        : 'This lesson is not yet available',
+      403,
+      'Lesson Locked'
+    );
+  }
+
+  // Get lesson progress
+  const progress = await getRow(
+    'SELECT * FROM lesson_progress WHERE user_id = $1 AND lesson_id = $2',
+    [userId, id]
+  );
+
+  // Get associated test info
+  const test = await getRow(
+    'SELECT id, title, description, duration_minutes, passing_score, max_attempts FROM tests WHERE lesson_id = $1',
+    [id]
+  );
 
   res.json({
     id: lesson.id,
@@ -96,8 +219,23 @@ router.get('/:id', authenticateToken, asyncHandler(async (req, res) => {
     durationMinutes: lesson.duration_minutes,
     orderIndex: lesson.order_index,
     isPublished: lesson.is_published,
+    isUnlocked: true,
     createdAt: lesson.created_at,
-    updatedAt: lesson.updated_at
+    updatedAt: lesson.updated_at,
+    progress: progress ? {
+      isCompleted: progress.status === 'completed',
+      progressPercentage: progress.progress_percentage,
+      timeSpentMinutes: progress.time_spent_minutes,
+      completedAt: progress.completed_at
+    } : null,
+    test: test ? {
+      id: test.id,
+      title: test.title,
+      description: test.description,
+      durationMinutes: test.duration_minutes,
+      passingScore: test.passing_score,
+      maxAttempts: test.max_attempts
+    } : null
   });
 }));
 

@@ -264,8 +264,9 @@ router.post('/', authenticateToken, authorizeInstructor, validateCourse, asyncHa
 }));
 
 // Get course by ID
-router.get('/:id', asyncHandler(async (req, res) => {
+router.get('/:id', authenticateToken, asyncHandler(async (req, res) => {
   const { id } = req.params;
+  const userId = req.user.id; // User ID from authentication
 
   const course = await getRow(
     `SELECT c.*, u.first_name as instructor_first_name, u.last_name as instructor_last_name,
@@ -278,6 +279,48 @@ router.get('/:id', asyncHandler(async (req, res) => {
 
   if (!course) {
     throw new AppError('Course not found', 404, 'Course Not Found');
+  }
+
+  // Get user enrollment and progress
+  let enrollment = null;
+  let courseProgress = null;
+  
+  // Get enrollment
+  enrollment = await getRow(
+    'SELECT * FROM enrollments WHERE user_id = $1 AND course_id = $2',
+    [userId, id]
+  );
+
+  // Get course progress if enrolled
+  if (enrollment) {
+    courseProgress = await getRow(
+      `SELECT 
+         COUNT(DISTINCT l.id) as total_lessons,
+         COUNT(DISTINCT CASE WHEN lp.status = 'completed' THEN l.id END) as completed_lessons,
+         COUNT(DISTINCT t.id) as total_tests,
+         COUNT(DISTINCT CASE WHEN ta.status = 'completed' AND ta.score >= t.passing_score THEN t.id END) as passed_tests
+       FROM courses c
+       LEFT JOIN lessons l ON c.id = l.course_id AND l.is_published = true
+       LEFT JOIN lesson_progress lp ON l.id = lp.lesson_id AND lp.user_id = $1
+       LEFT JOIN tests t ON (t.course_id = c.id OR l.id = t.lesson_id)
+       LEFT JOIN test_attempts ta ON t.id = ta.test_id AND ta.user_id = $1
+       WHERE c.id = $2`,
+      [userId, id]
+    );
+  }
+
+  // Calculate progress percentage (50% from lessons, 50% from tests)
+  let totalProgress = 0;
+  if (courseProgress) {
+    const lessonProgress = courseProgress.total_lessons > 0 
+      ? (courseProgress.completed_lessons / courseProgress.total_lessons) * 50 
+      : 0;
+    
+    const testProgress = courseProgress.total_tests > 0 
+      ? (courseProgress.passed_tests / courseProgress.total_tests) * 50 
+      : 0;
+    
+    totalProgress = Math.round(lessonProgress + testProgress);
   }
 
   res.json({
@@ -303,7 +346,22 @@ router.get('/:id', asyncHandler(async (req, res) => {
     imageUrl: course.image_url,
     isPublished: course.is_published,
     createdAt: course.created_at,
-    updatedAt: course.updated_at
+    updatedAt: course.updated_at,
+    // Enrollment and progress data
+    enrollment: enrollment ? {
+      id: enrollment.id,
+      progress: enrollment.progress,
+      status: enrollment.status,
+      enrolledAt: enrollment.enrolled_at,
+      completedAt: enrollment.completed_at
+    } : null,
+    courseStats: courseProgress ? {
+      totalLessons: parseInt(courseProgress.total_lessons) || 0,
+      completedLessons: parseInt(courseProgress.completed_lessons) || 0,
+      totalTests: parseInt(courseProgress.total_tests) || 0,
+      passedTests: parseInt(courseProgress.passed_tests) || 0,
+      totalProgress: totalProgress
+    } : null
   });
 }));
 
@@ -387,35 +445,7 @@ router.delete('/:id', authenticateToken, authorizeOwnerOrAdmin('courses', 'id'),
   });
 }));
 
-// Get course lessons
-router.get('/:id/lessons', asyncHandler(async (req, res) => {
-  const { id } = req.params;
 
-  // Verify course exists
-  const course = await getRow('SELECT * FROM courses WHERE id = $1', [id]);
-  if (!course) {
-    throw new AppError('Course not found', 404, 'Course Not Found');
-  }
-
-  const lessons = await getRows(
-    'SELECT * FROM lessons WHERE course_id = $1 ORDER BY order_index',
-    [id]
-  );
-
-  res.json({
-    lessons: lessons.map(l => ({
-      id: l.id,
-      title: l.title,
-      description: l.description,
-      content: l.content,
-      videoUrl: l.video_url,
-      durationMinutes: l.duration_minutes,
-      orderIndex: l.order_index,
-      isPublished: l.is_published,
-      createdAt: l.created_at
-    }))
-  });
-}));
 
 // Get course tests
 router.get('/:id/tests', asyncHandler(async (req, res) => {
@@ -594,6 +624,264 @@ router.put('/:id/enrollments/:enrollmentId', authenticateToken, asyncHandler(asy
     progress: updatedEnrollment.progress,
     status: updatedEnrollment.status,
     completedAt: updatedEnrollment.completed_at
+  });
+}));
+
+// Get course lessons with unlock status
+router.get('/:id/lessons', authenticateToken, asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const userId = req.user.id;
+
+  // Verify enrollment
+  const enrollment = await getRow(
+    'SELECT * FROM enrollments WHERE user_id = $1 AND course_id = $2',
+    [userId, id]
+  );
+
+  if (!enrollment) {
+    throw new AppError('You must be enrolled in this course to view lessons', 403, 'Not Enrolled');
+  }
+
+  // Get all lessons with their unlock and completion status
+  const lessons = await getRows(
+    `SELECT l.*, 
+            CASE WHEN lp.status = 'completed' THEN true ELSE false END as is_completed,
+            lp.progress_percentage,
+            lp.time_spent_minutes,
+            lp.completed_at,
+            t.id as test_id,
+            t.title as test_title,
+            t.passing_score,
+            t.max_attempts
+     FROM lessons l
+     LEFT JOIN lesson_progress lp ON l.id = lp.lesson_id AND lp.user_id = $1
+     LEFT JOIN tests t ON l.id = t.lesson_id
+     WHERE l.course_id = $1 AND l.is_published = true
+     ORDER BY l.order_index`,
+    [id]
+  );
+
+  // Calculate unlock status for each lesson
+  const lessonsWithStatus = [];
+  let unlockedCount = 0;
+
+  for (let i = 0; i < lessons.length; i++) {
+    const lesson = lessons[i];
+    const isUnlocked = i === 0 || (i > 0 && lessonsWithStatus[i - 1].isUnlocked && (lessonsWithStatus[i - 1].testPassed || lessonsWithStatus[i - 1].isCompleted));
+    
+    // Check if test was passed
+    let testPassed = false;
+    if (lesson.test_id) {
+      const testResult = await getRow(
+        `SELECT ta.id FROM test_attempts ta
+         WHERE ta.test_id = $1 AND ta.user_id = $2 AND ta.status = 'completed' AND ta.score >= $3
+         LIMIT 1`,
+        [lesson.test_id, userId, lesson.passing_score]
+      );
+      testPassed = !!testResult;
+    }
+
+    const lessonData = {
+      id: lesson.id,
+      title: lesson.title,
+      description: lesson.description,
+      orderIndex: lesson.order_index,
+      durationMinutes: lesson.duration_minutes,
+      isUnlocked: isUnlocked,
+      isCompleted: lesson.is_completed || false,
+      testPassed: testPassed,
+      progress: lesson.progress_percentage || 0,
+      timeSpentMinutes: lesson.time_spent_minutes || 0,
+      completedAt: lesson.completed_at,
+      test: lesson.test_id ? {
+        id: lesson.test_id,
+        title: lesson.test_title,
+        passingScore: lesson.passing_score,
+        maxAttempts: lesson.max_attempts
+      } : null,
+      canAccess: isUnlocked,
+      nextUnlocked: isUnlocked && !testPassed && lesson.test_id
+    };
+
+    lessonsWithStatus.push(lessonData);
+    if (isUnlocked) unlockedCount++;
+  }
+
+  // Get course stats for passed tests
+  const courseStats = await getRow(
+    `SELECT 
+       COUNT(DISTINCT CASE WHEN ta.status = 'completed' AND ta.score >= t.passing_score THEN t.id END) as passed_tests
+     FROM courses c
+     LEFT JOIN lessons l ON c.id = l.course_id AND l.is_published = true
+     LEFT JOIN tests t ON l.id = t.lesson_id
+     LEFT JOIN test_attempts ta ON t.id = ta.test_id AND ta.user_id = $1
+     WHERE c.id = $2`,
+    [userId, id]
+  );
+
+
+
+  const completedLessons = lessonsWithStatus.filter(l => l.isCompleted).length;
+  const totalProgress = lessons.length > 0 ? Math.round((completedLessons / lessons.length) * 100) : 0;
+
+  res.json({
+    courseId: id,
+    lessons: lessonsWithStatus,
+    courseStats: {
+      totalLessons: lessons.length,
+      unlockedLessons: unlockedCount,
+      completedLessons: completedLessons,
+      passedTests: parseInt(courseStats.passed_tests) || 0,
+      totalProgress: totalProgress
+    }
+  });
+}));
+
+// Get course progression status
+router.get('/:id/progression', authenticateToken, asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const userId = req.user.id;
+
+  // Verify enrollment
+  const enrollment = await getRow(
+    'SELECT * FROM enrollments WHERE user_id = $1 AND course_id = $2',
+    [userId, id]
+  );
+
+  if (!enrollment) {
+    throw new AppError('You must be enrolled in this course to view progression', 403, 'Not Enrolled');
+  }
+
+  // Get all lessons with their unlock status
+  const lessons = await getRows(
+    `SELECT l.*, 
+            CASE WHEN lp.status = 'completed' THEN true ELSE false END as is_completed,
+            lp.progress_percentage,
+            lp.time_spent_minutes,
+            lp.completed_at,
+            t.id as test_id,
+            t.title as test_title,
+            t.passing_score,
+            t.max_attempts
+     FROM lessons l
+     LEFT JOIN lesson_progress lp ON l.id = lp.lesson_id AND lp.user_id = $1
+     LEFT JOIN tests t ON l.id = t.lesson_id
+     WHERE l.course_id = $1 AND l.is_published = true
+     ORDER BY l.order_index`,
+    [id]
+  );
+
+  // Calculate unlock status for each lesson
+  const progressionData = [];
+  let unlockedCount = 0;
+  let completedCount = 0;
+
+  for (let i = 0; i < lessons.length; i++) {
+    const lesson = lessons[i];
+    const isUnlocked = i === 0 || (i > 0 && progressionData[i - 1].isUnlocked && (progressionData[i - 1].testPassed || progressionData[i - 1].isCompleted));
+    
+    // Check if test was passed
+    let testPassed = false;
+    if (lesson.test_id) {
+      const testResult = await getRow(
+        `SELECT ta.id FROM test_attempts ta
+         WHERE ta.test_id = $1 AND ta.user_id = $2 AND ta.status = 'completed' AND ta.score >= $3
+         LIMIT 1`,
+        [lesson.test_id, userId, lesson.passing_score]
+      );
+      testPassed = !!testResult;
+    }
+
+    const lessonData = {
+      id: lesson.id,
+      title: lesson.title,
+      orderIndex: lesson.order_index,
+      isUnlocked: isUnlocked,
+      isCompleted: lesson.is_completed || false,
+      testPassed: testPassed,
+      progress: lesson.progress_percentage || 0,
+      timeSpentMinutes: lesson.time_spent_minutes || 0,
+      completedAt: lesson.completed_at,
+      test: lesson.test_id ? {
+        id: lesson.test_id,
+        title: lesson.test_title,
+        passingScore: lesson.passing_score,
+        maxAttempts: lesson.max_attempts
+      } : null,
+      nextUnlocked: isUnlocked && !testPassed && lesson.test_id
+    };
+
+    progressionData.push(lessonData);
+
+    if (isUnlocked) unlockedCount++;
+    if (lesson.is_completed) completedCount++;
+  }
+
+  // Get course stats
+  const courseStats = await getRow(
+    `SELECT 
+       COUNT(DISTINCT l.id) as total_lessons,
+       COUNT(DISTINCT CASE WHEN lp.status = 'completed' THEN l.id END) as completed_lessons,
+       COUNT(DISTINCT CASE WHEN ta.status = 'completed' AND ta.score >= t.passing_score THEN t.id END) as passed_tests
+     FROM courses c
+     LEFT JOIN lessons l ON c.id = l.course_id AND l.is_published = true
+     LEFT JOIN lesson_progress lp ON l.id = lp.lesson_id AND lp.user_id = $1
+     LEFT JOIN tests t ON l.id = t.lesson_id
+     LEFT JOIN test_attempts ta ON t.id = ta.test_id AND ta.user_id = $1
+     WHERE c.id = $2`,
+    [userId, id]
+  );
+
+  const totalProgress = courseStats.total_lessons > 0 
+    ? Math.round((completedCount / courseStats.total_lessons) * 100)
+    : 0;
+
+  res.json({
+    courseId: id,
+    progression: progressionData,
+    courseStats: {
+      totalLessons: parseInt(courseStats.total_lessons) || 0,
+      unlockedLessons: unlockedCount,
+      completedLessons: completedCount,
+      passedTests: parseInt(courseStats.passed_tests) || 0,
+      totalProgress: totalProgress
+    },
+    currentLesson: progressionData.find(l => l.isUnlocked && !l.testPassed) || null,
+    nextUnlockedLesson: progressionData.find(l => !l.isUnlocked) || null
+  });
+}));
+
+// Test endpoint to verify courseStats structure (temporary)
+router.get('/:id/test-stats', asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  
+  // Get all lessons
+  const lessons = await getRows(
+    'SELECT * FROM lessons WHERE course_id = $1 AND is_published = true ORDER BY order_index',
+    [id]
+  );
+
+  // Get test attempts for passed tests
+  const courseStats = await getRow(
+    `SELECT 
+       COUNT(DISTINCT CASE WHEN ta.status = 'completed' AND ta.score >= t.passing_score THEN t.id END) as passed_tests
+     FROM courses c
+     LEFT JOIN lessons l ON c.id = l.course_id AND l.is_published = true
+     LEFT JOIN tests t ON l.id = t.lesson_id
+     LEFT JOIN test_attempts ta ON t.id = ta.test_id
+     WHERE c.id = $1`,
+    [id]
+  );
+
+  res.json({
+    courseId: id,
+    courseStats: {
+      totalLessons: lessons.length,
+      unlockedLessons: 1, // First lesson is always unlocked
+      completedLessons: 0,
+      passedTests: parseInt(courseStats.passed_tests) || 0,
+      totalProgress: 0
+    }
   });
 }));
 
