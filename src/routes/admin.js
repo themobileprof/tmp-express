@@ -3,6 +3,7 @@ const { body, validationResult } = require('express-validator');
 const { query, getRow, getRows } = require('../database/config');
 const { asyncHandler, AppError } = require('../middleware/errorHandler');
 const { authenticateToken } = require('../middleware/auth');
+const { clearSettingsCache } = require('../utils/systemSettings');
 
 const router = express.Router();
 
@@ -2353,6 +2354,9 @@ router.put('/settings', [
     );
   }
 
+  // Clear settings cache after update
+  clearSettingsCache();
+
   res.json({
     message: 'Settings updated successfully'
   });
@@ -2472,6 +2476,12 @@ router.post('/lessons/:lessonId/tests', asyncHandler(async (req, res) => {
   const { lessonId } = req.params;
   const { title, description, durationMinutes, passingScore, maxAttempts, questions } = req.body;
 
+  // Cap maxAttempts by system setting if configured
+  const { getSystemSetting } = require('../utils/systemSettings');
+  const configuredMaxAttempts = parseInt(await getSystemSetting('max_test_attempts', '3'));
+  const maxAllowedAttempts = Number.isFinite(configuredMaxAttempts) && configuredMaxAttempts > 0 ? configuredMaxAttempts : 3;
+  const effectiveMaxAttempts = Math.min(maxAttempts, maxAllowedAttempts);
+
   // Validate required fields
   if (!title || !durationMinutes || !passingScore || !maxAttempts) {
     throw new AppError('Missing required fields: title, durationMinutes, passingScore, and maxAttempts are required', 400, 'VALIDATION_ERROR');
@@ -2491,7 +2501,7 @@ router.post('/lessons/:lessonId/tests', asyncHandler(async (req, res) => {
     `INSERT INTO tests (course_id, lesson_id, title, description, duration_minutes, passing_score, max_attempts, order_index, is_published)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
      RETURNING *`,
-    [lesson.course_id, lessonId, title, description, durationMinutes, passingScore, maxAttempts, 0, true]
+    [lesson.course_id, lessonId, title, description, durationMinutes, passingScore, effectiveMaxAttempts, 0, true]
   );
   const test = testResult.rows[0];
 
@@ -2617,6 +2627,7 @@ router.post('/settings', [
     return res.status(409).json({ error: 'Setting already exists' });
   }
   await query('INSERT INTO system_settings (key, value) VALUES ($1, $2)', [key, value]);
+  clearSettingsCache();
   res.status(201).json({ message: 'Setting created' });
 }));
 
@@ -2637,6 +2648,7 @@ router.put('/settings/:key', [
   if (result.rows.length === 0) {
     return res.status(404).json({ error: 'Setting not found' });
   }
+  clearSettingsCache();
   res.json({ message: 'Setting updated', setting: result.rows[0] });
 }));
 
@@ -2647,6 +2659,7 @@ router.delete('/settings/:key', asyncHandler(async (req, res) => {
   if (result.rows.length === 0) {
     return res.status(404).json({ error: 'Setting not found' });
   }
+  clearSettingsCache();
   res.json({ message: 'Setting deleted' });
 }));
 

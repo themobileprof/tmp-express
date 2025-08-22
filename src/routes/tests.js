@@ -6,6 +6,7 @@ const { authenticateToken, authorizeInstructor, authorizeOwnerOrAdmin } = requir
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const { notifyTestResult } = require('../utils/notifications');
 
 const router = express.Router();
 
@@ -163,7 +164,7 @@ const storage = multer.diskStorage({
 });
 const upload = multer({
   storage,
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+  limits: { fileSize: parseInt(process.env.UPLOAD_MAX_IMAGE_SIZE || (5 * 1024 * 1024), 10) },
   fileFilter: (req, file, cb) => {
     const allowed = ['.png', '.jpg', '.jpeg', '.gif', '.svg'];
     if (!allowed.includes(path.extname(file.originalname).toLowerCase())) {
@@ -474,7 +475,38 @@ router.post('/:id/start', authenticateToken, asyncHandler(async (req, res) => {
   );
 
   if (inProgressAttempt) {
-    throw new AppError('You already have an in-progress attempt for this test', 400, 'Attempt In Progress');
+    // Resume existing attempt: return attempt details and questions with any saved answers
+    const resumeQuestions = await getRows(
+      `SELECT q.id, q.question, q.question_type, q.options, q.points, q.order_index,
+              a.selected_answer, a.answer_text
+       FROM test_questions q
+       LEFT JOIN test_attempt_answers a ON q.id = a.question_id AND a.attempt_id = $1
+       WHERE q.test_id = $2
+       ORDER BY q.order_index`,
+      [inProgressAttempt.id, id]
+    );
+
+    return res.json({
+      attempt: {
+        id: inProgressAttempt.id,
+        testId: inProgressAttempt.test_id,
+        userId: inProgressAttempt.user_id,
+        attemptNumber: inProgressAttempt.attempt_number,
+        status: inProgressAttempt.status,
+        startedAt: inProgressAttempt.started_at
+      },
+      questions: resumeQuestions.map(q => ({
+        id: q.id,
+        question: q.question,
+        questionType: q.question_type,
+        options: q.question_type === 'multiple_choice' ? q.options :
+                 q.question_type === 'true_false' ? ['False', 'True'] : undefined,
+        points: q.points,
+        orderIndex: q.order_index,
+        selectedAnswer: q.selected_answer,
+        answerText: q.answer_text
+      }))
+    });
   }
 
   // Get questions for the test
@@ -802,6 +834,14 @@ router.post('/:id/attempts/:attemptId/submit', authenticateToken, asyncHandler(a
   if (passed || forceProceed) {
     console.log(`Updating progress for test: ${id}`);
     await updateProgressFromTest(id, userId, passed, forceProceed);
+  }
+
+  // Send test result notification
+  try {
+    await notifyTestResult(userId, id, test.title, score, passed);
+  } catch (error) {
+    console.error('Failed to send test result notification:', error);
+    // Don't fail the test submission if notification fails
   }
 
   res.json({

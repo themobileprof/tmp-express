@@ -50,9 +50,9 @@ const allowedVideoTypes = ['video/mp4', 'video/webm', 'video/ogg'];
 
 // File size limits (in bytes)
 const maxFileSizes = {
-  image: 5 * 1024 * 1024, // 5MB
-  document: 10 * 1024 * 1024, // 10MB
-  video: 500 * 1024 * 1024 // 500MB
+  image: parseInt(process.env.UPLOAD_MAX_IMAGE_SIZE || (5 * 1024 * 1024), 10),
+  document: parseInt(process.env.UPLOAD_MAX_DOCUMENT_SIZE || (10 * 1024 * 1024), 10),
+  video: parseInt(process.env.UPLOAD_MAX_VIDEO_SIZE || (500 * 1024 * 1024), 10)
 };
 
 // Multer configuration for different upload types

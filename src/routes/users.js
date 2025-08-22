@@ -539,4 +539,166 @@ router.get('/:id/enrolled-classes', authenticateToken, asyncHandler(async (req, 
   })));
 }));
 
+// Aliases for current user settings/profile (frontend-friendly)
+router.get('/me/settings', authenticateToken, asyncHandler(async (req, res) => {
+	// Load from user_settings or create defaults like settings route does
+	const settings = await getRow(
+		`SELECT theme, language, timezone, email_notifications, push_notifications,
+		        course_notifications, class_notifications, discussion_notifications,
+		        marketing_emails, created_at, updated_at
+		 FROM user_settings 
+		 WHERE user_id = $1`,
+		[req.user.id]
+	);
+
+	if (!settings) {
+		await query(
+			`INSERT INTO user_settings (user_id, theme, language, timezone, 
+									 email_notifications, push_notifications,
+									 course_notifications, class_notifications, 
+									 discussion_notifications, marketing_emails)
+			 VALUES ($1, 'system', 'en', 'UTC', true, true, true, true, true, false)`,
+			[req.user.id]
+		);
+		return res.json({
+			theme: 'system',
+			language: 'en',
+			timezone: 'UTC',
+			emailNotifications: true,
+			pushNotifications: true,
+			courseNotifications: true,
+			classNotifications: true,
+			discussionNotifications: true,
+			marketingEmails: false
+		});
+	}
+
+	res.json({
+		theme: settings.theme,
+		language: settings.language,
+		timezone: settings.timezone,
+		emailNotifications: settings.email_notifications,
+		pushNotifications: settings.push_notifications,
+		courseNotifications: settings.course_notifications,
+		classNotifications: settings.class_notifications,
+		discussionNotifications: settings.discussion_notifications,
+		marketingEmails: settings.marketing_emails
+	});
+}));
+
+router.put('/me/settings', [
+	body('theme').optional().isIn(['light', 'dark', 'system']).withMessage('Theme must be light, dark, or system'),
+	body('language').optional().isString(),
+	body('timezone').optional().isString(),
+	body('emailNotifications').optional().isBoolean(),
+	body('pushNotifications').optional().isBoolean(),
+	body('courseNotifications').optional().isBoolean(),
+	body('classNotifications').optional().isBoolean(),
+	body('discussionNotifications').optional().isBoolean(),
+	body('marketingEmails').optional().isBoolean()
+], authenticateToken, asyncHandler(async (req, res) => {
+	const errors = validationResult(req);
+	if (!errors.isEmpty()) {
+		throw new AppError('Validation failed', 400, 'Validation Error');
+	}
+
+	const {
+		theme, language, timezone,
+		emailNotifications, pushNotifications, courseNotifications,
+		classNotifications, discussionNotifications, marketingEmails
+	} = req.body;
+
+	const existing = await getRow('SELECT id FROM user_settings WHERE user_id = $1', [req.user.id]);
+
+	const updateFields = [];
+	const updateValues = [];
+	let paramIndex = 1;
+
+	if (theme !== undefined) { updateFields.push(`theme = $${paramIndex}`); updateValues.push(theme); paramIndex++; }
+	if (language !== undefined) { updateFields.push(`language = $${paramIndex}`); updateValues.push(language); paramIndex++; }
+	if (timezone !== undefined) { updateFields.push(`timezone = $${paramIndex}`); updateValues.push(timezone); paramIndex++; }
+	if (emailNotifications !== undefined) { updateFields.push(`email_notifications = $${paramIndex}`); updateValues.push(emailNotifications); paramIndex++; }
+	if (pushNotifications !== undefined) { updateFields.push(`push_notifications = $${paramIndex}`); updateValues.push(pushNotifications); paramIndex++; }
+	if (courseNotifications !== undefined) { updateFields.push(`course_notifications = $${paramIndex}`); updateValues.push(courseNotifications); paramIndex++; }
+	if (classNotifications !== undefined) { updateFields.push(`class_notifications = $${paramIndex}`); updateValues.push(classNotifications); paramIndex++; }
+	if (discussionNotifications !== undefined) { updateFields.push(`discussion_notifications = $${paramIndex}`); updateValues.push(discussionNotifications); paramIndex++; }
+	if (marketingEmails !== undefined) { updateFields.push(`marketing_emails = $${paramIndex}`); updateValues.push(marketingEmails); paramIndex++; }
+
+	if (!existing) {
+		// insert new
+		const insertCols = ['user_id'];
+		const insertValsPlaceholders = ['$1'];
+		const insertVals = [req.user.id];
+		let nextParam = 2;
+		for (const field of updateFields) {
+			const col = field.split('=')[0].trim();
+			insertCols.push(col);
+			insertValsPlaceholders.push(`$${nextParam}`);
+			nextParam++;
+		}
+		await query(`INSERT INTO user_settings (${insertCols.join(', ')}) VALUES (${insertValsPlaceholders.join(', ')})`, [...insertVals, ...updateValues]);
+	} else if (updateFields.length > 0) {
+		updateFields.push('updated_at = CURRENT_TIMESTAMP');
+		updateValues.push(req.user.id);
+		await query(`UPDATE user_settings SET ${updateFields.join(', ')} WHERE user_id = $${paramIndex}`, updateValues);
+	}
+
+	res.json({ success: true });
+}));
+
+router.put('/me/profile', [
+	body('firstName').optional().isLength({ min: 1, max: 50 }),
+	body('lastName').optional().isLength({ min: 1, max: 50 }),
+	body('phone').optional().isString(),
+	body('location').optional().isString(),
+	body('bio').optional().isLength({ max: 500 }),
+	body('timezone').optional().isString(),
+	body('email').optional().isEmail()
+], authenticateToken, asyncHandler(async (req, res) => {
+	const errors = validationResult(req);
+	if (!errors.isEmpty()) {
+		throw new AppError('Validation failed', 400, 'Validation Error');
+	}
+
+	const { firstName, lastName, phone, location, bio, timezone, email } = req.body;
+
+	const updateFields = [];
+	const updateValues = [];
+	let paramIndex = 1;
+
+	if (firstName !== undefined) { updateFields.push(`first_name = $${paramIndex}`); updateValues.push(firstName); paramIndex++; }
+	if (lastName !== undefined) { updateFields.push(`last_name = $${paramIndex}`); updateValues.push(lastName); paramIndex++; }
+	if (bio !== undefined) { updateFields.push(`bio = $${paramIndex}`); updateValues.push(bio); paramIndex++; }
+	if (timezone !== undefined) { updateFields.push(`timezone = $${paramIndex}`); updateValues.push(timezone); paramIndex++; }
+	if (location !== undefined) { updateFields.push(`location = $${paramIndex}`); updateValues.push(location); paramIndex++; }
+	if (phone !== undefined) { updateFields.push(`phone = $${paramIndex}`); updateValues.push(phone); paramIndex++; }
+	// Note: Email change usually requires verification; if allowed, set and mark unverified
+	if (email !== undefined) { updateFields.push(`email = $${paramIndex}`); updateValues.push(email); paramIndex++; }
+
+	if (updateFields.length > 0) {
+		updateFields.push('updated_at = CURRENT_TIMESTAMP');
+		updateValues.push(req.user.id);
+		await query(`UPDATE users SET ${updateFields.join(', ')} WHERE id = $${paramIndex}`, updateValues);
+	}
+
+	const updatedUser = await getRow(
+		`SELECT email, first_name, last_name, avatar_url, bio, timezone, location, phone, created_at, updated_at
+		 FROM users WHERE id = $1`,
+		[req.user.id]
+	);
+
+	res.json({
+		email: updatedUser.email,
+		firstName: updatedUser.first_name,
+		lastName: updatedUser.last_name,
+		avatarUrl: updatedUser.avatar_url,
+		bio: updatedUser.bio,
+		timezone: updatedUser.timezone,
+		location: updatedUser.location,
+		phone: updatedUser.phone,
+		createdAt: updatedUser.created_at,
+		updatedAt: updatedUser.updated_at
+	});
+}));
+
 module.exports = router; 

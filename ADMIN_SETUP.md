@@ -322,10 +322,10 @@ GET /api/admin/settings
 PUT /api/admin/settings
 {
   "settings": {
-    "site_name": "TheMobileProf LMS",
+    "support_email": "support@themobileprof.com",
+    "site_description": "Professional mobile development learning platform",
     "max_file_size": "10MB",
-    "maintenance_mode": "false",
-    "registration_enabled": "true"
+    "maintenance_mode": "false"
   }
 }
 ```

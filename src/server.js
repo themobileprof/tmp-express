@@ -23,9 +23,14 @@ const adminRoutes = require('./routes/admin');
 const scrapingRoutes = require('./routes/scraping');
 const notificationRoutes = require('./routes/notifications');
 const uploadRoutes = require('./routes/uploads');
+const searchRoutes = require('./routes/search');
+const metaRoutes = require('./routes/meta');
+const certificationProgramRoutes = require('./routes/certificationPrograms');
 
 const { errorHandler } = require('./middleware/errorHandler');
 const { authenticateToken } = require('./middleware/auth');
+const { getSystemSetting } = require('./utils/systemSettings');
+const maintenanceMiddleware = require('./middleware/maintenance');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -166,16 +171,20 @@ app.get('/health', (req, res) => {
 });
 
 // API landing page
-app.get('/', (req, res) => {
+app.get('/', async (req, res) => {
   // Check if request wants JSON (API client) or HTML (browser)
   const wantsJson = req.headers.accept && req.headers.accept.includes('application/json');
   
   if (wantsJson) {
+    // Get system settings
+    const siteDescription = await getSystemSetting('site_description', 'Learning Management System Backend API');
+    const supportEmail = await getSystemSetting('support_email', 'support@themobileprof.com');
+    
     // Return JSON for API clients
     res.status(200).json({
       name: 'TheMobileProf LMS API',
       version: '1.0.0',
-      description: 'Learning Management System Backend API',
+      description: siteDescription,
       status: 'running',
       timestamp: new Date().toISOString(),
       endpoints: {
@@ -194,9 +203,13 @@ app.get('/', (req, res) => {
         scraping: '/api/scraping'
       },
       documentation: 'https://github.com/your-username/themobileprof-backend',
-      support: 'support@themobileprof.com'
+      support: supportEmail
     });
   } else {
+    // Get system settings for HTML
+    const siteDescription = await getSystemSetting('site_description', 'Learning Management System Backend API');
+    const supportEmail = await getSystemSetting('support_email', 'support@themobileprof.com');
+    
     // Return HTML for browser requests
     res.status(200).send(`
       <!DOCTYPE html>
@@ -260,7 +273,7 @@ app.get('/', (req, res) => {
       <body>
         <div class="header">
           <h1>🚀 TheMobileProf LMS API</h1>
-          <p>Learning Management System Backend API</p>
+          <p>${siteDescription}</p>
           <span class="status">Running</span>
         </div>
         
@@ -299,7 +312,7 @@ app.get('/', (req, res) => {
         </div>
         
         <div class="footer">
-          <p>Version 1.0.0 | <a href="https://github.com/your-username/themobileprof-backend">Documentation</a> | <a href="mailto:support@themobileprof.com">Support</a></p>
+          <p>Version 1.0.0 | <a href="https://github.com/your-username/themobileprof-backend">Documentation</a> | <a href="mailto:${supportEmail}">Support</a></p>
           <p>Last updated: ${new Date().toLocaleString()}</p>
         </div>
       </body>
@@ -307,6 +320,9 @@ app.get('/', (req, res) => {
     `);
   }
 });
+
+// Maintenance mode (before most routes)
+app.use(maintenanceMiddleware);
 
 // API routes
 app.use('/api/auth', authRoutes);
@@ -324,6 +340,9 @@ app.use('/api/payments', paymentRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/scraping', scrapingRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/search', searchRoutes);
+app.use('/api/meta', metaRoutes);
+app.use('/api/certification-programs', certificationProgramRoutes);
 
 // Debug endpoints (must be defined before /uploads route to avoid conflicts)
 app.get('/debug/uploads', (req, res) => {

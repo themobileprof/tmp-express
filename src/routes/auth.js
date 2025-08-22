@@ -136,6 +136,17 @@ router.post('/login', validateLogin, asyncHandler(async (req, res) => {
     throw new AppError('Invalid email or password', 401, 'Authentication Failed');
   }
 
+  // Enforce email verification if required by system setting
+  const { getSystemSetting } = require('../utils/systemSettings');
+  const emailVerificationRequired = String(await getSystemSetting('email_verification_required', 'true')).toLowerCase() === 'true';
+  const userVerification = await getRow('SELECT email_verified FROM users WHERE id = $1', [user.id]);
+  if (emailVerificationRequired && !userVerification.email_verified) {
+    return res.status(403).json({
+      error: 'EMAIL_VERIFICATION_REQUIRED',
+      message: 'Please verify your email before logging in.'
+    });
+  }
+
   // Generate token
   const token = generateToken(user.id, user.email, user.role);
 

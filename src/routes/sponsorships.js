@@ -5,6 +5,7 @@ const { asyncHandler, AppError } = require('../middleware/errorHandler');
 const { authenticateToken, authorizeSponsor, authorizeOwnerOrAdmin } = require('../middleware/auth');
 const { v4: uuidv4 } = require('uuid');
 const transporter = require('../mailer');
+const { getSystemSetting } = require('../utils/systemSettings');
 
 const router = express.Router();
 
@@ -25,7 +26,8 @@ const validateSponsorshipUsage = [
 
 // Generate unique discount code
 const generateDiscountCode = async () => {
-  const codeLength = parseInt(process.env.SPONSORSHIP_CODE_LENGTH) || 10;
+  const configuredLength = parseInt(await getSystemSetting('sponsorship_code_length', '10'));
+  const codeLength = Number.isFinite(configuredLength) && configuredLength > 0 ? configuredLength : 10;
   let code;
   let isUnique = false;
   
@@ -63,10 +65,14 @@ router.post('/', authenticateToken, authorizeSponsor, validateSponsorship, async
     throw new AppError('Fixed discount cannot exceed or equal course price', 400, 'Invalid Discount');
   }
 
-  // Calculate dates
+  // Calculate dates with cap from settings
+  const configuredMaxMonths = parseInt(await getSystemSetting('max_sponsorship_duration_months', '12'));
+  const maxMonths = Number.isFinite(configuredMaxMonths) && configuredMaxMonths > 0 ? configuredMaxMonths : 12;
+  const cappedDuration = Math.min(duration, maxMonths);
+  
   const startDate = new Date();
   const endDate = new Date();
-  endDate.setMonth(endDate.getMonth() + duration);
+  endDate.setMonth(endDate.getMonth() + cappedDuration);
 
   // Generate unique discount code
   const discountCode = await generateDiscountCode();
@@ -464,6 +470,10 @@ router.post('/:id/email', authenticateToken, authorizeOwnerOrAdmin('sponsorships
     throw new AppError('Sponsorship not found', 404, 'Sponsorship Not Found');
   }
 
+  // Get system settings for email
+  const siteDescription = await getSystemSetting('site_description', 'TheMobileProf LMS');
+  const supportEmail = await getSystemSetting('support_email', 'support@themobileprof.com');
+
   // Compose email
   const subject = isForRecipient
     ? `You've received a sponsorship for ${sponsorship.course_title}!`
@@ -482,6 +492,7 @@ router.post('/:id/email', authenticateToken, authorizeOwnerOrAdmin('sponsorships
       <li><strong>Valid Until:</strong> ${new Date(sponsorship.end_date).toLocaleDateString()}</li>
     </ul>
     <p>To use this sponsorship, enroll in the course and enter the discount code above.</p>
+    <p>If you have any questions, please contact us at ${supportEmail}.</p>
   `;
 
   // Send email

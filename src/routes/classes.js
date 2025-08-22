@@ -3,6 +3,7 @@ const { body, validationResult } = require('express-validator');
 const { query, getRow, getRows } = require('../database/config');
 const { asyncHandler, AppError } = require('../middleware/errorHandler');
 const { authenticateToken, authorizeInstructor, authorizeOwnerOrAdmin } = require('../middleware/auth');
+const { notifyClassEnrollment } = require('../utils/notifications');
 
 const router = express.Router();
 
@@ -125,82 +126,109 @@ router.get('/upcoming', asyncHandler(async (req, res) => {
 
 // Validation middleware
 const validateClass = [
-  body('title').trim().isLength({ min: 1 }).withMessage('Class title is required'),
-  body('description').trim().isLength({ min: 10 }).withMessage('Class description must be at least 10 characters'),
-  body('topic').trim().isLength({ min: 1 }).withMessage('Class topic is required'),
-  body('type').isIn(['online', 'hybrid']).withMessage('Class type must be online or hybrid'),
-  body('startDate').isISO8601().withMessage('Valid start date is required'),
-  body('endDate').optional().isISO8601().withMessage('Valid end date is required'),
-  body('duration').trim().isLength({ min: 1 }).withMessage('Class duration is required'),
-  body('price').isFloat({ min: 0 }).withMessage('Price must be a non-negative number'),
-  body('availableSlots').isInt({ min: 1 }).withMessage('Available slots must be at least 1'),
-  body('totalSlots').isInt({ min: 1 }).withMessage('Total slots must be at least 1'),
-  body('location').optional().isString().withMessage('Location must be a string')
+	body('title').trim().isLength({ min: 1 }).withMessage('Class title is required'),
+	body('description').trim().isLength({ min: 10 }).withMessage('Class description must be at least 10 characters'),
+	body('topic').trim().isLength({ min: 1 }).withMessage('Class topic is required'),
+	body('type').isIn(['online', 'hybrid']).withMessage('Class type must be online or hybrid'),
+	body('startDate').isISO8601().withMessage('Valid start date is required'),
+	body('endDate').optional().isISO8601().withMessage('Valid end date is required'),
+	body('duration').trim().isLength({ min: 1 }).withMessage('Class duration is required'),
+	body('price').isFloat({ min: 0 }).withMessage('Price must be a non-negative number'),
+	body('availableSlots').isInt({ min: 1 }).withMessage('Available slots must be at least 1'),
+	body('totalSlots').isInt({ min: 1 }).withMessage('Total slots must be at least 1'),
+	body('location').optional().isString().withMessage('Location must be a string')
+];
+
+// Allow optional sponsorshipId during enrollment
+const validateClassEnrollment = [
+	body('sponsorshipId').optional().isUUID().withMessage('Valid sponsorship ID is required')
 ];
 
 // Get all classes
 router.get('/', asyncHandler(async (req, res) => {
-  const { topic, type, instructorId, isPublished, limit = 20, offset = 0 } = req.query;
+	const { topic, type, instructorId, isPublished, priceMin, priceMax, search, sort = 'start_date', order = 'asc', limit = 20, offset = 0 } = req.query;
 
-  let whereClause = 'WHERE 1=1';
-  let params = [];
-  let paramIndex = 1;
+	let whereClause = 'WHERE 1=1';
+	let params = [];
+	let paramIndex = 1;
 
-  if (topic) {
-    whereClause += ` AND cl.topic ILIKE $${paramIndex}`;
-    params.push(`%${topic}%`);
-    paramIndex++;
-  }
+	if (topic) {
+		whereClause += ` AND cl.topic ILIKE $${paramIndex}`;
+		params.push(`%${topic}%`);
+		paramIndex++;
+	}
 
-  if (type) {
-    whereClause += ` AND cl.type = $${paramIndex}`;
-    params.push(type);
-    paramIndex++;
-  }
+	if (type) {
+		whereClause += ` AND cl.type = $${paramIndex}`;
+		params.push(type);
+		paramIndex++;
+	}
 
-  if (instructorId) {
-    whereClause += ` AND cl.instructor_id = $${paramIndex}`;
-    params.push(instructorId);
-    paramIndex++;
-  }
+	if (instructorId) {
+		whereClause += ` AND cl.instructor_id = $${paramIndex}`;
+		params.push(instructorId);
+		paramIndex++;
+	}
 
-  if (isPublished !== undefined) {
-    whereClause += ` AND cl.is_published = $${paramIndex}`;
-    params.push(isPublished === 'true');
-    paramIndex++;
-  }
+	if (isPublished !== undefined) {
+		whereClause += ` AND cl.is_published = $${paramIndex}`;
+		params.push(isPublished === 'true');
+		paramIndex++;
+	}
 
-  const classes = await getRows(
-    `SELECT cl.*, u.first_name as instructor_first_name, u.last_name as instructor_last_name
-     FROM classes cl
-     JOIN users u ON cl.instructor_id = u.id
-     ${whereClause}
-     ORDER BY cl.start_date ASC
-     LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
-    [...params, parseInt(limit), parseInt(offset)]
-  );
+	if (priceMin) {
+		whereClause += ` AND cl.price >= $${paramIndex}`;
+		params.push(parseFloat(priceMin));
+		paramIndex++;
+	}
 
-  res.json({
-    classes: classes.map(c => ({
-      id: c.id,
-      title: c.title,
-      description: c.description,
-      topic: c.topic,
-      type: c.type,
-      startDate: c.start_date,
-      endDate: c.end_date,
-      duration: c.duration,
-      price: c.price,
-      instructorId: c.instructor_id,
-      instructorName: `${c.instructor_first_name} ${c.instructor_last_name}`,
-      availableSlots: c.available_slots,
-      totalSlots: c.total_slots,
-      location: c.location,
-      isPublished: c.is_published,
-      createdAt: c.created_at,
-      updatedAt: c.updated_at
-    }))
-  });
+	if (priceMax) {
+		whereClause += ` AND cl.price <= $${paramIndex}`;
+		params.push(parseFloat(priceMax));
+		paramIndex++;
+	}
+
+	if (search) {
+		whereClause += ` AND (cl.title ILIKE $${paramIndex} OR cl.description ILIKE $${paramIndex})`;
+		params.push(`%${search}%`);
+		paramIndex++;
+	}
+
+	const allowedSortFields = ['start_date', 'title', 'price', 'available_slots', 'created_at'];
+	const sortField = allowedSortFields.includes(sort) ? sort : 'start_date';
+	const sortOrder = order && order.toLowerCase() === 'desc' ? 'DESC' : 'ASC';
+
+	const classes = await getRows(
+		`SELECT cl.*, u.first_name as instructor_first_name, u.last_name as instructor_last_name
+		 FROM classes cl
+		 JOIN users u ON cl.instructor_id = u.id
+		 ${whereClause}
+		 ORDER BY cl.${sortField} ${sortOrder}
+		 LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
+		[...params, parseInt(limit), parseInt(offset)]
+	);
+
+	res.json({
+		classes: classes.map(c => ({
+			id: c.id,
+			title: c.title,
+			description: c.description,
+			topic: c.topic,
+			type: c.type,
+			startDate: c.start_date,
+			endDate: c.end_date,
+			duration: c.duration,
+			price: c.price,
+			instructorId: c.instructor_id,
+			instructorName: `${c.instructor_first_name} ${c.instructor_last_name}`,
+			availableSlots: c.available_slots,
+			totalSlots: c.total_slots,
+			location: c.location,
+			isPublished: c.is_published,
+			createdAt: c.created_at,
+			updatedAt: c.updated_at
+		}))
+	});
 }));
 
 // Create new class
@@ -252,59 +280,65 @@ router.post('/', authenticateToken, authorizeInstructor, validateClass, asyncHan
 
 // Get class by ID
 router.get('/:id', asyncHandler(async (req, res) => {
-  const { id } = req.params;
+	const { id } = req.params;
 
-  const classData = await getRow(
-    `SELECT cl.*, u.first_name as instructor_first_name, u.last_name as instructor_last_name,
-            u.avatar_url as instructor_avatar, u.bio as instructor_bio
-     FROM classes cl
-     JOIN users u ON cl.instructor_id = u.id
-     WHERE cl.id = $1`,
-    [id]
-  );
+	const classData = await getRow(
+		`SELECT cl.*, u.first_name as instructor_first_name, u.last_name as instructor_last_name,
+				u.avatar_url as instructor_avatar, u.bio as instructor_bio
+		 FROM classes cl
+		 JOIN users u ON cl.instructor_id = u.id
+		 WHERE cl.id = $1`,
+		[id]
+	);
 
-  if (!classData) {
-    throw new AppError('Class not found', 404, 'Class Not Found');
-  }
+	if (!classData) {
+		throw new AppError('Class not found', 404, 'Class Not Found');
+	}
 
-  // Get associated courses
-  const courses = await getRows(
-    `SELECT c.id, c.title, c.topic, c.duration, cc.order_index
-     FROM class_courses cc
-     JOIN courses c ON cc.course_id = c.id
-     WHERE cc.class_id = $1
-     ORDER BY cc.order_index`,
-    [id]
-  );
+	// Get associated courses
+	const courses = await getRows(
+		`SELECT c.id, c.title, c.topic, c.duration, cc.order_index
+		 FROM class_courses cc
+		 JOIN courses c ON cc.course_id = c.id
+		 WHERE cc.class_id = $1
+		 ORDER BY cc.order_index`,
+		[id]
+	);
 
-  res.json({
-    id: classData.id,
-    title: classData.title,
-    description: classData.description,
-    topic: classData.topic,
-    type: classData.type,
-    startDate: classData.start_date,
-    endDate: classData.end_date,
-    duration: classData.duration,
-    price: classData.price,
-    instructorId: classData.instructor_id,
-    instructorName: `${classData.instructor_first_name} ${classData.instructor_last_name}`,
-    instructorAvatar: classData.instructor_avatar,
-    instructorBio: classData.instructor_bio,
-    availableSlots: classData.available_slots,
-    totalSlots: classData.total_slots,
-    location: classData.location,
-    isPublished: classData.is_published,
-    createdAt: classData.created_at,
-    updatedAt: classData.updated_at,
-    courses: courses.map(c => ({
-      id: c.id,
-      title: c.title,
-      topic: c.topic,
-      duration: c.duration,
-      orderIndex: c.order_index
-    }))
-  });
+	res.json({
+		id: classData.id,
+		title: classData.title,
+		description: classData.description,
+		topic: classData.topic,
+		type: classData.type,
+		startDate: classData.start_date,
+		endDate: classData.end_date,
+		duration: classData.duration,
+		price: classData.price,
+		instructorId: classData.instructor_id,
+		instructorName: `${classData.instructor_first_name} ${classData.instructor_last_name}`,
+		instructorAvatar: classData.instructor_avatar,
+		instructorBio: classData.instructor_bio,
+		availableSlots: classData.available_slots,
+		totalSlots: classData.total_slots,
+		location: classData.location,
+		isPublished: classData.is_published,
+		createdAt: classData.created_at,
+		updatedAt: classData.updated_at,
+		courses: courses.map(c => ({
+			id: c.id,
+			title: c.title,
+			topic: c.topic,
+			duration: c.duration,
+			orderIndex: c.order_index
+		}))
+	});
+}));
+
+// Distinct topics for filters
+router.get('/topics', asyncHandler(async (req, res) => {
+	const rows = await getRows(`SELECT DISTINCT topic FROM classes WHERE topic IS NOT NULL AND topic <> '' ORDER BY topic ASC`);
+	res.json({ topics: rows.map(r => r.topic) });
 }));
 
 // Update class
@@ -418,57 +452,104 @@ router.get('/:id/enrollments', authenticateToken, authorizeOwnerOrAdmin('classes
 }));
 
 // Enroll in class
-router.post('/:id/enroll', authenticateToken, asyncHandler(async (req, res) => {
-  const { id } = req.params;
-  const userId = req.user.id;
+router.post('/:id/enroll', authenticateToken, validateClassEnrollment, asyncHandler(async (req, res) => {
+	const errors = validationResult(req);
+	if (!errors.isEmpty()) {
+		throw new AppError('Validation failed', 400, 'Validation Error');
+	}
 
-  // Verify class exists and is published
-  const classData = await getRow('SELECT * FROM classes WHERE id = $1 AND is_published = true', [id]);
-  if (!classData) {
-    throw new AppError('Class not found or not published', 404, 'Class Not Found');
-  }
+	const { id } = req.params;
+	const { sponsorshipId } = req.body;
+	const userId = req.user.id;
 
-  // Check if class has available slots
-  if (classData.available_slots <= 0) {
-    throw new AppError('Class is full', 400, 'Class Full');
-  }
+	// Verify class exists and is published
+	const classData = await getRow('SELECT * FROM classes WHERE id = $1 AND is_published = true', [id]);
+	if (!classData) {
+		throw new AppError('Class not found or not published', 404, 'Class Not Found');
+	}
 
-  // Check if user is already enrolled
-  const existingEnrollment = await getRow(
-    'SELECT * FROM enrollments WHERE class_id = $1 AND user_id = $2',
-    [id, userId]
-  );
+	// Check if class has available slots
+	if (classData.available_slots <= 0) {
+		throw new AppError('Class is full', 400, 'Class Full');
+	}
 
-  if (existingEnrollment) {
-    throw new AppError('User is already enrolled in this class', 400, 'Already Enrolled');
-  }
+	// Check if user is already enrolled
+	const existingEnrollment = await getRow(
+		'SELECT * FROM enrollments WHERE class_id = $1 AND user_id = $2',
+		[id, userId]
+	);
 
-  // Create enrollment
-  const result = await query(
-    `INSERT INTO enrollments (
-      user_id, class_id, enrollment_type
-    ) VALUES ($1, $2, $3)
-    RETURNING *`,
-    [userId, id, 'class']
-  );
+	if (existingEnrollment) {
+		throw new AppError('User is already enrolled in this class', 400, 'Already Enrolled');
+	}
 
-  const enrollment = result.rows[0];
+	// If sponsorship provided, verify it is active and applicable to one of the class courses and used by this user
+	let sponsorshipIdToSave = null;
+	if (sponsorshipId) {
+		const sponsorship = await getRow(
+			'SELECT * FROM sponsorships WHERE id = $1 AND status = $2',
+			[sponsorshipId, 'active']
+		);
+		if (!sponsorship) {
+			throw new AppError('Invalid or inactive sponsorship', 400, 'Invalid Sponsorship');
+		}
 
-  // Update available slots
-  await query(
-    'UPDATE classes SET available_slots = available_slots - 1 WHERE id = $1',
-    [id]
-  );
+		// Verify the sponsorship course is part of this class (via class_courses)
+		const mapping = await getRow(
+			'SELECT 1 FROM class_courses WHERE class_id = $1 AND course_id = $2 LIMIT 1',
+			[id, sponsorship.course_id]
+		);
+		if (!mapping) {
+			throw new AppError('Sponsorship is not applicable to this class', 400, 'Invalid Sponsorship Mapping');
+		}
 
-  res.status(201).json({
-    id: enrollment.id,
-    userId: enrollment.user_id,
-    classId: enrollment.class_id,
-    enrollmentType: enrollment.enrollment_type,
-    progress: enrollment.progress,
-    status: enrollment.status,
-    enrolledAt: enrollment.enrolled_at
-  });
+		// Verify usage by this user
+		const usage = await getRow(
+			'SELECT 1 FROM sponsorship_usage WHERE sponsorship_id = $1 AND student_id = $2',
+			[sponsorshipId, userId]
+		);
+		if (!usage) {
+			throw new AppError('Sponsorship has not been used by this user', 400, 'Sponsorship Not Used');
+		}
+
+		sponsorshipIdToSave = sponsorshipId;
+	}
+
+	// Create enrollment
+	const result = await query(
+		`INSERT INTO enrollments (
+			user_id, class_id, enrollment_type, sponsorship_id
+		) VALUES ($1, $2, $3, $4)
+		RETURNING *`,
+		[userId, id, 'class', sponsorshipIdToSave]
+	);
+
+	const enrollment = result.rows[0];
+
+	// Update available slots
+	await query(
+		'UPDATE classes SET available_slots = available_slots - 1 WHERE id = $1',
+		[id]
+	);
+
+	// Send enrollment notification
+	try {
+		await notifyClassEnrollment(userId, id, classData.title);
+	} catch (error) {
+		console.error('Failed to send class enrollment notification:', error);
+		// Don't fail the enrollment if notification fails
+	}
+
+	res.status(201).json({
+		id: enrollment.id,
+		userId: enrollment.user_id,
+		classId: enrollment.class_id,
+		enrollmentType: enrollment.enrollment_type,
+		progress: enrollment.progress,
+		status: enrollment.status,
+		sponsorshipId: enrollment.sponsorship_id,
+		enrolledAt: enrollment.enrolled_at
+	});
 }));
 
 module.exports = router; 

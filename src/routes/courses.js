@@ -3,6 +3,7 @@ const { body, validationResult } = require('express-validator');
 const { query, getRow, getRows } = require('../database/config');
 const { asyncHandler, AppError } = require('../middleware/errorHandler');
 const { authenticateToken, authorizeInstructor, authorizeOwnerOrAdmin } = require('../middleware/auth');
+const { notifyCourseEnrollment } = require('../utils/notifications');
 
 const router = express.Router();
 
@@ -578,6 +579,14 @@ router.post('/:id/enroll', authenticateToken, validateEnrollment, asyncHandler(a
     [id]
   );
 
+  // Send enrollment notification
+  try {
+    await notifyCourseEnrollment(userId, id, course.title);
+  } catch (error) {
+    console.error('Failed to send enrollment notification:', error);
+    // Don't fail the enrollment if notification fails
+  }
+
   res.status(201).json({
     id: enrollment.id,
     userId: enrollment.user_id,
@@ -629,112 +638,92 @@ router.put('/:id/enrollments/:enrollmentId', authenticateToken, asyncHandler(asy
 
 // Get course lessons with unlock status
 router.get('/:id/lessons', authenticateToken, asyncHandler(async (req, res) => {
-  const { id } = req.params;
-  const userId = req.user.id;
+	const { id } = req.params;
+	const userId = req.user.id;
+	const isAdmin = req.user.role === 'admin';
 
-  // Verify enrollment
-  const enrollment = await getRow(
-    'SELECT * FROM enrollments WHERE user_id = $1 AND course_id = $2',
-    [userId, id]
-  );
+	// Verify enrollment unless admin
+	if (!isAdmin) {
+		const enrollment = await getRow(
+			'SELECT * FROM enrollments WHERE user_id = $1 AND course_id = $2',
+			[userId, id]
+		);
 
-  if (!enrollment) {
-    throw new AppError('You must be enrolled in this course to view lessons', 403, 'Not Enrolled');
-  }
+		if (!enrollment) {
+			throw new AppError('Enrollment required to view lessons', 403, 'ENROLLMENT_REQUIRED', { courseId: id });
+		}
+	}
 
-  // Get all lessons with their unlock and completion status
-  const lessons = await getRows(
-    `SELECT l.*, 
-            CASE WHEN lp.status = 'completed' THEN true ELSE false END as is_completed,
-            lp.progress_percentage,
-            lp.time_spent_minutes,
-            lp.completed_at,
-            t.id as test_id,
-            t.title as test_title,
-            t.passing_score,
-            t.max_attempts
-     FROM lessons l
-     LEFT JOIN lesson_progress lp ON l.id = lp.lesson_id AND lp.user_id = $1
-     LEFT JOIN tests t ON l.id = t.lesson_id
-     WHERE l.course_id = $1 AND l.is_published = true
-     ORDER BY l.order_index`,
-    [id]
-  );
+	// Get all lessons with their unlock and completion status
+	const lessons = await getRows(
+		`SELECT l.*, 
+				CASE WHEN lp.status = 'completed' THEN true ELSE false END as is_completed,
+				lp.progress_percentage,
+				lp.time_spent_minutes,
+				lp.completed_at,
+				t.id as test_id,
+				t.title as test_title,
+				t.passing_score,
+				t.max_attempts
+		 FROM lessons l
+		 LEFT JOIN lesson_progress lp ON l.id = lp.lesson_id AND lp.user_id = $1
+		 LEFT JOIN tests t ON l.id = t.lesson_id
+		 WHERE l.course_id = $2 AND l.is_published = true
+		 ORDER BY l.order_index`,
+		[userId, id]
+	);
 
-  // Calculate unlock status for each lesson
-  const lessonsWithStatus = [];
-  let unlockedCount = 0;
+	// Calculate unlock status for each lesson
+	const lessonsWithStatus = [];
+	let unlockedCount = 0;
 
-  for (let i = 0; i < lessons.length; i++) {
-    const lesson = lessons[i];
-    const isUnlocked = i === 0 || (i > 0 && lessonsWithStatus[i - 1].isUnlocked && (lessonsWithStatus[i - 1].testPassed || lessonsWithStatus[i - 1].isCompleted));
-    
-    // Check if test was passed
-    let testPassed = false;
-    if (lesson.test_id) {
-      const testResult = await getRow(
-        `SELECT ta.id FROM test_attempts ta
-         WHERE ta.test_id = $1 AND ta.user_id = $2 AND ta.status = 'completed' AND ta.score >= $3
-         LIMIT 1`,
-        [lesson.test_id, userId, lesson.passing_score]
-      );
-      testPassed = !!testResult;
-    }
+	for (let i = 0; i < lessons.length; i++) {
+		const lesson = lessons[i];
+		const isUnlocked = i === 0 || (i > 0 && lessonsWithStatus[i - 1].isUnlocked && (lessonsWithStatus[i - 1].testPassed || lessonsWithStatus[i - 1].isCompleted));
+		
+		// Check if test was passed
+		let testPassed = false;
+		if (lesson.test_id) {
+			const testResult = await getRow(
+				`SELECT ta.id FROM test_attempts ta
+				 WHERE ta.test_id = $1 AND ta.user_id = $2 AND ta.status = 'completed' AND ta.score >= $3
+				 LIMIT 1`,
+				[lesson.test_id, userId, lesson.passing_score]
+			);
+			testPassed = !!testResult;
+		}
 
-    const lessonData = {
-      id: lesson.id,
-      title: lesson.title,
-      description: lesson.description,
-      orderIndex: lesson.order_index,
-      durationMinutes: lesson.duration_minutes,
-      isUnlocked: isUnlocked,
-      isCompleted: lesson.is_completed || false,
-      testPassed: testPassed,
-      progress: lesson.progress_percentage || 0,
-      timeSpentMinutes: lesson.time_spent_minutes || 0,
-      completedAt: lesson.completed_at,
-      test: lesson.test_id ? {
-        id: lesson.test_id,
-        title: lesson.test_title,
-        passingScore: lesson.passing_score,
-        maxAttempts: lesson.max_attempts
-      } : null,
-      canAccess: isUnlocked,
-      nextUnlocked: isUnlocked && !testPassed && lesson.test_id
-    };
+		const lessonData = {
+			id: lesson.id,
+			title: lesson.title,
+			description: lesson.description,
+			orderIndex: lesson.order_index,
+			durationMinutes: lesson.duration_minutes,
+			isUnlocked: isUnlocked,
+			isCompleted: lesson.is_completed || false,
+			testPassed: testPassed,
+			progress: lesson.progress_percentage || 0,
+			timeSpentMinutes: lesson.time_spent_minutes || 0,
+			completedAt: lesson.completed_at,
+			test: lesson.test_id ? {
+				id: lesson.test_id,
+				title: lesson.test_title,
+				passingScore: lesson.passing_score,
+				maxAttempts: lesson.max_attempts
+			} : null
+		};
 
-    lessonsWithStatus.push(lessonData);
-    if (isUnlocked) unlockedCount++;
-  }
+		lessonsWithStatus.push(lessonData);
 
-  // Get course stats for passed tests
-  const courseStats = await getRow(
-    `SELECT 
-       COUNT(DISTINCT CASE WHEN ta.status = 'completed' AND ta.score >= t.passing_score THEN t.id END) as passed_tests
-     FROM courses c
-     LEFT JOIN lessons l ON c.id = l.course_id AND l.is_published = true
-     LEFT JOIN tests t ON l.id = t.lesson_id
-     LEFT JOIN test_attempts ta ON t.id = ta.test_id AND ta.user_id = $1
-     WHERE c.id = $2`,
-    [userId, id]
-  );
+		if (isUnlocked) {
+			unlockedCount++;
+		}
+	}
 
-
-
-  const completedLessons = lessonsWithStatus.filter(l => l.isCompleted).length;
-  const totalProgress = lessons.length > 0 ? Math.round((completedLessons / lessons.length) * 100) : 0;
-
-  res.json({
-    courseId: id,
-    lessons: lessonsWithStatus,
-    courseStats: {
-      totalLessons: lessons.length,
-      unlockedLessons: unlockedCount,
-      completedLessons: completedLessons,
-      passedTests: parseInt(courseStats.passed_tests) || 0,
-      totalProgress: totalProgress
-    }
-  });
+	res.json({
+		lessons: lessonsWithStatus,
+		unlockedCount
+	});
 }));
 
 // Get course progression status
@@ -962,6 +951,92 @@ router.get('/:id/analytics', authenticateToken, authorizeOwnerOrAdmin('courses',
       correctAnswers: parseInt(q.correct_answers) || 0,
       correctRate: parseFloat(q.correct_rate) || 0
     }))
+  });
+}));
+
+// Get course discussions
+router.get('/:id/discussions', asyncHandler(async (req, res) => {
+  const { id: courseId } = req.params;
+  const { category, lessonId, search, sort = 'last_activity_at', order = 'desc', limit = 20, offset = 0 } = req.query;
+
+  // Verify course exists
+  const course = await getRow('SELECT id, title, topic FROM courses WHERE id = $1', [courseId]);
+  if (!course) {
+    throw new AppError('Course not found', 404, 'Course Not Found');
+  }
+
+  let whereClause = 'WHERE d.course_id = $1';
+  let params = [courseId];
+  let paramIndex = 2;
+
+  if (category) {
+    whereClause += ` AND d.category = $${paramIndex}`;
+    params.push(category);
+    paramIndex++;
+  }
+
+  if (lessonId) {
+    whereClause += ` AND d.lesson_id = $${paramIndex}`;
+    params.push(lessonId);
+    paramIndex++;
+  }
+
+  if (search) {
+    whereClause += ` AND (d.title ILIKE $${paramIndex} OR d.content ILIKE $${paramIndex})`;
+    params.push(`%${search}%`);
+    paramIndex++;
+  }
+
+  const allowedSortFields = ['created_at', 'title', 'last_activity_at', 'reply_count', 'likes_count'];
+  const sortField = allowedSortFields.includes(sort) ? sort : 'last_activity_at';
+  const sortOrder = order && order.toLowerCase() === 'asc' ? 'ASC' : 'DESC';
+
+  // Get total count
+  const countResult = await getRow(
+    `SELECT COUNT(*) as total FROM discussions d ${whereClause}`,
+    params
+  );
+  const total = parseInt(countResult.total);
+
+  // Get discussions
+  const discussions = await getRows(
+    `SELECT d.*, u.first_name, u.last_name, u.avatar_url,
+        l.title as lesson_title,
+        COALESCE((SELECT COUNT(*) FROM discussion_likes dl WHERE dl.discussion_id = d.id), 0) as likes_count
+     FROM discussions d
+     JOIN users u ON d.author_id = u.id
+     LEFT JOIN lessons l ON d.lesson_id = l.id
+     ${whereClause}
+     ORDER BY d.${sortField} ${sortOrder}
+     LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
+    [...params, parseInt(limit), parseInt(offset)]
+  );
+
+  res.json({
+    course: {
+      id: course.id,
+      title: course.title,
+      topic: course.topic
+    },
+    discussions: discussions.map(d => ({
+      id: d.id,
+      title: d.title,
+      content: d.content,
+      category: d.category,
+      lessonId: d.lesson_id,
+      lessonTitle: d.lesson_title,
+      authorName: `${d.first_name} ${d.last_name}`,
+      replyCount: d.reply_count,
+      likesCount: parseInt(d.likes_count) || 0,
+      lastActivityAt: d.last_activity_at,
+      createdAt: d.created_at
+    })),
+    pagination: {
+      page: Math.floor(parseInt(offset) / parseInt(limit)) + 1,
+      limit: parseInt(limit),
+      total,
+      pages: Math.ceil(total / parseInt(limit))
+    }
   });
 }));
 

@@ -21,11 +21,15 @@
    - [Sponsorship Opportunities](#sponsorship-opportunities-endpoints)
    - [Discussions](#discussions-endpoints)
    - [Certifications](#certifications-endpoints)
+   - [Certification Programs](#certification-programs-endpoints)
    - [Settings](#settings-endpoints)
    - [Payments](#payments-endpoints)
    - [Admin](#admin-endpoints)
    - [File Uploads](#file-upload-endpoints)
    - [Scraping Management](#scraping-management)
+   - [Notifications](#notifications-endpoints)
+   - [Search](#search-endpoints)
+   - [Meta](#meta-endpoints)
 
 ## Overview
 
@@ -1401,6 +1405,431 @@ Authorization: Bearer <jwt-token>
 }
 ```
 
+---
+
+### Notifications Endpoints
+
+The notification system provides comprehensive user notification capabilities across the platform, including in-app notifications, email notifications, and preference management.
+
+#### Get Notifications
+**GET** `/api/notifications`
+
+List notifications with filters and pagination.
+
+**Headers:**
+```
+Authorization: Bearer <jwt-token>
+```
+
+**Query Parameters:**
+- `type` - Filter by notification type
+- `read` - Filter by read status (`true`/`false`)
+- `priority` - Filter by priority level
+- `sort` - Sort field (`created_at`, `type`, `priority`, `is_read`)
+- `order` - Sort order (`asc`/`desc`)
+- `page` - Page number (default: 1)
+- `limit` - Items per page (default: 20)
+
+**Response (200):**
+```json
+{
+  "notifications": [
+    {
+      "id": "uuid",
+      "type": "course_enrollment",
+      "title": "Course Enrollment Successful",
+      "message": "You have successfully enrolled in...",
+      "data": { "courseId": "uuid", "courseTitle": "..." },
+      "isRead": false,
+      "priority": "normal",
+      "createdAt": "2024-01-01T00:00:00Z",
+      "readAt": null
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "limit": 20,
+    "total": 50,
+    "totalPages": 3
+  }
+}
+```
+
+#### Get Notification Types
+**GET** `/api/notifications/types`
+
+Get available notification types and priorities.
+
+**Headers:**
+```
+Authorization: Bearer <jwt-token>
+```
+
+**Response (200):**
+```json
+{
+  "types": [
+    "course_enrollment",
+    "course_completion",
+    "class_enrollment",
+    "discussion_reply",
+    "test_result",
+    "payment_success",
+    "system_maintenance"
+  ],
+  "priorities": ["low", "normal", "high", "urgent"]
+}
+```
+
+#### Get Unread Count
+**GET** `/api/notifications/count`
+
+Get unread notification count.
+
+**Headers:**
+```
+Authorization: Bearer <jwt-token>
+```
+
+**Query Parameters:**
+- `type` - Filter by notification type (optional)
+
+**Response (200):**
+```json
+{
+  "unreadCount": 5
+}
+```
+
+#### Get Notification Statistics
+**GET** `/api/notifications/stats`
+
+Get notification statistics and analytics.
+
+**Headers:**
+```
+Authorization: Bearer <jwt-token>
+```
+
+**Response (200):**
+```json
+{
+  "total": 25,
+  "unread": 5,
+  "read": 20,
+  "byPriority": {
+    "urgent": 1,
+    "high": 3,
+    "normal": 18,
+    "low": 3
+  },
+  "byType": [
+    {
+      "type": "course_enrollment",
+      "count": 8
+    }
+  ]
+}
+```
+
+#### Get Notification Preferences
+**GET** `/api/notifications/preferences`
+
+Get user notification preferences.
+
+**Headers:**
+```
+Authorization: Bearer <jwt-token>
+```
+
+**Response (200):**
+```json
+{
+  "emailNotifications": true,
+  "pushNotifications": true,
+  "courseNotifications": true,
+  "classNotifications": true,
+  "discussionNotifications": true,
+  "testNotifications": true,
+  "certificationNotifications": true,
+  "paymentNotifications": true,
+  "systemNotifications": true
+}
+```
+
+#### Update Notification Preferences
+**PUT** `/api/notifications/preferences`
+
+Update user notification preferences.
+
+**Headers:**
+```
+Authorization: Bearer <jwt-token>
+Content-Type: application/json
+```
+
+**Request Body:**
+```json
+{
+  "emailNotifications": true,
+  "pushNotifications": true,
+  "courseNotifications": true,
+  "classNotifications": true,
+  "discussionNotifications": true,
+  "testNotifications": true,
+  "certificationNotifications": true,
+  "paymentNotifications": true,
+  "systemNotifications": true
+}
+```
+
+**Response (200):**
+```json
+{
+  "message": "Notification preferences updated successfully"
+}
+```
+
+#### Mark Notification as Read
+**PATCH** `/api/notifications/:id/read`
+
+Mark a specific notification as read.
+
+**Headers:**
+```
+Authorization: Bearer <jwt-token>
+```
+
+**Response (200):**
+```json
+{
+  "message": "Notification marked as read"
+}
+```
+
+#### Mark All Notifications as Read
+**PATCH** `/api/notifications/read-all`
+
+Mark all notifications as read.
+
+**Headers:**
+```
+Authorization: Bearer <jwt-token>
+```
+
+**Response (200):**
+```json
+{
+  "message": "All notifications marked as read",
+  "updatedCount": 5
+}
+```
+
+#### Mark Notifications by Type as Read
+**PATCH** `/api/notifications/read-by-type`
+
+Mark all notifications of a specific type as read.
+
+**Headers:**
+```
+Authorization: Bearer <jwt-token>
+Content-Type: application/json
+```
+
+**Request Body:**
+```json
+{
+  "type": "course_enrollment"
+}
+```
+
+**Response (200):**
+```json
+{
+  "message": "All course_enrollment notifications marked as read",
+  "updatedCount": 3
+}
+```
+
+#### Delete Notification
+**DELETE** `/api/notifications/:id`
+
+Delete a specific notification.
+
+**Headers:**
+```
+Authorization: Bearer <jwt-token>
+```
+
+**Response (200):**
+```json
+{
+  "message": "Notification deleted"
+}
+```
+
+#### Delete Multiple Notifications
+**DELETE** `/api/notifications/bulk`
+
+Bulk delete notifications.
+
+**Headers:**
+```
+Authorization: Bearer <jwt-token>
+Content-Type: application/json
+```
+
+**Request Body:**
+```json
+{
+  "ids": ["uuid1", "uuid2"],
+  "type": "course_enrollment",
+  "read": false
+}
+```
+
+**Response (200):**
+```json
+{
+  "message": "Notifications deleted successfully",
+  "deletedCount": 5
+}
+```
+
+#### Send System Notification (Admin Only)
+**POST** `/api/notifications/system`
+
+Send system notification to all users (admin only).
+
+**Headers:**
+```
+Authorization: Bearer <jwt-token>
+Content-Type: application/json
+```
+
+**Request Body:**
+```json
+{
+  "title": "System Maintenance",
+  "message": "Scheduled maintenance will begin...",
+  "type": "system_maintenance",
+  "priority": "high",
+  "data": { "maintenanceType": "database", "duration": "2 hours" }
+}
+```
+
+**Response (200):**
+```json
+{
+  "message": "System notification sent to 150 users",
+  "notificationCount": 150,
+  "type": "system_maintenance",
+  "title": "System Maintenance"
+}
+```
+
+#### Cleanup Old Notifications (Admin Only)
+**DELETE** `/api/notifications/cleanup`
+
+Clean up old notifications (admin only).
+
+**Headers:**
+```
+Authorization: Bearer <jwt-token>
+```
+
+**Query Parameters:**
+- `daysOld` - Days old to clean up (default: 90)
+
+**Response (200):**
+```json
+{
+  "message": "Cleaned up 25 old notifications",
+  "deletedCount": 25,
+  "daysOld": 90
+}
+```
+
+### Search Endpoints
+
+#### Get Search Suggestions
+**GET** `/api/search/suggestions`
+
+Get lightweight search suggestions for search bars.
+
+**Headers:**
+```
+Authorization: Bearer <jwt-token>
+```
+
+**Query Parameters:**
+- `scope` - Search scope (`classes`, `discussions`)
+- `q` - Search query string
+
+**Response (200):**
+```json
+{
+  "suggestions": [
+    {
+      "id": "uuid",
+      "title": "JavaScript Fundamentals",
+      "type": "course",
+      "relevance": 0.95
+    }
+  ]
+}
+```
+
+### Meta Endpoints
+
+#### Get Classes Facets
+**GET** `/api/meta/classes-facets`
+
+Get counts per topic/type and price buckets for filter chips.
+
+**Headers:**
+```
+Authorization: Bearer <jwt-token>
+```
+
+**Response (200):**
+```json
+{
+  "topics": [
+    {
+      "topic": "Programming",
+      "count": 25
+    }
+  ],
+  "types": [
+    {
+      "type": "online",
+      "count": 30
+    }
+  ],
+  "priceRanges": [
+    {
+      "range": "free",
+      "count": 5
+    },
+    {
+      "range": "under_50",
+      "count": 15
+    },
+    {
+      "range": "50_100",
+      "count": 8
+    },
+    {
+      "range": "over_100",
+      "count": 2
+    }
+  ]
+}
+```
+
+---
+
 ## Rate Limiting
 
 The API implements rate limiting to prevent abuse:
@@ -1464,6 +1893,62 @@ The test script will:
 - Verify file deletion
 - Test admin file listing
 - Clean up test files
+
+### Notification System Testing
+A test script is provided to verify notification functionality:
+
+```bash
+# Install dependencies
+npm install
+
+# Set test token
+export TEST_TOKEN="your-jwt-token-here"
+
+# Run notification tests
+node test-notifications.js
+```
+
+The test script will:
+- Test all notification endpoints
+- Verify notification preferences
+- Test notification CRUD operations
+- Test bulk operations
+- Verify admin restrictions
+
+## Notification System
+
+The notification system provides comprehensive user notification capabilities across the platform, including in-app notifications, email notifications, and preference management.
+
+### Notification Types
+- **Course-related**: Enrollment, completion, progress updates
+- **Class-related**: Enrollment, reminders, schedule changes
+- **Discussion-related**: Replies, mentions, likes
+- **Test-related**: Results, availability, reminders
+- **Certification-related**: Earned, expiring, progress
+- **Payment-related**: Success, failure, refunds
+- **System-related**: Maintenance, updates, announcements
+
+### Notification Priorities
+- **Low**: Informational updates
+- **Normal**: Standard notifications
+- **High**: Important updates (class reminders, test results)
+- **Urgent**: Critical system notifications
+
+### Automatic Notifications
+The system automatically sends notifications for common events:
+- Course enrollments
+- Class enrollments
+- Discussion replies
+- Test results
+- Payment success
+- System maintenance
+
+### User Preferences
+Users can control notifications through granular preferences:
+- Email notifications (on/off)
+- Push notifications (on/off)
+- Category-specific notifications (courses, classes, discussions, tests, certifications, payments, system)
+- Priority-based filtering
 
 ## Flutterwave v3 API Status
 
@@ -3494,6 +3979,93 @@ Authorization: Bearer <jwt-token>
 
 > **Note:** The `studyTimeThisMonth` field has been removed and is no longer returned by this endpoint.
 
+#### Get Current User's Settings
+**GET** `/api/users/me/settings`
+
+Get current user's preferences (notifications, privacy, appearance).
+
+**Headers:**
+```
+Authorization: Bearer <jwt-token>
+```
+
+**Response (200):**
+```json
+{
+  "emailNotifications": true,
+  "pushNotifications": true,
+  "courseNotifications": true,
+  "classNotifications": true,
+  "discussionNotifications": true,
+  "testNotifications": true,
+  "certificationNotifications": true,
+  "paymentNotifications": true,
+  "systemNotifications": true,
+  "marketingEmails": false,
+  "theme": "system",
+  "language": "en",
+  "timezone": "UTC"
+}
+```
+
+#### Update Current User's Settings
+**PUT** `/api/users/me/settings`
+
+Update current user's preferences.
+
+**Headers:**
+```
+Authorization: Bearer <jwt-token>
+Content-Type: application/json
+```
+
+**Request Body:**
+```json
+{
+  "emailNotifications": true,
+  "pushNotifications": false,
+  "theme": "dark",
+  "language": "en",
+  "timezone": "UTC"
+}
+```
+
+**Response (200):**
+```json
+{
+  "message": "Settings updated successfully"
+}
+```
+
+#### Update Current User's Profile
+**PUT** `/api/users/me/profile`
+
+Update current user's profile information.
+
+**Headers:**
+```
+Authorization: Bearer <jwt-token>
+Content-Type: application/json
+```
+
+**Request Body:**
+```json
+{
+  "firstName": "John",
+  "lastName": "Doe",
+  "phone": "+1234567890",
+  "location": "New York, NY",
+  "bio": "Software developer passionate about learning"
+}
+```
+
+**Response (200):**
+```json
+{
+  "message": "Profile updated successfully"
+}
+```
+
 ### Sponsorships Endpoints
 
 #### Get All Sponsorships (Sponsor)
@@ -4342,20 +4914,70 @@ Authorization: Bearer <jwt-token>
 
 ### Discussions Endpoints
 
-#### Get Discussions for a Course
-**GET** `/discussions?courseId=<course_id>`
+The discussion system provides a comprehensive platform for learners to engage in meaningful conversations, ask questions, and collaborate on their learning journey. The system supports multiple discussion types and provides easy ways to organize and discover relevant conversations.
 
-Fetch all discussions related to a specific course.
+#### Discussion Organization
+
+**Hierarchical Structure:**
+- **Platform-wide**: General discussions accessible to all users
+- **Course-specific**: Discussions related to a particular course
+- **Lesson-specific**: Questions and clarifications for specific lessons
+- **Class-specific**: Discussions for scheduled classes and workshops
+
+**Categories and Tags:**
+- **Categories**: Predefined discussion types (general, course, lesson, class, question, help, feedback)
+- **Tags**: User-defined labels for better organization and discovery
+- **Smart Filtering**: Combine category, course, lesson, and tag filters for precise results
+
+**Discovery Features:**
+- **Related Discussions**: Easily find discussions related to your current lesson or course
+- **Popular Tags**: Discover trending topics and common questions
+- **Search and Filter**: Advanced search with multiple filter options
+- **Follow Conversations**: Track discussions you're interested in
+
+#### Use Cases
+
+**For Students:**
+- Ask lesson-specific questions when stuck
+- Discuss course concepts with peers
+- Get help with assignments or projects
+- Share learning experiences and tips
+
+**For Instructors:**
+- Announce course updates and changes
+- Answer common questions in one place
+- Facilitate group discussions
+- Provide additional resources and clarifications
+
+**For Course Communities:**
+- Build knowledge bases through Q&A
+- Create study groups and discussions
+- Share resources and helpful links
+- Foster peer-to-peer learning
+
+---
+
+#### Get Discussions
+**GET** `/api/discussions`
+
+List discussions with filters and pagination.
+
+**Headers:**
+```
+Authorization: Bearer <jwt-token>
+```
 
 **Query Parameters:**
-- `courseId` (required): The UUID of the course
-- `limit`: Number of results to return (default: 20)
-- `offset`: Number of results to skip (default: 0)
-
-**Example:**
-```
-GET /api/discussions?courseId=67ee4b48-0df7-494f-bce5-4e4aca2e8498
-```
+- `category` - Filter by category (general, course, lesson, class, question, help, feedback)
+- `courseId` - Filter by course ID for course-specific discussions
+- `lessonId` - Filter by lesson ID for lesson-specific discussions
+- `classId` - Filter by class ID for class-specific discussions
+- `search` - Search in title/content
+- `tags` - Filter by tags (comma-separated)
+- `sort` - Sort field (created_at, title, last_activity, reply_count, likes_count)
+- `order` - Sort order (asc/desc)
+- `limit` - Items per page (default: 20)
+- `offset` - Number to skip (default: 0)
 
 **Response (200):**
 ```json
@@ -4363,18 +4985,22 @@ GET /api/discussions?courseId=67ee4b48-0df7-494f-bce5-4e4aca2e8498
   "discussions": [
     {
       "id": "uuid",
-      "title": "Discussion Title",
-      "content": "Discussion content...",
-      "category": "general",
+      "title": "JavaScript Variables Question",
+      "content": "I'm having trouble understanding how variables work in JavaScript...",
+      "category": "lesson",
       "authorId": "uuid",
       "authorName": "John Doe",
       "authorAvatar": "https://example.com/avatar.jpg",
       "courseId": "uuid",
-      "courseTitle": "Course Title",
+      "courseTitle": "JavaScript Fundamentals",
+      "lessonId": "uuid",
+      "lessonTitle": "Variables and Data Types",
       "classId": null,
       "classTitle": null,
+      "tags": ["javascript", "variables", "beginner"],
       "isPinned": false,
       "replyCount": 3,
+      "likesCount": 5,
       "lastActivityAt": "2024-07-01T12:00:00Z",
       "createdAt": "2024-07-01T10:00:00Z"
     }
@@ -4388,7 +5014,536 @@ GET /api/discussions?courseId=67ee4b48-0df7-494f-bce5-4e4aca2e8498
 }
 ```
 
-> **Note:** There is no /api/courses/:id/discussions endpoint. Use the query parameter as shown above.
+#### Get Discussion by ID
+**GET** `/api/discussions/:id`
+
+Get discussion details with replies and likes count.
+
+**Headers:**
+```
+Authorization: Bearer <jwt-token>
+```
+
+**Response (200):**
+```json
+{
+  "id": "uuid",
+  "title": "JavaScript Variables Question",
+  "content": "I'm having trouble understanding how variables work in JavaScript...",
+  "category": "lesson",
+  "authorId": "uuid",
+  "authorName": "John Doe",
+  "authorAvatar": "https://example.com/avatar.jpg",
+  "courseId": "uuid",
+  "courseTitle": "JavaScript Fundamentals",
+  "lessonId": "uuid",
+  "lessonTitle": "Variables and Data Types",
+  "classId": null,
+  "classTitle": null,
+  "tags": ["javascript", "variables", "beginner"],
+  "isPinned": false,
+  "replyCount": 3,
+  "likesCount": 5,
+  "lastActivityAt": "2024-07-01T12:00:00Z",
+  "createdAt": "2024-07-01T10:00:00Z"
+}
+```
+
+#### Create Discussion
+**POST** `/api/discussions`
+
+Create a new discussion.
+
+**Headers:**
+```
+Authorization: Bearer <jwt-token>
+Content-Type: application/json
+```
+
+**Request Body:**
+```json
+{
+  "title": "Discussion Title",
+  "content": "Discussion content...",
+  "category": "general",
+  "courseId": "uuid",
+  "lessonId": "uuid",
+  "classId": "uuid",
+  "tags": ["javascript", "beginner"]
+}
+```
+
+**Fields:**
+- `title` (required): Discussion title
+- `content` (required): Discussion content
+- `category` (required): Discussion category (general, course, lesson, class, question, help, feedback)
+- `courseId` (optional): Course ID for course-specific discussions
+- `lessonId` (optional): Lesson ID for lesson-specific discussions
+- `classId` (optional): Class ID for class-specific discussions
+- `tags` (optional): Array of tags for better organization
+
+**Response (201):**
+```json
+{
+  "id": "uuid",
+  "title": "Discussion Title",
+  "content": "Discussion content...",
+  "category": "general",
+  "courseId": "uuid",
+  "lessonId": "uuid",
+  "classId": "uuid",
+  "tags": ["javascript", "beginner"],
+  "authorId": "uuid",
+  "createdAt": "2024-07-01T10:00:00Z"
+}
+```
+
+**Discussion Categories:**
+- **general**: Platform-wide discussions
+- **course**: Course-specific discussions and announcements
+- **lesson**: Lesson-specific questions and clarifications
+- **class**: Class-specific discussions and Q&A
+- **question**: General questions seeking help
+- **help**: Help requests and support
+- **feedback**: Feedback and suggestions
+
+#### Get Course Discussions
+**GET** `/api/courses/:courseId/discussions`
+
+Get all discussions for a specific course.
+
+**Headers:**
+```
+Authorization: Bearer <jwt-token>
+```
+
+**Query Parameters:**
+- `category` - Filter by category (optional)
+- `lessonId` - Filter by specific lesson (optional)
+- `search` - Search in title/content (optional)
+- `sort` - Sort field (created_at, title, last_activity, reply_count, likes_count)
+- `order` - Sort order (asc/desc)
+- `limit` - Items per page (default: 20)
+- `offset` - Number to skip (default: 0)
+
+**Response (200):**
+```json
+{
+  "course": {
+    "id": "uuid",
+    "title": "JavaScript Fundamentals",
+    "topic": "Programming"
+  },
+  "discussions": [
+    {
+      "id": "uuid",
+      "title": "JavaScript Variables Question",
+      "content": "I'm having trouble understanding how variables work...",
+      "category": "lesson",
+      "lessonId": "uuid",
+      "lessonTitle": "Variables and Data Types",
+      "authorName": "John Doe",
+      "replyCount": 3,
+      "likesCount": 5,
+      "lastActivityAt": "2024-07-01T12:00:00Z",
+      "createdAt": "2024-07-01T10:00:00Z"
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "limit": 20,
+    "total": 15,
+    "pages": 1
+  }
+}
+```
+
+#### Get Lesson Discussions
+**GET** `/api/lessons/:lessonId/discussions`
+
+Get all discussions for a specific lesson.
+
+**Headers:**
+```
+Authorization: Bearer <jwt-token>
+```
+
+**Query Parameters:**
+- `category` - Filter by category (optional)
+- `search` - Search in title/content (optional)
+- `sort` - Sort field (created_at, title, last_activity, reply_count, likes_count)
+- `order` - Sort order (asc/desc)
+- `limit` - Items per page (default: 20)
+- `offset` - Number to skip (default: 0)
+
+**Response (200):**
+```json
+{
+  "lesson": {
+    "id": "uuid",
+    "title": "Variables and Data Types",
+    "courseId": "uuid",
+    "courseTitle": "JavaScript Fundamentals"
+  },
+  "discussions": [
+    {
+      "id": "uuid",
+      "title": "JavaScript Variables Question",
+      "content": "I'm having trouble understanding how variables work...",
+      "category": "lesson",
+      "authorName": "John Doe",
+      "replyCount": 3,
+      "likesCount": 5,
+      "lastActivityAt": "2024-07-01T12:00:00Z",
+      "createdAt": "2024-07-01T10:00:00Z"
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "limit": 20,
+    "total": 8,
+    "pages": 1
+  }
+}
+```
+
+#### Get Discussion Replies
+**GET** `/api/discussions/:id/replies`
+
+**Headers:**
+```
+Authorization: Bearer <jwt-token>
+```
+
+**Query Parameters:**
+- `limit` - Items per page (default: 20)
+- `offset` - Number to skip (default: 0)
+
+**Response (200):**
+```json
+{
+  "replies": [
+    {
+      "id": "uuid",
+      "content": "Reply content...",
+      "authorId": "uuid",
+      "authorName": "Jane Doe",
+      "authorAvatar": "https://example.com/avatar.jpg",
+      "createdAt": "2024-07-01T11:00:00Z"
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "limit": 20,
+    "total": 15,
+    "pages": 1
+  }
+}
+```
+
+#### Add Reply
+**POST** `/api/discussions/:id/replies`
+
+Add a reply to a discussion.
+
+**Headers:**
+```
+Authorization: Bearer <jwt-token>
+Content-Type: application/json
+```
+
+**Request Body:**
+```json
+{
+  "content": "Reply content..."
+}
+```
+
+**Response (201):**
+```json
+{
+  "id": "uuid",
+  "content": "Reply content...",
+  "authorId": "uuid",
+  "discussionId": "uuid",
+  "createdAt": "2024-07-01T11:00:00Z"
+}
+```
+
+#### Like Discussion
+**POST** `/api/discussions/:id/like`
+
+Like a discussion.
+
+**Headers:**
+```
+Authorization: Bearer <jwt-token>
+```
+
+**Response (200):**
+```json
+{
+  "message": "Discussion liked successfully"
+}
+```
+
+#### Unlike Discussion
+**DELETE** `/api/discussions/:id/like`
+
+Unlike a discussion.
+
+**Headers:**
+```
+Authorization: Bearer <jwt-token>
+```
+
+**Response (200):**
+```json
+{
+  "message": "Discussion unliked successfully"
+}
+```
+
+#### Get Discussion Categories
+**GET** `/api/discussions/categories`
+
+Get available discussion categories and their descriptions.
+
+**Headers:**
+```
+Authorization: Bearer <jwt-token>
+```
+
+**Response (200):**
+```json
+{
+  "categories": [
+    {
+      "key": "general",
+      "name": "General",
+      "description": "Platform-wide discussions and announcements",
+      "icon": "chat"
+    },
+    {
+      "key": "course",
+      "name": "Course",
+      "description": "Course-specific discussions and announcements",
+      "icon": "book"
+    },
+    {
+      "key": "lesson",
+      "name": "Lesson",
+      "description": "Lesson-specific questions and clarifications",
+      "icon": "lightbulb"
+    },
+    {
+      "key": "class",
+      "name": "Class",
+      "description": "Class-specific discussions and Q&A",
+      "icon": "users"
+    },
+    {
+      "key": "question",
+      "name": "Question",
+      "description": "General questions seeking help",
+      "icon": "help-circle"
+    },
+    {
+      "key": "help",
+      "name": "Help",
+      "description": "Help requests and support",
+      "icon": "life-buoy"
+    },
+    {
+      "key": "feedback",
+      "name": "Feedback",
+      "description": "Feedback and suggestions",
+      "icon": "message-square"
+    }
+  ]
+}
+```
+
+#### Get Popular Tags
+**GET** `/api/discussions/tags`
+
+Get popular discussion tags for better organization.
+
+**Headers:**
+```
+Authorization: Bearer <jwt-token>
+```
+
+**Query Parameters:**
+- `limit` - Number of tags to return (default: 50)
+
+**Response (200):**
+```json
+{
+  "tags": [
+    {
+      "tag": "javascript",
+      "count": 125,
+      "category": "programming"
+    },
+    {
+      "tag": "beginner",
+      "count": 89,
+      "category": "level"
+    },
+    {
+      "tag": "variables",
+      "count": 45,
+      "category": "concept"
+    }
+  ]
+}
+```
+
+> **Note:** The discussion system now supports lesson-specific and course-specific discussions with proper categorization and tagging for better organization and discovery.
+
+### Certifications Endpoints
+
+#### Get User's Certifications
+**GET** `/api/certifications/my`
+
+Get user's earned certificates.
+
+**Headers:**
+```
+Authorization: Bearer <jwt-token>
+```
+
+**Response (200):**
+```json
+{
+  "certifications": [
+    {
+      "id": "uuid",
+      "title": "JavaScript Developer",
+      "description": "Certified JavaScript Developer",
+      "issuerName": "TheMobileProf",
+      "issuedAt": "2024-01-15T00:00:00Z",
+      "expiryDate": "2026-01-15T00:00:00Z",
+      "certificateUrl": "https://example.com/certificate.pdf",
+      "verificationCode": "CERT123456",
+      "status": "active"
+    }
+  ]
+}
+```
+
+#### Download Certificate
+**GET** `/api/certifications/:id/download`
+
+Download certificate file or return signed URL.
+
+**Headers:**
+```
+Authorization: Bearer <jwt-token>
+```
+
+**Response (200):**
+```json
+{
+  "certificateUrl": "https://example.com/certificate.pdf",
+  "downloadUrl": "https://api.themobileprof.com/certificates/download/uuid",
+  "expiresAt": "2024-01-02T00:00:00Z"
+}
+```
+
+#### Get Certification Progress
+**GET** `/api/certifications/progress`
+
+Get in-progress programs with progress fields.
+
+**Headers:**
+```
+Authorization: Bearer <jwt-token>
+```
+
+**Response (200):**
+```json
+{
+  "programs": [
+    {
+      "id": "uuid",
+      "title": "Full-Stack Web Developer",
+      "progress": 65,
+      "completedModules": 3,
+      "totalModules": 5,
+      "nextRequirement": "Complete Frontend Fundamentals module",
+      "estimatedCompletion": "2024-03-15T00:00:00Z"
+    }
+  ]
+}
+```
+
+### Certification Programs Endpoints
+
+#### Get Certification Programs
+**GET** `/api/certification-programs`
+
+List available certification programs with modules and pricing.
+
+**Headers:**
+```
+Authorization: Bearer <jwt-token>
+```
+
+**Response (200):**
+```json
+{
+  "programs": [
+    {
+      "id": "uuid",
+      "title": "Full-Stack Web Developer",
+      "description": "Comprehensive web development certification",
+      "duration": "6 months",
+      "level": "intermediate",
+      "prerequisites": "Basic programming knowledge",
+      "modules": [
+        {
+          "id": "uuid",
+          "title": "Frontend Fundamentals",
+          "description": "HTML, CSS, JavaScript basics",
+          "duration": "4 weeks",
+          "orderIndex": 1
+        }
+      ],
+      "price": 299.99,
+      "isActive": true
+    }
+  ]
+}
+```
+
+#### Enroll in Certification Program
+**POST** `/api/certification-programs/:id/enroll`
+
+Enroll in a certification track.
+
+**Headers:**
+```
+Authorization: Bearer <jwt-token>
+Content-Type: application/json
+```
+
+**Response (201):**
+```json
+{
+  "message": "Successfully enrolled in certification program",
+  "enrollment": {
+    "id": "uuid",
+    "programId": "uuid",
+    "userId": "uuid",
+    "enrolledAt": "2024-01-01T00:00:00Z",
+    "status": "enrolled"
+  }
+}
+```
+
+---
 
 ### Lessons Endpoints
 
@@ -4918,3 +6073,166 @@ Content-Type: application/json
 - Progress is automatically calculated when lessons are completed or tests are passed
 - Setting status to "completed" will automatically set `completedAt` timestamp
 - Progress of 100% will automatically set status to "completed"
+
+---
+
+### Classes Endpoints
+
+#### Get Upcoming Classes
+**GET** `/api/classes/upcoming`
+
+Get upcoming classes with filters and pagination.
+
+#### Get Classes
+**GET** `/api/classes`
+
+List classes with filters and pagination.
+
+**Headers:**
+```
+Authorization: Bearer <jwt-token>
+```
+
+**Query Parameters:**
+- `topic` - Filter by topic
+- `type` - Filter by type (online/offline)
+- `instructorId` - Filter by instructor ID
+- `priceMin` - Minimum price filter
+- `priceMax` - Maximum price filter
+- `isPublished` - Filter by publication status
+- `search` - Search in title/description
+- `sort` - Sort field (start_date, title, price, available_slots, created_at)
+- `order` - Sort order (asc/desc)
+- `limit` - Items per page (default: 20)
+- `offset` - Number to skip (default: 0)
+
+**Response (200):**
+```json
+{
+  "classes": [
+    {
+      "id": "uuid",
+      "title": "Advanced JavaScript Workshop",
+      "description": "Hands-on JavaScript workshop",
+      "topic": "Programming",
+      "type": "online",
+      "instructorId": "uuid",
+      "instructorName": "John Doe",
+      "startDate": "2024-07-02T14:00:00Z",
+      "endDate": "2024-07-02T16:00:00Z",
+      "duration": "2 hours",
+      "location": "Online",
+      "price": 49.99,
+      "availableSlots": 15,
+      "totalSlots": 20,
+      "isPublished": true
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "limit": 20,
+    "total": 50,
+    "totalPages": 3
+  }
+}
+```
+
+#### Get Class by ID
+**GET** `/api/classes/:id`
+
+Get class details including schedule, duration, location, instructor, availableSlots/totalSlots, courses.
+
+**Headers:**
+```
+Authorization: Bearer <jwt-token>
+```
+
+**Response (200):**
+```json
+{
+  "id": "uuid",
+  "title": "Advanced JavaScript Workshop",
+  "description": "Hands-on JavaScript workshop",
+  "topic": "Programming",
+  "type": "online",
+  "instructorId": "uuid",
+  "instructorName": "John Doe",
+  "instructorAvatar": "https://example.com/avatar.jpg",
+  "startDate": "2024-07-02T14:00:00Z",
+  "endDate": "2024-07-02T16:00:00Z",
+  "duration": "2 hours",
+  "location": "Online",
+  "price": 49.99,
+  "availableSlots": 15,
+  "totalSlots": 20,
+  "isPublished": true,
+  "courses": [
+    {
+      "id": "uuid",
+      "title": "JavaScript Fundamentals",
+      "topic": "Programming",
+      "duration": "8 weeks",
+      "orderIndex": 1
+    }
+  ]
+}
+```
+
+#### Enroll in Class
+**POST** `/api/classes/:id/enroll`
+
+Enroll in a class (supports sponsorship codes).
+
+**Headers:**
+```
+Authorization: Bearer <jwt-token>
+Content-Type: application/json
+```
+
+**Request Body:**
+```json
+{
+  "sponsorshipId": "uuid"
+}
+```
+
+**Response (201):**
+```json
+{
+  "message": "Successfully enrolled in class",
+  "enrollment": {
+    "id": "uuid",
+    "classId": "uuid",
+    "userId": "uuid",
+    "enrolledAt": "2024-01-01T00:00:00Z",
+    "status": "enrolled",
+    "sponsorshipId": "uuid"
+  }
+}
+```
+
+#### Get Class Topics
+**GET** `/api/classes/topics`
+
+Get distinct topics for filters.
+
+**Headers:**
+```
+Authorization: Bearer <jwt-token>
+```
+
+**Response (200):**
+```json
+{
+  "topics": [
+    {
+      "topic": "Programming",
+      "count": 25
+    },
+    {
+      "topic": "Design",
+      "count": 15
+    }
+  ]
+}
+```

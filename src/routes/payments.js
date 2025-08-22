@@ -4,6 +4,8 @@ const { v4: uuidv4 } = require('uuid');
 const { authenticateToken } = require('../middleware/auth');
 const { asyncHandler } = require('../middleware/errorHandler');
 const { getRow, query, getRows } = require('../database/config');
+const { getSystemSetting } = require('../utils/systemSettings');
+const { notifyPaymentSuccess } = require('../utils/notifications');
 const {
   generateReference,
   formatAmount,
@@ -156,6 +158,10 @@ router.post('/initialize', authenticateToken, asyncHandler(async (req, res) => {
   // Get secret key
   const accessToken = await getFlutterwaveToken();
 
+  // Get system settings for payment customization
+  const siteDescription = await getSystemSetting('site_description', 'TheMobileProf LMS');
+  const supportEmail = await getSystemSetting('support_email', 'support@themobileprof.com');
+
   // Initialize payment
   const response = await axios.post(
     `${baseUrl}/payments`,
@@ -169,7 +175,7 @@ router.post('/initialize', authenticateToken, asyncHandler(async (req, res) => {
         name: `${req.user.firstName || ''} ${req.user.lastName || ''}`.trim() || 'Customer'
       },
       customizations: {
-        title: 'TheMobileProf LMS',
+        title: siteDescription,
         description: itemDescription,
         logo: 'https://themobileprof.com/assets/logo.jpg'
       },
@@ -273,13 +279,30 @@ router.get('/verify/:reference', authenticateToken, asyncHandler(async (req, res
         `INSERT INTO enrollments (user_id, course_id, enrollment_type) VALUES ($1, $2, 'course')`,
         [userId, payment.course_id]
       );
-      await query('UPDATE courses SET student_count = student_count + 1 WHERE id = $1', [payment.course_id]);
+      await query('UPDATE courses SET student_count = student_count + 1 WHERE id = payment.course_id');
     } else {
       await query(
         `INSERT INTO enrollments (user_id, class_id, enrollment_type) VALUES ($1, $2, 'class')`,
         [userId, payment.class_id]
       );
-      await query('UPDATE classes SET available_slots = available_slots - 1 WHERE id = $1', [payment.class_id]);
+      await query('UPDATE classes SET available_slots = available_slots - 1 WHERE id = payment.class_id');
+    }
+
+    // Send payment success notification
+    try {
+      let itemTitle = '';
+      if (payment.payment_type === 'course') {
+        const course = await getRow('SELECT title FROM courses WHERE id = $1', [payment.course_id]);
+        itemTitle = course?.title || 'Course';
+      } else {
+        const classData = await getRow('SELECT title FROM classes WHERE id = $1', [payment.class_id]);
+        itemTitle = classData?.title || 'Class';
+      }
+      
+      await notifyPaymentSuccess(userId, payment.id, payment.amount, itemTitle);
+    } catch (error) {
+      console.error('Failed to send payment success notification:', error);
+      // Don't fail the payment verification if notification fails
     }
 
     res.json({

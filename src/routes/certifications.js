@@ -306,4 +306,112 @@ router.get('/verify/:code', asyncHandler(async (req, res) => {
   });
 }));
 
+// Current user's certifications (alias)
+router.get('/my', authenticateToken, asyncHandler(async (req, res) => {
+	const userId = req.user.id;
+	const certifications = await getRows(
+		`SELECT cert.*, co.title as course_title, cl.title as class_title
+		 FROM certifications cert
+		 LEFT JOIN courses co ON cert.course_id = co.id
+		 LEFT JOIN classes cl ON cert.class_id = cl.id
+		 WHERE cert.user_id = $1
+		 ORDER BY cert.issued_date DESC`,
+		[userId]
+	);
+	res.json({
+		certifications: certifications.map(c => ({
+			id: c.id,
+			title: c.certification_name,
+			issuer: c.issuer,
+			dateEarned: c.issued_date,
+			validUntil: c.expiry_date,
+			credentialId: c.verification_code,
+			skills: c.skills || null,
+			certificateUrl: c.certificate_url,
+			course: c.course_id ? { id: c.course_id, title: c.course_title } : null,
+			class: c.class_id ? { id: c.class_id, title: c.class_title } : null
+		}))
+	});
+}));
+
+// Download certificate (return file or signed URL)
+router.get('/:id/download', authenticateToken, asyncHandler(async (req, res) => {
+	const { id } = req.params;
+	const userId = req.user.id;
+
+	const cert = await getRow('SELECT * FROM certifications WHERE id = $1', [id]);
+	if (!cert) {
+		throw new AppError('Certificate not found', 404, 'Certificate Not Found');
+	}
+
+	// Authorization: owner or admin
+	if (cert.user_id !== userId && req.user.role !== 'admin') {
+		throw new AppError('Access denied', 403, 'Access Denied');
+	}
+
+	// For now, return the stored URL; future: sign if using cloud storage
+	if (cert.certificate_url) {
+		return res.json({ url: cert.certificate_url });
+	}
+
+	throw new AppError('Certificate file not available', 404, 'File Not Found');
+}));
+
+// In-progress certification programs (student-facing)
+router.get('/progress', authenticateToken, asyncHandler(async (req, res) => {
+	const userId = req.user.id;
+
+	const enrollments = await getRows(
+		`SELECT e.id as enrollment_id, e.status, e.progress, e.enrolled_at, e.completed_at,
+		        p.id as program_id, p.title, p.level, p.duration
+		 FROM certification_program_enrollments e
+		 JOIN certification_programs p ON e.program_id = p.id
+		 WHERE e.user_id = $1
+		 ORDER BY e.enrolled_at DESC`,
+		[userId]
+	);
+
+	const results = [];
+	for (const e of enrollments) {
+		const totalModulesRow = await getRow('SELECT COUNT(*)::int as count FROM certification_program_modules WHERE program_id = $1', [e.program_id]);
+		const completedModulesRow = await getRow(
+			`SELECT COUNT(*)::int as count
+			 FROM certification_program_progress pr
+			 JOIN certification_program_modules m ON pr.module_id = m.id
+			 WHERE pr.enrollment_id = $1 AND pr.is_completed = true`,
+			[e.enrollment_id]
+		);
+
+		const total = totalModulesRow?.count || 0;
+		const completed = completedModulesRow?.count || 0;
+		let nextRequirement = null;
+		if (total > completed) {
+			const nextModule = await getRow(
+				`SELECT m.title
+				 FROM certification_program_modules m
+				 WHERE m.program_id = $1 AND NOT EXISTS (
+					 SELECT 1 FROM certification_program_progress pr WHERE pr.module_id = m.id AND pr.enrollment_id = $2 AND pr.is_completed = true
+				 )
+				 ORDER BY m.order_index ASC
+				 LIMIT 1`,
+				[e.program_id, e.enrollment_id]
+			);
+			nextRequirement = nextModule?.title || null;
+		}
+
+		results.push({
+			programId: e.program_id,
+			title: e.title,
+			level: e.level,
+			duration: e.duration,
+			progress: total ? Math.round((completed / total) * 100) : 0,
+			nextRequirement,
+			estimatedCompletion: null,
+			totals: { totalModules: total, completedModules: completed }
+		});
+	}
+
+	res.json({ programs: results });
+}));
+
 module.exports = router; 

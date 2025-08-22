@@ -153,6 +153,7 @@ const validateLesson = [
 router.get('/:id', authenticateToken, asyncHandler(async (req, res) => {
   const { id } = req.params;
   const userId = req.user.id;
+  const isAdmin = req.user.role === 'admin';
 
   // Verify lesson exists
   const lesson = await getRow(
@@ -167,33 +168,37 @@ router.get('/:id', authenticateToken, asyncHandler(async (req, res) => {
     throw new AppError('Lesson not found', 404, 'Lesson Not Found');
   }
 
-  // Check if user is enrolled in the course
-  const enrollment = await getRow(
-    'SELECT * FROM enrollments WHERE user_id = $1 AND course_id = $2',
-    [userId, lesson.course_id]
-  );
+  // Check if user is enrolled in the course (skip for admins)
+  if (!isAdmin) {
+    const enrollment = await getRow(
+      'SELECT * FROM enrollments WHERE user_id = $1 AND course_id = $2',
+      [userId, lesson.course_id]
+    );
 
-  if (!enrollment) {
-    throw new AppError('You must be enrolled in this course to access lessons', 403, 'Not Enrolled');
+    if (!enrollment) {
+      throw new AppError('Enrollment required to access lessons', 403, 'ENROLLMENT_REQUIRED', { courseId: lesson.course_id });
+    }
   }
 
-  // Check if lesson is unlocked for this user
-  const isUnlocked = await isLessonUnlocked(id, userId);
-  
-  if (!isUnlocked) {
-    // Get previous lesson info for better user experience
-    const previousLesson = await getRow(
-      'SELECT id, title FROM lessons WHERE course_id = $1 AND order_index = $2',
-      [lesson.course_id, lesson.order_index - 1]
-    );
+  // Check if lesson is unlocked for this user (skip for admins)
+  if (!isAdmin) {
+    const isUnlocked = await isLessonUnlocked(id, userId);
+    
+    if (!isUnlocked) {
+      // Get previous lesson info for better user experience
+      const previousLesson = await getRow(
+        'SELECT id, title FROM lessons WHERE course_id = $1 AND order_index = $2',
+        [lesson.course_id, lesson.order_index - 1]
+      );
 
-    throw new AppError(
-      previousLesson 
-        ? `Complete the test for "${previousLesson.title}" to unlock this lesson`
-        : 'This lesson is not yet available',
-      403,
-      'Lesson Locked'
-    );
+      throw new AppError(
+        previousLesson 
+          ? `Complete the test for "${previousLesson.title}" to unlock this lesson`
+          : 'This lesson is not yet available',
+        403,
+        'Lesson Locked'
+      );
+    }
   }
 
   // Get lesson progress
@@ -425,6 +430,89 @@ router.get('/:id/progress', authenticateToken, asyncHandler(async (req, res) => 
     progressPercentage: progress ? progress.progress_percentage : 0,
     timeSpentMinutes: progress ? progress.time_spent_minutes : 0,
     completedAt: progress ? progress.completed_at : null
+  });
+}));
+
+// Get lesson discussions
+router.get('/:id/discussions', asyncHandler(async (req, res) => {
+  const { id: lessonId } = req.params;
+  const { category, search, sort = 'last_activity_at', order = 'desc', limit = 20, offset = 0 } = req.query;
+
+  // Verify lesson exists
+  const lesson = await getRow(
+    `SELECT l.id, l.title, c.id as course_id, c.title as course_title 
+     FROM lessons l 
+     JOIN courses c ON l.course_id = c.id 
+     WHERE l.id = $1`,
+    [lessonId]
+  );
+  if (!lesson) {
+    throw new AppError('Lesson not found', 404, 'Lesson Not Found');
+  }
+
+  let whereClause = 'WHERE d.lesson_id = $1';
+  let params = [lessonId];
+  let paramIndex = 2;
+
+  if (category) {
+    whereClause += ` AND d.category = $${paramIndex}`;
+    params.push(category);
+    paramIndex++;
+  }
+
+  if (search) {
+    whereClause += ` AND (d.title ILIKE $${paramIndex} OR d.content ILIKE $${paramIndex})`;
+    params.push(`%${search}%`);
+    paramIndex++;
+  }
+
+  const allowedSortFields = ['created_at', 'title', 'last_activity_at', 'reply_count', 'likes_count'];
+  const sortField = allowedSortFields.includes(sort) ? sort : 'last_activity_at';
+  const sortOrder = order && order.toLowerCase() === 'asc' ? 'ASC' : 'DESC';
+
+  // Get total count
+  const countResult = await getRow(
+    `SELECT COUNT(*) as total FROM discussions d ${whereClause}`,
+    params
+  );
+  const total = parseInt(countResult.total);
+
+  // Get discussions
+  const discussions = await getRows(
+    `SELECT d.*, u.first_name, u.last_name, u.avatar_url,
+        COALESCE((SELECT COUNT(*) FROM discussion_likes dl WHERE dl.discussion_id = d.id), 0) as likes_count
+     FROM discussions d
+     JOIN users u ON d.author_id = u.id
+     ${whereClause}
+     ORDER BY d.${sortField} ${sortOrder}
+     LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
+    [...params, parseInt(limit), parseInt(offset)]
+  );
+
+  res.json({
+    lesson: {
+      id: lesson.id,
+      title: lesson.title,
+      courseId: lesson.course_id,
+      courseTitle: lesson.course_title
+    },
+    discussions: discussions.map(d => ({
+      id: d.id,
+      title: d.title,
+      content: d.content,
+      category: d.category,
+      authorName: `${d.first_name} ${d.last_name}`,
+      replyCount: d.reply_count,
+      likesCount: parseInt(d.likes_count) || 0,
+      lastActivityAt: d.last_activity_at,
+      createdAt: d.created_at
+    })),
+    pagination: {
+      page: Math.floor(parseInt(offset) / parseInt(limit)) + 1,
+      limit: parseInt(limit),
+      total,
+      pages: Math.ceil(total / parseInt(limit))
+    }
   });
 }));
 

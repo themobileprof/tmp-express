@@ -429,7 +429,9 @@ const createTables = async () => {
         category VARCHAR(100) NOT NULL,
         author_id UUID NOT NULL,
         course_id UUID,
+        lesson_id UUID,
         class_id UUID,
+        tags TEXT[] DEFAULT '{}',
         is_pinned BOOLEAN DEFAULT false,
         is_locked BOOLEAN DEFAULT false,
         reply_count INTEGER DEFAULT 0,
@@ -439,6 +441,7 @@ const createTables = async () => {
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (author_id) REFERENCES users(id) ON DELETE CASCADE,
         FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE SET NULL,
+        FOREIGN KEY (lesson_id) REFERENCES lessons(id) ON DELETE SET NULL,
         FOREIGN KEY (class_id) REFERENCES classes(id) ON DELETE SET NULL
       )
     `);
@@ -455,6 +458,19 @@ const createTables = async () => {
         FOREIGN KEY (discussion_id) REFERENCES discussions(id) ON DELETE CASCADE,
         FOREIGN KEY (author_id) REFERENCES users(id) ON DELETE CASCADE,
         FOREIGN KEY (parent_reply_id) REFERENCES discussion_replies(id) ON DELETE SET NULL
+      )
+    `);
+
+    // Create Discussion_Likes table
+    await query(`
+      CREATE TABLE IF NOT EXISTS discussion_likes (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        discussion_id UUID NOT NULL,
+        user_id UUID NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (discussion_id) REFERENCES discussions(id) ON DELETE CASCADE,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        UNIQUE(discussion_id, user_id)
       )
     `);
 
@@ -479,6 +495,61 @@ const createTables = async () => {
       )
     `);
 
+    // Certification Programs
+    await query(`
+      CREATE TABLE IF NOT EXISTS certification_programs (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        title VARCHAR(255) NOT NULL,
+        description TEXT,
+        duration VARCHAR(100),
+        level VARCHAR(50),
+        prerequisites TEXT,
+        price DECIMAL(10,2) DEFAULT 0,
+        is_active BOOLEAN DEFAULT true,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    await query(`
+      CREATE TABLE IF NOT EXISTS certification_program_modules (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        program_id UUID NOT NULL,
+        title VARCHAR(255) NOT NULL,
+        order_index INTEGER DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (program_id) REFERENCES certification_programs(id) ON DELETE CASCADE
+      )
+    `);
+
+    await query(`
+      CREATE TABLE IF NOT EXISTS certification_program_enrollments (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id UUID NOT NULL,
+        program_id UUID NOT NULL,
+        status VARCHAR(50) DEFAULT 'in_progress',
+        progress INTEGER DEFAULT 0,
+        enrolled_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        completed_at TIMESTAMP NULL,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (program_id) REFERENCES certification_programs(id) ON DELETE CASCADE,
+        UNIQUE(user_id, program_id)
+      )
+    `);
+
+    await query(`
+      CREATE TABLE IF NOT EXISTS certification_program_progress (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        enrollment_id UUID NOT NULL,
+        module_id UUID NOT NULL,
+        is_completed BOOLEAN DEFAULT false,
+        completed_at TIMESTAMP NULL,
+        FOREIGN KEY (enrollment_id) REFERENCES certification_program_enrollments(id) ON DELETE CASCADE,
+        FOREIGN KEY (module_id) REFERENCES certification_program_modules(id) ON DELETE CASCADE,
+        UNIQUE(enrollment_id, module_id)
+      )
+    `);
+
     // Create User_Settings table
     await query(`
       CREATE TABLE IF NOT EXISTS user_settings (
@@ -486,6 +557,13 @@ const createTables = async () => {
         user_id UUID NOT NULL UNIQUE,
         email_notifications BOOLEAN DEFAULT true,
         push_notifications BOOLEAN DEFAULT true,
+        course_notifications BOOLEAN DEFAULT true,
+        class_notifications BOOLEAN DEFAULT true,
+        discussion_notifications BOOLEAN DEFAULT true,
+        test_notifications BOOLEAN DEFAULT true,
+        certification_notifications BOOLEAN DEFAULT true,
+        payment_notifications BOOLEAN DEFAULT true,
+        system_notifications BOOLEAN DEFAULT true,
         marketing_emails BOOLEAN DEFAULT false,
         theme theme_type DEFAULT 'system',
         language VARCHAR(10) DEFAULT 'en',
@@ -556,6 +634,22 @@ const createTables = async () => {
       )
     `);
 
+    // Create Discussion Categories table
+    await query(`
+      CREATE TABLE IF NOT EXISTS discussion_categories (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        key VARCHAR(100) UNIQUE NOT NULL,
+        name VARCHAR(255) NOT NULL,
+        description TEXT,
+        icon VARCHAR(100),
+        color VARCHAR(7),
+        is_active BOOLEAN DEFAULT true,
+        sort_order INTEGER DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
     // Create Notifications table
     await query(`
       CREATE TABLE IF NOT EXISTS notifications (
@@ -587,6 +681,11 @@ const createTables = async () => {
     await query('CREATE INDEX IF NOT EXISTS idx_tests_lesson ON tests(lesson_id)');
     await query('CREATE INDEX IF NOT EXISTS idx_test_attempts_user ON test_attempts(user_id)');
     await query('CREATE INDEX IF NOT EXISTS idx_discussions_author ON discussions(author_id)');
+    await query('CREATE INDEX IF NOT EXISTS idx_discussions_course ON discussions(course_id)');
+    await query('CREATE INDEX IF NOT EXISTS idx_discussions_class ON discussions(class_id)');
+    await query('CREATE INDEX IF NOT EXISTS idx_discussions_category ON discussions(category)');
+    await query('CREATE INDEX IF NOT EXISTS idx_discussions_created ON discussions(created_at)');
+    await query('CREATE INDEX IF NOT EXISTS idx_discussions_last_activity ON discussions(last_activity_at)');
     await query('CREATE INDEX IF NOT EXISTS idx_payments_user ON payments(user_id)');
     await query('CREATE INDEX IF NOT EXISTS idx_payments_reference ON payments(flutterwave_reference)');
     await query('CREATE INDEX IF NOT EXISTS idx_payments_status ON payments(status)');
@@ -594,12 +693,27 @@ const createTables = async () => {
     await query('CREATE INDEX IF NOT EXISTS idx_scraped_urls_url ON scraped_urls(url)');
     await query('CREATE INDEX IF NOT EXISTS idx_scraped_urls_status ON scraped_urls(status)');
     await query('CREATE INDEX IF NOT EXISTS idx_scraped_urls_created_at ON scraped_urls(created_at)');
+    await query('CREATE INDEX IF NOT EXISTS idx_discussion_likes_discussion ON discussion_likes(discussion_id)');
+    await query('CREATE INDEX IF NOT EXISTS idx_discussion_likes_user ON discussion_likes(user_id)');
+    await query('CREATE INDEX IF NOT EXISTS idx_cert_programs_active ON certification_programs(is_active)');
+    await query('CREATE INDEX IF NOT EXISTS idx_cert_program_modules_program ON certification_program_modules(program_id)');
+    await query('CREATE INDEX IF NOT EXISTS idx_cert_program_enrollments_user ON certification_program_enrollments(user_id)');
+    await query('CREATE INDEX IF NOT EXISTS idx_cert_program_enrollments_program ON certification_program_enrollments(program_id)');
+    		await query('CREATE INDEX IF NOT EXISTS idx_cert_program_progress_enrollment ON certification_program_progress(enrollment_id)');
+		await query('CREATE INDEX IF NOT EXISTS idx_discussion_categories_key ON discussion_categories(key)');
+		await query('CREATE INDEX IF NOT EXISTS idx_discussion_categories_active ON discussion_categories(is_active)');
 
-    console.log('✅ Database migration completed successfully!');
+		console.log('✅ Database migration completed successfully!');
     console.log('🎉 All tables created and ready!');
     
     // Migrate existing courses table to add new fields
     await migrateCoursesTable();
+    
+    		// Migrate existing discussions table to add new fields
+		await migrateDiscussionsTable();
+		
+		// Seed default discussion categories
+		await seedDiscussionCategories();
     
   } catch (error) {
     console.error('❌ Migration failed:', error);
@@ -636,6 +750,96 @@ const migrateCoursesTable = async () => {
   } catch (error) {
     console.error('❌ Courses table migration failed:', error);
     throw error;
+  }
+};
+
+// Function to migrate existing discussions table
+const migrateDiscussionsTable = async () => {
+  try {
+    console.log('🔄 Migrating discussions table to add new fields...');
+    
+    // Add new columns to existing discussions table
+    const newColumns = [
+      'lesson_id UUID',
+      'tags TEXT[] DEFAULT \'{}\''
+    ];
+    
+    for (const column of newColumns) {
+      try {
+        const columnName = column.split(' ')[0];
+        await query(`ALTER TABLE discussions ADD COLUMN IF NOT EXISTS ${columnName} ${column.split(' ').slice(1).join(' ')}`);
+        console.log(`✅ Added column: ${columnName}`);
+      } catch (error) {
+        console.log(`⚠️  Column might already exist: ${column.split(' ')[0]}`);
+      }
+    }
+    
+    // Add foreign key constraint for lesson_id if it doesn't exist
+    try {
+      await query(`
+        ALTER TABLE discussions 
+        ADD CONSTRAINT IF NOT EXISTS fk_discussions_lesson 
+        FOREIGN KEY (lesson_id) REFERENCES lessons(id) ON DELETE SET NULL
+      `);
+      console.log('✅ Added lesson_id foreign key constraint');
+    } catch (error) {
+      console.log('⚠️  Lesson foreign key constraint might already exist');
+    }
+    
+    // Create indexes for the new fields
+    try {
+      await query('CREATE INDEX IF NOT EXISTS idx_discussions_lesson ON discussions(lesson_id)');
+      await query('CREATE INDEX IF NOT EXISTS idx_discussions_tags ON discussions USING GIN(tags)');
+      console.log('✅ Added indexes for new discussion fields');
+    } catch (error) {
+      console.log('⚠️  Some indexes might already exist');
+    }
+    
+    	console.log('✅ Discussions table migration completed!');
+  } catch (error) {
+    console.error('❌ Discussions table migration failed:', error);
+    throw error;
+  }
+};
+
+// Function to seed default discussion categories
+const seedDiscussionCategories = async () => {
+  try {
+    console.log('🌱 Seeding discussion categories...');
+    
+    const defaultCategories = [
+      { key: 'general', name: 'General', description: 'Platform-wide discussions and announcements', icon: '💬', color: '#3B82F6', sort_order: 1 },
+      { key: 'course', name: 'Course', description: 'Course-specific discussions and announcements', icon: '📚', color: '#10B981', sort_order: 2 },
+      { key: 'lesson', name: 'Lesson', description: 'Lesson-specific questions and clarifications', icon: '💡', color: '#F59E0B', sort_order: 3 },
+      { key: 'class', name: 'Class', description: 'Class-specific discussions and Q&A', icon: '👥', color: '#8B5CF6', sort_order: 4 },
+      { key: 'question', name: 'Question', description: 'General questions seeking help', icon: '❓', color: '#EF4444', sort_order: 5 },
+      { key: 'help', name: 'Help', description: 'Help requests and support', icon: '🛟', color: '#06B6D4', sort_order: 6 },
+      { key: 'feedback', name: 'Feedback', description: 'Feedback and suggestions', icon: '💭', color: '#84CC16', sort_order: 7 }
+    ];
+    
+    for (const category of defaultCategories) {
+      try {
+        await query(
+          `INSERT INTO discussion_categories (key, name, description, icon, color, sort_order)
+           VALUES ($1, $2, $3, $4, $5, $6)
+           ON CONFLICT (key) DO UPDATE SET
+             name = EXCLUDED.name,
+             description = EXCLUDED.description,
+             icon = EXCLUDED.icon,
+             color = EXCLUDED.color,
+             sort_order = EXCLUDED.sort_order,
+             updated_at = CURRENT_TIMESTAMP`,
+          [category.key, category.name, category.description, category.icon, category.color, category.sort_order]
+        );
+      } catch (error) {
+        console.log(`⚠️  Could not insert category ${category.key}:`, error.message);
+      }
+    }
+    
+    console.log('✅ Discussion categories seeded successfully!');
+  } catch (error) {
+    console.error('❌ Failed to seed discussion categories:', error);
+    // Don't fail the migration if seeding fails
   }
 };
 
