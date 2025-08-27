@@ -1,0 +1,53 @@
+Lesson:
+  type: object
+  properties:
+    id:
+      type: string
+      format: uuid
+      description: Unique identifier for the lesson
+    courseId:
+      type: string
+      format: uuid
+      description: ID of the course this lesson belongs to
+    courseTitle:
+      type: string
+      description: Title of the parent course
+    title:
+      type: string
+      description: Title of the lesson
+    description:
+      type: string
+      description: Description of the lesson
+    content:
+      type: string
+      description: Main content of the lesson
+    videoUrl:
+      type: string
+      description: URL to the lesson video
+    durationMinutes:
+      type: integer
+      minimum: 0
+      description: Duration of the lesson in minutes
+    orderIndex:
+      type: integer
+      minimum: 0
+      description: Order of the lesson within the course
+    isPublished:
+      type: boolean
+      description: Whether the lesson is published and accessible
+    createdAt:
+      type: string
+      format: date-time
+      description: When the lesson was created
+    updatedAt:
+      type: string
+      format: date-time
+      description: When the lesson was last updated
+  required:
+    - id
+    - courseId
+    - title
+    - orderIndex
+    - isPublished
+    - createdAt
+    - updatedAt 

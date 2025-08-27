@@ -712,6 +712,9 @@ const createTables = async () => {
     		// Migrate existing discussions table to add new fields
 		await migrateDiscussionsTable();
 		
+		// Migrate existing user_settings table to add missing columns
+		await migrateUserSettingsTable();
+		
 		// Seed default discussion categories
 		await seedDiscussionCategories();
     
@@ -798,6 +801,39 @@ const migrateDiscussionsTable = async () => {
     	console.log('✅ Discussions table migration completed!');
   } catch (error) {
     console.error('❌ Discussions table migration failed:', error);
+    throw error;
+  }
+};
+
+// Function to migrate existing user_settings table
+const migrateUserSettingsTable = async () => {
+  try {
+    console.log('🔄 Migrating user_settings table to add missing columns...');
+    
+    // Add new columns to existing user_settings table
+    const newColumns = [
+      'course_notifications BOOLEAN DEFAULT true',
+      'class_notifications BOOLEAN DEFAULT true',
+      'discussion_notifications BOOLEAN DEFAULT true',
+      'test_notifications BOOLEAN DEFAULT true',
+      'certification_notifications BOOLEAN DEFAULT true',
+      'payment_notifications BOOLEAN DEFAULT true',
+      'system_notifications BOOLEAN DEFAULT true'
+    ];
+    
+    for (const column of newColumns) {
+      try {
+        const columnName = column.split(' ')[0];
+        await query(`ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS ${columnName} ${column.split(' ').slice(1).join(' ')}`);
+        console.log(`✅ Added column: ${columnName}`);
+      } catch (error) {
+        console.log(`⚠️  Column might already exist: ${column.split(' ')[0]}`);
+      }
+    }
+    
+    console.log('✅ User settings table migration completed!');
+  } catch (error) {
+    console.error('❌ User settings table migration failed:', error);
     throw error;
   }
 };

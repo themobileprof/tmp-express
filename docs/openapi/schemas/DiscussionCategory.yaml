@@ -1,0 +1,40 @@
+DiscussionCategory:
+  type: object
+  properties:
+    key:
+      type: string
+      description: Unique key identifier for the category
+    name:
+      type: string
+      description: Display name of the category
+    description:
+      type: string
+      description: Description of what the category is for
+    icon:
+      type: string
+      description: Icon representation for the category
+    color:
+      type: string
+      description: Color code for the category
+    isActive:
+      type: boolean
+      description: Whether the category is currently active
+    sortOrder:
+      type: integer
+      description: Order for sorting categories
+    createdAt:
+      type: string
+      format: date-time
+      description: When the category was created
+    updatedAt:
+      type: string
+      format: date-time
+      description: When the category was last updated
+  required:
+    - key
+    - name
+    - description
+    - icon
+    - color
+    - isActive
+    - sortOrder 

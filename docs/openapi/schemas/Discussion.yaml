@@ -1,0 +1,82 @@
+Discussion:
+  type: object
+  properties:
+    id:
+      type: string
+      format: uuid
+      description: Unique identifier for the discussion
+    title:
+      type: string
+      description: Title of the discussion
+    content:
+      type: string
+      description: Content/body of the discussion
+    category:
+      type: string
+      enum: [general, course, lesson, class, question, help, feedback]
+      description: Category of the discussion
+    authorId:
+      type: string
+      format: uuid
+      description: ID of the discussion author
+    authorName:
+      type: string
+      description: Name of the discussion author
+    authorAvatar:
+      type: string
+      description: URL to author's avatar
+    courseId:
+      type: string
+      format: uuid
+      nullable: true
+      description: ID of the associated course (if course-specific)
+    courseTitle:
+      type: string
+      description: Title of the associated course
+    lessonId:
+      type: string
+      format: uuid
+      nullable: true
+      description: ID of the associated lesson (if lesson-specific)
+    lessonTitle:
+      type: string
+      description: Title of the associated lesson
+    classId:
+      type: string
+      format: uuid
+      nullable: true
+      description: ID of the associated class (if class-specific)
+    classTitle:
+      type: string
+      description: Title of the associated class
+    tags:
+      type: array
+      items:
+        type: string
+      description: Array of tags for better organization
+    isPinned:
+      type: boolean
+      description: Whether the discussion is pinned
+    replyCount:
+      type: integer
+      minimum: 0
+      description: Number of replies to the discussion
+    likesCount:
+      type: integer
+      minimum: 0
+      description: Number of likes on the discussion
+    lastActivityAt:
+      type: string
+      format: date-time
+      description: When the discussion was last active
+    createdAt:
+      type: string
+      format: date-time
+      description: When the discussion was created
+  required:
+    - id
+    - title
+    - content
+    - category
+    - authorId
+    - createdAt 

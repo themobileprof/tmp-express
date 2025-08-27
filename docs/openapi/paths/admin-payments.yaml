@@ -1,0 +1,183 @@
+# Admin Payment Management Endpoints
+
+# Get All Payments (Admin)
+get:
+  tags:
+    - Admin Payments
+  summary: Get payment history with admin details
+  description: Retrieve comprehensive payment history with admin-level details
+  security:
+    - BearerAuth: []
+  parameters:
+    - name: page
+      in: query
+      description: Page number
+      schema:
+        type: integer
+        default: 1
+        minimum: 1
+    - name: limit
+      in: query
+      description: Number of results per page
+      schema:
+        type: integer
+        default: 20
+        minimum: 1
+        maximum: 100
+    - name: status
+      in: query
+      description: Filter by payment status
+      schema:
+        type: string
+        enum: [successful, failed, pending]
+    - name: paymentMethod
+      in: query
+      description: Filter by payment method
+      schema:
+        type: string
+    - name: search
+      in: query
+      description: Search by user name or transaction ID
+      schema:
+        type: string
+  responses:
+    '200':
+      description: Admin payment history retrieved successfully
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              payments:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                      format: uuid
+                    user_id:
+                      type: string
+                      format: uuid
+                    first_name:
+                      type: string
+                    last_name:
+                      type: string
+                    email:
+                      type: string
+                    amount:
+                      type: number
+                    currency:
+                      type: string
+                    status:
+                      type: string
+                    payment_method:
+                      type: string
+                    reference:
+                      type: string
+                    transaction_id:
+                      type: string
+                    course_title:
+                      type: string
+                      nullable: true
+                    class_title:
+                      type: string
+                      nullable: true
+                    created_at:
+                      type: string
+                      format: date-time
+              pagination:
+                type: object
+                properties:
+                  page:
+                    type: integer
+                  limit:
+                    type: integer
+                  total:
+                    type: integer
+                  pages:
+                    type: integer
+      '401':
+        $ref: '../responses/Unauthorized.yaml'
+      '403':
+        $ref: '../responses/Forbidden.yaml'
+
+# Get Payment Statistics (Admin)
+/stats:
+  get:
+    tags:
+      - Admin Payments
+    summary: Get comprehensive payment statistics
+    description: Retrieve comprehensive payment statistics for admin dashboard
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: period
+        in: query
+        description: Time period in days
+        schema:
+          type: integer
+          default: 30
+          minimum: 1
+    responses:
+      '200':
+        description: Payment statistics retrieved successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                overview:
+                  type: object
+                  properties:
+                    total_payments:
+                      type: integer
+                      description: Total number of payments
+                    total_revenue:
+                      type: number
+                      description: Total revenue generated
+                    successful_payments:
+                      type: integer
+                      description: Number of successful payments
+                    failed_payments:
+                      type: integer
+                      description: Number of failed payments
+                    pending_payments:
+                      type: integer
+                      description: Number of pending payments
+                    average_payment:
+                      type: number
+                      description: Average payment amount
+                methodBreakdown:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      payment_method:
+                        type: string
+                        description: Payment method used
+                      count:
+                        type: integer
+                        description: Number of payments using this method
+                      total_amount:
+                        type: number
+                        description: Total amount processed through this method
+                dailyStats:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      date:
+                        type: string
+                        format: date
+                        description: Date in YYYY-MM-DD format
+                      payment_count:
+                        type: integer
+                        description: Number of payments on this date
+                      daily_revenue:
+                        type: number
+                        description: Revenue generated on this date
+      '401':
+        $ref: '../responses/Unauthorized.yaml'
+      '403':
+        $ref: '../responses/Forbidden.yaml' 

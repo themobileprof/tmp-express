@@ -1,0 +1,411 @@
+# Courses Endpoints
+
+# Get Course by ID
+/{id}:
+  get:
+    tags:
+      - Courses
+    summary: Get details of a course by its ID
+    description: Retrieve detailed information about a specific course
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Course ID
+        schema:
+          type: string
+          format: uuid
+    responses:
+      '200':
+        description: Course details retrieved successfully
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/Course.yaml'
+      '401':
+        $ref: '../responses/Unauthorized.yaml'
+      '404':
+        $ref: '../responses/NotFound.yaml'
+
+  # Enroll in Course
+  post:
+    tags:
+      - Courses
+    summary: Enroll in a course
+    description: Enroll in a course with optional sponsorship code for discounted enrollment
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Course ID
+        schema:
+          type: string
+          format: uuid
+    requestBody:
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              sponsorshipId:
+                type: string
+                format: uuid
+                description: Sponsorship ID for discounted enrollment
+    responses:
+      '201':
+        description: Successfully enrolled in course
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/Enrollment.yaml'
+      '400':
+        $ref: '../responses/BadRequest.yaml'
+      '401':
+        $ref: '../responses/Unauthorized.yaml'
+      '404':
+        $ref: '../responses/NotFound.yaml'
+
+  # Get Course Lessons with Unlock Status
+  get:
+    tags:
+      - Courses
+    summary: Get all lessons for a course with their unlock and completion status
+    description: Retrieve all lessons for a course with unlock status based on test completion
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Course ID
+        schema:
+          type: string
+          format: uuid
+    responses:
+      '200':
+        description: Course lessons with unlock status retrieved successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                courseId:
+                  type: string
+                  format: uuid
+                lessons:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      title:
+                        type: string
+                      description:
+                        type: string
+                      orderIndex:
+                        type: integer
+                      durationMinutes:
+                        type: integer
+                      isUnlocked:
+                        type: boolean
+                        description: Whether the lesson is unlocked
+                      isCompleted:
+                        type: boolean
+                        description: Whether the lesson is completed
+                      testPassed:
+                        type: boolean
+                        description: Whether the test was passed
+                      progress:
+                        type: integer
+                        minimum: 0
+                        maximum: 100
+                      timeSpentMinutes:
+                        type: integer
+                        minimum: 0
+                      completedAt:
+                        type: string
+                        format: date-time
+                        nullable: true
+                      test:
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                            format: uuid
+                          title:
+                            type: string
+                          passingScore:
+                            type: integer
+                          maxAttempts:
+                            type: integer
+                      canAccess:
+                        type: boolean
+                        description: Whether the user can access this lesson
+                      nextUnlocked:
+                        type: boolean
+                        description: Whether this is the next lesson to unlock
+                courseStats:
+                  type: object
+                  properties:
+                    totalLessons:
+                      type: integer
+                    unlockedLessons:
+                      type: integer
+                    completedLessons:
+                      type: integer
+                    passedTests:
+                      type: integer
+                    totalProgress:
+                      type: integer
+                      minimum: 0
+                      maximum: 100
+      '401':
+        $ref: '../responses/Unauthorized.yaml'
+      '404':
+        $ref: '../responses/NotFound.yaml'
+
+  # Get Course Progression Status
+  get:
+    tags:
+      - Courses
+    summary: Get detailed progression status for a course
+    description: Retrieve detailed progression showing which lessons are locked/unlocked and overall progress
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Course ID
+        schema:
+          type: string
+          format: uuid
+    responses:
+      '200':
+        description: Course progression status retrieved successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                courseId:
+                  type: string
+                  format: uuid
+                progression:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      title:
+                        type: string
+                      orderIndex:
+                        type: integer
+                      isUnlocked:
+                        type: boolean
+                      isCompleted:
+                        type: boolean
+                      testPassed:
+                        type: boolean
+                      progress:
+                        type: integer
+                        minimum: 0
+                        maximum: 100
+                      timeSpentMinutes:
+                        type: integer
+                        minimum: 0
+                      completedAt:
+                        type: string
+                        format: date-time
+                        nullable: true
+                      test:
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                            format: uuid
+                          title:
+                            type: string
+                          passingScore:
+                            type: integer
+                          maxAttempts:
+                            type: integer
+                      nextUnlocked:
+                        type: boolean
+                courseStats:
+                  type: object
+                  properties:
+                    totalLessons:
+                      type: integer
+                    unlockedLessons:
+                      type: integer
+                    completedLessons:
+                      type: integer
+                    passedTests:
+                      type: integer
+                    totalProgress:
+                      type: integer
+                      minimum: 0
+                      maximum: 100
+                currentLesson:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                      format: uuid
+                    title:
+                      type: string
+                nextUnlockedLesson:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                      format: uuid
+                    title:
+                      type: string
+      '401':
+        $ref: '../responses/Unauthorized.yaml'
+      '404':
+        $ref: '../responses/NotFound.yaml'
+
+  # Update Course Enrollment Progress
+  put:
+    tags:
+      - Courses
+    summary: Update the progress of a course enrollment
+    description: Update progress for a course enrollment (manual updates and automatic progress tracking)
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Course ID
+        schema:
+          type: string
+          format: uuid
+      - name: enrollmentId
+        in: path
+        required: true
+        description: Enrollment ID
+        schema:
+          type: string
+          format: uuid
+    requestBody:
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              progress:
+                type: integer
+                minimum: 0
+                maximum: 100
+                description: Progress percentage
+              status:
+                type: string
+                enum: [pending, in_progress, completed, dropped]
+                description: Enrollment status
+    responses:
+      '200':
+        description: Course enrollment progress updated successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                id:
+                  type: string
+                  format: uuid
+                progress:
+                  type: integer
+                  minimum: 0
+                  maximum: 100
+                status:
+                  type: string
+                completedAt:
+                  type: string
+                  format: date-time
+                  nullable: true
+      '400':
+        $ref: '../responses/BadRequest.yaml'
+      '401':
+        $ref: '../responses/Unauthorized.yaml'
+      '404':
+        $ref: '../responses/NotFound.yaml'
+
+  # Get Course Analytics (Admin/Instructor)
+  get:
+    tags:
+      - Courses
+    summary: Get comprehensive analytics for all tests in a course
+    description: Retrieve analytics for both course-level and lesson-level tests
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Course ID
+        schema:
+          type: string
+          format: uuid
+    responses:
+      '200':
+        description: Course analytics retrieved successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                totalTests:
+                  type: integer
+                  description: Total number of tests in the course
+                totalAttempts:
+                  type: integer
+                  description: Total number of test attempts
+                averageScore:
+                  type: number
+                  description: Average score across all tests
+                passRate:
+                  type: number
+                  description: Overall pass rate percentage
+                averageTimeMinutes:
+                  type: number
+                  description: Average time taken for tests
+                questionAnalytics:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      questionId:
+                        type: string
+                        format: uuid
+                      question:
+                        type: string
+                      questionType:
+                        type: string
+                        enum: [multiple_choice, true_false, short_answer]
+                      points:
+                        type: integer
+                      totalAnswers:
+                        type: integer
+                      correctAnswers:
+                        type: integer
+                      correctRate:
+                        type: number
+                        description: Percentage of correct answers
+      '401':
+        $ref: '../responses/Unauthorized.yaml'
+      '403':
+        $ref: '../responses/Forbidden.yaml'
+      '404':
+        $ref: '../responses/NotFound.yaml' 

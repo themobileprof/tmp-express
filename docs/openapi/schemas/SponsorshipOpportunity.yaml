@@ -1,0 +1,82 @@
+SponsorshipOpportunity:
+  type: object
+  properties:
+    id:
+      type: string
+      format: uuid
+      description: Unique identifier for the sponsorship opportunity
+    courseId:
+      type: string
+      format: uuid
+      description: ID of the course seeking sponsorship
+    courseName:
+      type: string
+      description: Name of the course
+    courseDescription:
+      type: string
+      description: Description of the course
+    courseDuration:
+      type: string
+      description: Duration of the course
+    courseTopic:
+      type: string
+      description: Topic/category of the course
+    coursePrice:
+      type: number
+      description: Price of the course
+    instructor:
+      type: string
+      description: Name of the instructor
+    instructorAvatar:
+      type: string
+      description: URL to instructor's avatar
+    instructorBio:
+      type: string
+      description: Instructor's biography
+    targetStudents:
+      type: integer
+      minimum: 1
+      description: Target number of students to sponsor
+    fundingGoal:
+      type: number
+      minimum: 0
+      description: Funding goal amount
+    fundingRaised:
+      type: number
+      minimum: 0
+      description: Amount of funding raised so far
+    fundingProgress:
+      type: string
+      description: Percentage of funding goal achieved
+    urgency:
+      type: string
+      enum: [low, medium, high]
+      description: Urgency level of the opportunity
+    demographics:
+      type: string
+      description: Target student demographics
+    impactDescription:
+      type: string
+      description: Description of the impact this sponsorship will have
+    isActive:
+      type: boolean
+      description: Whether the opportunity is currently active
+    createdAt:
+      type: string
+      format: date-time
+      description: When the opportunity was created
+    updatedAt:
+      type: string
+      format: date-time
+      description: When the opportunity was last updated
+  required:
+    - id
+    - courseId
+    - targetStudents
+    - fundingGoal
+    - urgency
+    - demographics
+    - impactDescription
+    - isActive
+    - createdAt
+    - updatedAt 

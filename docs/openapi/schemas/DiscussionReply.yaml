@@ -1,0 +1,39 @@
+DiscussionReply:
+  type: object
+  properties:
+    id:
+      type: string
+      format: uuid
+      description: Unique identifier for the reply
+    content:
+      type: string
+      description: Content of the reply
+    authorId:
+      type: string
+      format: uuid
+      description: ID of the reply author
+    authorName:
+      type: string
+      description: Name of the reply author
+    authorAvatar:
+      type: string
+      description: URL to author's avatar
+    discussionId:
+      type: string
+      format: uuid
+      description: ID of the parent discussion
+    parentReplyId:
+      type: string
+      format: uuid
+      nullable: true
+      description: ID of the parent reply (for nested replies)
+    createdAt:
+      type: string
+      format: date-time
+      description: When the reply was created
+  required:
+    - id
+    - content
+    - authorId
+    - discussionId
+    - createdAt 

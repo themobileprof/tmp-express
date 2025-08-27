@@ -1,0 +1,273 @@
+# Authentication Endpoints
+post:
+  tags:
+    - Authentication
+  summary: Register User
+  description: Register a new user with email and password
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          type: object
+          required:
+            - email
+            - password
+            - firstName
+            - lastName
+          properties:
+            email:
+              type: string
+              format: email
+              description: User email address
+            password:
+              type: string
+              minLength: 6
+              description: User password
+            firstName:
+              type: string
+              minLength: 1
+              description: User first name
+            lastName:
+              type: string
+              minLength: 1
+              description: User last name
+            role:
+              type: string
+              enum: [student, instructor, admin, sponsor]
+              default: student
+              description: User role
+  responses:
+    '201':
+      description: User registered successfully
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              user:
+                $ref: '../schemas/User.yaml'
+              token:
+                type: string
+                description: JWT token
+    '400':
+      $ref: '../responses/BadRequest.yaml'
+    '409':
+      $ref: '../responses/Conflict.yaml'
+
+adminLogin:
+  tags:
+    - Authentication
+  summary: Admin Login
+  description: Authenticate admin user with email and password (admin only)
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          type: object
+          required:
+            - email
+            - password
+          properties:
+            email:
+              type: string
+              format: email
+            password:
+              type: string
+  responses:
+    '200':
+      description: Admin login successful
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              user:
+                $ref: '../schemas/User.yaml'
+              token:
+                type: string
+    '401':
+      $ref: '../responses/Unauthorized.yaml'
+
+googleOAuth:
+  tags:
+    - Authentication
+  summary: Google OAuth Login/Signup
+  description: |
+    Authenticate or register user with Google OAuth.
+    - If user exists with Google ID, logs them in
+    - If user exists with email but different auth provider, links Google account
+    - If user doesn't exist, creates new account
+    - Google profile picture is automatically set as avatar
+    - Email verification status is set based on Google's verification
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          type: object
+          required:
+            - token
+          properties:
+            token:
+              type: string
+              description: Google ID token
+            firstName:
+              type: string
+              description: Optional, will use Google data if not provided
+            lastName:
+              type: string
+              description: Optional, will use Google data if not provided
+            role:
+              type: string
+              enum: [student, instructor, admin, sponsor]
+              default: student
+              description: Optional, defaults to "student"
+  responses:
+    '200':
+      description: Login successful (existing user)
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              user:
+                $ref: '../schemas/User.yaml'
+              token:
+                type: string
+    '201':
+      description: User created successfully (new user)
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              user:
+                $ref: '../schemas/User.yaml'
+              token:
+                type: string
+
+getMe:
+  tags:
+    - Authentication
+  summary: Get Current User
+  description: Get current user information
+  security:
+    - BearerAuth: []
+  responses:
+    '200':
+      description: User information retrieved successfully
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              user:
+                $ref: '../schemas/User.yaml'
+    '401':
+      $ref: '../responses/Unauthorized.yaml'
+
+getProfile:
+  tags:
+    - Authentication
+  summary: Get Current User Profile (Frontend Compatible)
+  description: Get current user profile in frontend-compatible format
+  security:
+    - BearerAuth: []
+  responses:
+    '200':
+      description: User profile retrieved successfully
+      content:
+        application/json:
+          schema:
+            $ref: '../schemas/UserProfile.yaml'
+    '401':
+      $ref: '../responses/Unauthorized.yaml'
+
+refreshToken:
+  tags:
+    - Authentication
+  summary: Refresh Token
+  description: Refresh JWT token
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          type: object
+          required:
+            - token
+          properties:
+            token:
+              type: string
+              description: JWT token to refresh
+  responses:
+    '200':
+      description: Token refreshed successfully
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              token:
+                type: string
+                description: New JWT token
+              user:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  email:
+                    type: string
+                  role:
+                    type: string
+
+changePassword:
+  tags:
+    - Authentication
+  summary: Change Password
+  description: Change user password (only for local authentication users)
+  security:
+    - BearerAuth: []
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          type: object
+          required:
+            - currentPassword
+            - newPassword
+          properties:
+            currentPassword:
+              type: string
+              description: Current password
+            newPassword:
+              type: string
+              minLength: 6
+              description: New password
+  responses:
+    '200':
+      description: Password changed successfully
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+    '400':
+      description: Password change not available for Google OAuth accounts
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Password change not available for Google OAuth accounts"
+              message:
+                type: string
+                example: "Invalid Operation" 

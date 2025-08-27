@@ -2663,4 +2663,228 @@ router.delete('/settings/:key', asyncHandler(async (req, res) => {
   res.json({ message: 'Setting deleted' });
 }));
 
+// ===== DISCUSSION CATEGORIES MANAGEMENT =====
+
+// Create new discussion category
+router.post('/discussions/categories', [
+  body('key').isString().isLength({ min: 1, max: 50 }).matches(/^[a-z0-9_-]+$/),
+  body('name').isString().isLength({ min: 1, max: 100 }),
+  body('description').optional().isString().isLength({ max: 500 }),
+  body('icon').isString().isLength({ min: 1, max: 10 }),
+  body('color').optional().isString().isLength({ min: 3, max: 7 }).matches(/^#[0-9A-Fa-f]{3,6}$/),
+  body('sortOrder').optional().isInt({ min: 0 }),
+  body('isActive').optional().isBoolean()
+], asyncHandler(async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    const errorDetails = errors.array().reduce((acc, error) => {
+      acc[error.path] = error.msg;
+      return acc;
+    }, {});
+    
+    const validationError = new AppError('Validation failed', 400, 'VALIDATION_ERROR');
+    validationError.details = errorDetails;
+    throw validationError;
+  }
+
+  const { key, name, description, icon, color = '#6B7280', sortOrder = 0, isActive = true } = req.body;
+
+  // Check if key already exists
+  const existing = await getRow('SELECT id FROM discussion_categories WHERE key = $1', [key]);
+  if (existing) {
+    throw new AppError('Category key already exists', 409, 'DUPLICATE_KEY');
+  }
+
+  const result = await query(
+    `INSERT INTO discussion_categories (key, name, description, icon, color, sort_order, is_active)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
+     RETURNING *`,
+    [key, name, description, icon, color, sortOrder, isActive]
+  );
+
+  const category = result.rows[0];
+  res.status(201).json({
+    message: 'Discussion category created successfully',
+    category: {
+      id: category.id,
+      key: category.key,
+      name: category.name,
+      description: category.description,
+      icon: category.icon,
+      color: category.color,
+      sortOrder: category.sort_order,
+      isActive: category.is_active,
+      createdAt: category.created_at,
+      updatedAt: category.updated_at
+    }
+  });
+}));
+
+// Update discussion category
+router.put('/discussions/categories/:id', [
+  body('name').optional().isString().isLength({ min: 1, max: 100 }),
+  body('description').optional().isString().isLength({ max: 500 }),
+  body('icon').optional().isString().isLength({ min: 1, max: 10 }),
+  body('color').optional().isString().isLength({ min: 3, max: 7 }).matches(/^#[0-9A-Fa-f]{3,6}$/),
+  body('sortOrder').optional().isInt({ min: 0 }),
+  body('isActive').optional().isBoolean()
+], asyncHandler(async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    const errorDetails = errors.array().reduce((acc, error) => {
+      acc[error.path] = error.msg;
+      return acc;
+    }, {});
+    
+    const validationError = new AppError('Validation failed', 400, 'VALIDATION_ERROR');
+    validationError.details = errorDetails;
+    throw validationError;
+  }
+
+  const { id } = req.params;
+  const { name, description, icon, color, sortOrder, isActive } = req.body;
+
+  // Check if category exists
+  const existing = await getRow('SELECT * FROM discussion_categories WHERE id = $1', [id]);
+  if (!existing) {
+    throw new AppError('Discussion category not found', 404, 'NOT_FOUND');
+  }
+
+  // Build update query dynamically
+  const updates = [];
+  const values = [];
+  let paramCount = 0;
+
+  if (name !== undefined) {
+    paramCount++;
+    updates.push(`name = $${paramCount}`);
+    values.push(name);
+  }
+  if (description !== undefined) {
+    paramCount++;
+    updates.push(`description = $${paramCount}`);
+    values.push(description);
+  }
+  if (icon !== undefined) {
+    paramCount++;
+    updates.push(`icon = $${paramCount}`);
+    values.push(icon);
+  }
+  if (color !== undefined) {
+    paramCount++;
+    updates.push(`color = $${paramCount}`);
+    values.push(color);
+  }
+  if (sortOrder !== undefined) {
+    paramCount++;
+    updates.push(`sort_order = $${paramCount}`);
+    values.push(sortOrder);
+  }
+  if (isActive !== undefined) {
+    paramCount++;
+    updates.push(`is_active = $${paramCount}`);
+    values.push(isActive);
+  }
+
+  if (updates.length === 0) {
+    throw new AppError('No fields to update', 400, 'NO_UPDATES');
+  }
+
+  paramCount++;
+  updates.push(`updated_at = CURRENT_TIMESTAMP`);
+  values.push(id);
+
+  const result = await query(
+    `UPDATE discussion_categories SET ${updates.join(', ')} WHERE id = $${paramCount} RETURNING *`,
+    values
+  );
+
+  const category = result.rows[0];
+  res.json({
+    message: 'Discussion category updated successfully',
+    category: {
+      id: category.id,
+      key: category.key,
+      name: category.name,
+      description: category.description,
+      icon: category.icon,
+      color: category.color,
+      sortOrder: category.sort_order,
+      isActive: category.is_active,
+      createdAt: category.created_at,
+      updatedAt: category.updated_at
+    }
+  });
+}));
+
+// Delete discussion category
+router.delete('/discussions/categories/:id', asyncHandler(async (req, res) => {
+  const { id } = req.params;
+
+  // Check if category exists
+  const existing = await getRow('SELECT * FROM discussion_categories WHERE id = $1', [id]);
+  if (!existing) {
+    throw new AppError('Discussion category not found', 404, 'NOT_FOUND');
+  }
+
+  // Check if category is being used by any discussions
+  const usageCount = await getRow(
+    'SELECT COUNT(*) as count FROM discussions WHERE category = $1',
+    [existing.key]
+  );
+
+  if (parseInt(usageCount.count) > 0) {
+    throw new AppError(
+      `Cannot delete category: ${parseInt(usageCount.count)} discussion(s) are using this category`,
+      409,
+      'CATEGORY_IN_USE'
+    );
+  }
+
+  await query('DELETE FROM discussion_categories WHERE id = $1', [id]);
+
+  res.json({
+    message: 'Discussion category deleted successfully'
+  });
+}));
+
+// Get discussion category statistics
+router.get('/discussions/categories/:id/stats', asyncHandler(async (req, res) => {
+  const { id } = req.params;
+
+  // Check if category exists
+  const category = await getRow('SELECT * FROM discussion_categories WHERE id = $1', [id]);
+  if (!category) {
+    throw new AppError('Discussion category not found', 404, 'NOT_FOUND');
+  }
+
+  // Get usage statistics
+  const stats = await getRow(
+    `SELECT 
+      COUNT(*) as total_discussions,
+      COUNT(CASE WHEN created_at >= CURRENT_DATE - INTERVAL '7 days' THEN 1 END) as discussions_this_week,
+      COUNT(CASE WHEN created_at >= CURRENT_DATE - INTERVAL '30 days' THEN 1 END) as discussions_this_month,
+      AVG(EXTRACT(EPOCH FROM (updated_at - created_at))/3600) as avg_hours_to_last_activity
+     FROM discussions 
+     WHERE category = $1`,
+    [category.key]
+  );
+
+  res.json({
+    category: {
+      id: category.id,
+      key: category.key,
+      name: category.name,
+      icon: category.icon,
+      color: category.color
+    },
+    stats: {
+      totalDiscussions: parseInt(stats.total_discussions),
+      discussionsThisWeek: parseInt(stats.discussions_this_week),
+      discussionsThisMonth: parseInt(stats.discussions_this_month),
+      avgHoursToLastActivity: stats.avg_hours_to_last_activity ? parseFloat(stats.avg_hours_to_last_activity) : null
+    }
+  });
+}));
+
 module.exports = router; 

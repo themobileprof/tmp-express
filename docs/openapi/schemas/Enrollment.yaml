@@ -1,0 +1,67 @@
+# Enrollment Schema
+type: object
+properties:
+  id:
+    type: string
+    format: uuid
+    description: Unique identifier for the enrollment
+  userId:
+    type: string
+    format: uuid
+    description: ID of the enrolled user
+  courseId:
+    type: string
+    format: uuid
+    nullable: true
+    description: ID of the course (if enrollment is for a course)
+  classId:
+    type: string
+    format: uuid
+    nullable: true
+    description: ID of the class (if enrollment is for a class)
+  enrollmentType:
+    type: string
+    enum: [course, class]
+    description: Type of enrollment
+  progress:
+    type: integer
+    minimum: 0
+    maximum: 100
+    description: Progress percentage through the course/class
+  status:
+    type: string
+    enum: [enrolled, in_progress, completed, dropped]
+    description: Current status of the enrollment
+  sponsorshipId:
+    type: string
+    format: uuid
+    nullable: true
+    description: ID of the sponsorship used (if applicable)
+  isFreeEnrollment:
+    type: boolean
+    description: Whether this enrollment was free (100% discount)
+  originalPrice:
+    type: number
+    description: Original price before sponsorship discount
+  finalPrice:
+    type: number
+    description: Final price paid after sponsorship discount
+  discountAmount:
+    type: number
+    description: Amount of discount applied
+  enrolledAt:
+    type: string
+    format: date-time
+    description: When the user was enrolled
+  completedAt:
+    type: string
+    format: date-time
+    nullable: true
+    description: When the user completed the course/class
+required:
+  - id
+  - userId
+  - enrollmentType
+  - progress
+  - status
+  - enrolledAt 

@@ -1,0 +1,371 @@
+# Lessons Endpoints
+
+# Get Lesson Details
+/{id}:
+  get:
+    tags:
+      - Lessons
+    summary: Get details of a lesson by its ID
+    description: Retrieve detailed information about a specific lesson
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Lesson ID
+        schema:
+          type: string
+          format: uuid
+    responses:
+      '200':
+        description: Lesson details retrieved successfully
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/Lesson.yaml'
+      '401':
+        $ref: '../responses/Unauthorized.yaml'
+      '404':
+        $ref: '../responses/NotFound.yaml'
+
+  # Update Lesson
+  put:
+    tags:
+      - Lessons
+    summary: Update a lesson by its ID
+    description: Update an existing lesson (requires authentication and owner/admin authorization)
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Lesson ID
+        schema:
+          type: string
+          format: uuid
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              title:
+                type: string
+                description: Updated lesson title
+              description:
+                type: string
+                description: Updated lesson description
+              content:
+                type: string
+                description: Updated lesson content
+              videoUrl:
+                type: string
+                description: Updated video URL
+              durationMinutes:
+                type: integer
+                minimum: 0
+                description: Updated duration in minutes
+              orderIndex:
+                type: integer
+                minimum: 0
+                description: Updated order index
+              isPublished:
+                type: boolean
+                description: Whether the lesson is published
+    responses:
+      '200':
+        description: Lesson updated successfully
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/Lesson.yaml'
+      '400':
+        $ref: '../responses/BadRequest.yaml'
+      '401':
+        $ref: '../responses/Unauthorized.yaml'
+      '403':
+        $ref: '../responses/Forbidden.yaml'
+      '404':
+        $ref: '../responses/NotFound.yaml'
+
+  # Delete Lesson
+  delete:
+    tags:
+      - Lessons
+    summary: Delete a lesson by its ID
+    description: Delete a lesson (requires authentication and owner/admin authorization)
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Lesson ID
+        schema:
+          type: string
+          format: uuid
+    responses:
+      '200':
+        description: Lesson deleted successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+                  example: "Lesson deleted successfully"
+      '401':
+        $ref: '../responses/Unauthorized.yaml'
+      '403':
+        $ref: '../responses/Forbidden.yaml'
+      '404':
+        $ref: '../responses/NotFound.yaml'
+
+  # Mark Lesson as Completed
+  post:
+    tags:
+      - Lessons
+    summary: Mark a lesson as completed for the authenticated user
+    description: Mark a lesson as completed, automatically updating course progress
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Lesson ID
+        schema:
+          type: string
+          format: uuid
+    requestBody:
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              timeSpentMinutes:
+                type: integer
+                minimum: 0
+                default: 0
+                description: Time spent on the lesson in minutes
+    responses:
+      '200':
+        description: Lesson marked as completed
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+                  example: "Lesson marked as completed"
+                lessonId:
+                  type: string
+                  format: uuid
+                completedAt:
+                  type: string
+                  format: date-time
+      '400':
+        $ref: '../responses/BadRequest.yaml'
+      '401':
+        $ref: '../responses/Unauthorized.yaml'
+      '404':
+        $ref: '../responses/NotFound.yaml'
+
+  # Get Lesson Progress
+  get:
+    tags:
+      - Lessons
+    summary: Get the current progress for a lesson for the authenticated user
+    description: Retrieve progress information for a specific lesson
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Lesson ID
+        schema:
+          type: string
+          format: uuid
+    responses:
+      '200':
+        description: Lesson progress retrieved successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                lessonId:
+                  type: string
+                  format: uuid
+                isCompleted:
+                  type: boolean
+                  description: Whether the lesson is completed
+                progressPercentage:
+                  type: integer
+                  minimum: 0
+                  maximum: 100
+                  description: Progress percentage
+                timeSpentMinutes:
+                  type: integer
+                  minimum: 0
+                  description: Time spent on the lesson
+                completedAt:
+                  type: string
+                  format: date-time
+                  nullable: true
+                  description: When the lesson was completed
+      '401':
+        $ref: '../responses/Unauthorized.yaml'
+      '404':
+        $ref: '../responses/NotFound.yaml'
+
+# Get All Lessons for a Course (Admin)
+/admin/courses/{courseId}/lessons:
+  get:
+    tags:
+      - Lessons
+    summary: Get all lessons for a course (admin access)
+    description: Retrieve all lessons for a specific course with admin access
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: courseId
+        in: path
+        required: true
+        description: Course ID
+        schema:
+          type: string
+          format: uuid
+    responses:
+      '200':
+        description: Course lessons retrieved successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                lessons:
+                  type: array
+                  items:
+                    $ref: '../schemas/Lesson.yaml'
+                pagination:
+                  $ref: '../schemas/Pagination.yaml'
+      '401':
+        $ref: '../responses/Unauthorized.yaml'
+      '403':
+        $ref: '../responses/Forbidden.yaml'
+      '404':
+        $ref: '../responses/NotFound.yaml'
+
+  # Create Lesson for a Course (Admin)
+  post:
+    tags:
+      - Lessons
+    summary: Create a new lesson for a course (admin access)
+    description: Create a new lesson for a specific course with admin access
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: courseId
+        in: path
+        required: true
+        description: Course ID
+        schema:
+          type: string
+          format: uuid
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - title
+              - description
+              - content
+              - videoUrl
+              - durationMinutes
+              - orderIndex
+              - isPublished
+            properties:
+              title:
+                type: string
+                description: Lesson title
+              description:
+                type: string
+                description: Lesson description
+              content:
+                type: string
+                description: Lesson content
+              videoUrl:
+                type: string
+                description: Video URL for the lesson
+              durationMinutes:
+                type: integer
+                minimum: 0
+                description: Duration in minutes
+              orderIndex:
+                type: integer
+                minimum: 0
+                description: Order index within the course
+              isPublished:
+                type: boolean
+                description: Whether the lesson is published
+    responses:
+      '201':
+        description: Lesson created successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                lesson:
+                  $ref: '../schemas/Lesson.yaml'
+      '400':
+        $ref: '../responses/BadRequest.yaml'
+      '401':
+        $ref: '../responses/Unauthorized.yaml'
+      '403':
+        $ref: '../responses/Forbidden.yaml'
+      '404':
+        $ref: '../responses/NotFound.yaml'
+
+# Get All Lessons for a Course
+/courses/{id}/lessons:
+  get:
+    tags:
+      - Lessons
+    summary: Get all lessons for a course by course ID
+    description: Retrieve all lessons for a specific course
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Course ID
+        schema:
+          type: string
+          format: uuid
+    responses:
+      '200':
+        description: Course lessons retrieved successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                lessons:
+                  type: array
+                  items:
+                    $ref: '../schemas/Lesson.yaml'
+      '401':
+        $ref: '../responses/Unauthorized.yaml'
+      '404':
+        $ref: '../responses/NotFound.yaml' 

@@ -1,0 +1,100 @@
+Course:
+  type: object
+  properties:
+    id:
+      type: string
+      format: uuid
+      description: Unique identifier for the course
+    title:
+      type: string
+      description: Title of the course
+    description:
+      type: string
+      description: Description of the course
+    topic:
+      type: string
+      description: Topic/category of the course
+    type:
+      type: string
+      enum: [online, offline]
+      description: Type of course (online or offline)
+    price:
+      type: number
+      minimum: 0
+      description: Price of the course
+    duration:
+      type: string
+      description: Duration of the course
+    certification:
+      type: string
+      description: Type of certification offered
+    difficulty:
+      type: string
+      description: Difficulty level of the course
+    objectives:
+      type: string
+      description: Learning objectives of the course
+    prerequisites:
+      type: string
+      description: Prerequisites required for the course
+    syllabus:
+      type: string
+      description: Course syllabus and structure
+    tags:
+      type: array
+      items:
+        type: string
+      description: Array of tags for the course
+    imageUrl:
+      type: string
+      description: URL to the course image
+    instructorId:
+      type: string
+      format: uuid
+      description: ID of the instructor
+    instructorName:
+      type: string
+      description: Name of the instructor
+    isPublished:
+      type: boolean
+      description: Whether the course is published and accessible
+    enrollmentCount:
+      type: integer
+      minimum: 0
+      description: Number of students enrolled
+    lessonCount:
+      type: integer
+      minimum: 0
+      description: Number of lessons in the course
+    testCount:
+      type: integer
+      minimum: 0
+      description: Number of tests in the course
+    rating:
+      type: number
+      minimum: 0
+      maximum: 5
+      description: Average rating of the course
+    studentCount:
+      type: integer
+      minimum: 0
+      description: Total number of students
+    createdAt:
+      type: string
+      format: date-time
+      description: When the course was created
+    updatedAt:
+      type: string
+      format: date-time
+      description: When the course was last updated
+  required:
+    - id
+    - title
+    - description
+    - topic
+    - type
+    - price
+    - duration
+    - isPublished
+    - createdAt
+    - updatedAt 

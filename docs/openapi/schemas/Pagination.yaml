@@ -1,0 +1,11 @@
+# Pagination Schema
+type: object
+properties:
+  page:
+    type: integer
+  limit:
+    type: integer
+  total:
+    type: integer
+  totalPages:
+    type: integer 

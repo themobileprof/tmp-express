@@ -1,0 +1,100 @@
+Class:
+  type: object
+  properties:
+    id:
+      type: string
+      format: uuid
+      description: Unique identifier for the class
+    title:
+      type: string
+      description: Title of the class
+    description:
+      type: string
+      description: Description of the class
+    topic:
+      type: string
+      description: Topic/category of the class
+    type:
+      type: string
+      enum: [online, offline]
+      description: Type of class (online or offline)
+    instructorId:
+      type: string
+      format: uuid
+      description: ID of the instructor
+    instructorName:
+      type: string
+      description: Name of the instructor
+    instructorAvatar:
+      type: string
+      description: URL to instructor's avatar
+    startDate:
+      type: string
+      format: date-time
+      description: Start date and time of the class
+    endDate:
+      type: string
+      format: date-time
+      nullable: true
+      description: End date and time of the class
+    duration:
+      type: string
+      description: Duration of the class
+    location:
+      type: string
+      description: Location of the class (or "Online" for online classes)
+    price:
+      type: number
+      minimum: 0
+      description: Price of the class
+    availableSlots:
+      type: integer
+      minimum: 0
+      description: Number of available slots
+    totalSlots:
+      type: integer
+      minimum: 1
+      description: Total number of slots
+    isPublished:
+      type: boolean
+      description: Whether the class is published and accessible
+    courses:
+      type: array
+      items:
+        type: object
+        properties:
+          id:
+            type: string
+            format: uuid
+          title:
+            type: string
+          topic:
+            type: string
+          duration:
+            type: string
+          orderIndex:
+            type: integer
+      description: List of courses associated with this class
+    createdAt:
+      type: string
+      format: date-time
+      description: When the class was created
+    updatedAt:
+      type: string
+      format: date-time
+      description: When the class was last updated
+  required:
+    - id
+    - title
+    - description
+    - topic
+    - type
+    - instructorId
+    - startDate
+    - duration
+    - price
+    - availableSlots
+    - totalSlots
+    - isPublished
+    - createdAt
+    - updatedAt 

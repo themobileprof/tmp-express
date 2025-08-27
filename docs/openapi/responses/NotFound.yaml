@@ -1,0 +1,13 @@
+# Not Found Response (404)
+description: Not Found
+content:
+  application/json:
+    schema:
+      type: object
+      properties:
+        error:
+          type: string
+          example: "NOT_FOUND"
+        message:
+          type: string
+          example: "Resource not found" 

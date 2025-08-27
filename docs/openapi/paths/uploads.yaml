@@ -1,0 +1,327 @@
+# File Upload Endpoints
+uploadScreenshots:
+  tags:
+    - File Uploads
+  summary: Upload Screenshots/Images
+  description: |
+    Upload general images and screenshots.
+    
+    **Supported formats**: JPEG, JPG, PNG, GIF, WebP
+    **Maximum file size**: 5MB
+    **Storage**: Files stored with unique UUID-based names to prevent conflicts
+    **Access**: Files accessible via `/uploads/screenshots/filename` URL path
+  security:
+    - BearerAuth: []
+  requestBody:
+    required: true
+    content:
+      multipart/form-data:
+        schema:
+          type: object
+          properties:
+            file:
+              type: string
+              format: binary
+              description: Image file to upload
+  responses:
+    '200':
+      description: File uploaded successfully
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success:
+                type: boolean
+              message:
+                type: string
+              data:
+                type: object
+                properties:
+                  filename:
+                    type: string
+                  originalName:
+                    type: string
+                  size:
+                    type: integer
+                  mimetype:
+                    type: string
+                  url:
+                    type: string
+                    format: uri
+    '400':
+      $ref: '../responses/BadRequest.yaml'
+    '401':
+      $ref: '../responses/Unauthorized.yaml'
+
+uploadCourseImage:
+  tags:
+    - File Uploads
+  summary: Upload Course Image
+  description: Upload an image for a course
+  security:
+    - BearerAuth: []
+  requestBody:
+    required: true
+    content:
+      multipart/form-data:
+        schema:
+          type: object
+          properties:
+            image:
+              type: string
+              format: binary
+              description: Course image file
+  responses:
+    '200':
+      description: Course image uploaded successfully
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success:
+                type: boolean
+              message:
+                type: string
+              data:
+                type: object
+                properties:
+                  filename:
+                    type: string
+                  originalName:
+                    type: string
+                  size:
+                    type: integer
+                  mimetype:
+                    type: string
+                  imageUrl:
+                    type: string
+                    format: uri
+
+uploadLessonMaterial:
+  tags:
+    - File Uploads
+  summary: Upload Lesson Material
+  description: |
+    Upload a material file for a lesson.
+    
+    **Supported formats**: 
+    - Images: JPEG, JPG, PNG, GIF, WebP
+    - Documents: PDF, DOC, DOCX, TXT
+    - Videos: MP4, WebM, OGG
+    **Maximum file size**: 10MB
+  security:
+    - BearerAuth: []
+  requestBody:
+    required: true
+    content:
+      multipart/form-data:
+        schema:
+          type: object
+          properties:
+            file:
+              type: string
+              format: binary
+              description: Lesson material file
+  responses:
+    '200':
+      description: Lesson material uploaded successfully
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success:
+                type: boolean
+              message:
+                type: string
+              data:
+                type: object
+                properties:
+                  filename:
+                    type: string
+                  originalName:
+                    type: string
+                  size:
+                    type: integer
+                  mimetype:
+                    type: string
+                  fileUrl:
+                    type: string
+                    format: uri
+
+uploadAvatar:
+  tags:
+    - File Uploads
+  summary: Upload User Avatar
+  description: Upload a user avatar image
+  security:
+    - BearerAuth: []
+  requestBody:
+    required: true
+    content:
+      multipart/form-data:
+        schema:
+          type: object
+          properties:
+            avatar:
+              type: string
+              format: binary
+              description: Avatar image file
+  responses:
+    '200':
+      description: Avatar uploaded successfully
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success:
+                type: boolean
+              message:
+                type: string
+              data:
+                type: object
+                properties:
+                  filename:
+                    type: string
+                  originalName:
+                    type: string
+                  size:
+                    type: integer
+                  mimetype:
+                    type: string
+                  avatarUrl:
+                    type: string
+                    format: uri
+
+uploadCertificate:
+  tags:
+    - File Uploads
+  summary: Upload Certificate
+  description: Upload a certificate file
+  security:
+    - BearerAuth: []
+  requestBody:
+    required: true
+    content:
+      multipart/form-data:
+        schema:
+          type: object
+          properties:
+            certificate:
+              type: string
+              format: binary
+              description: Certificate file
+  responses:
+    '200':
+      description: Certificate uploaded successfully
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success:
+                type: boolean
+              message:
+                type: string
+              data:
+                type: object
+                properties:
+                  filename:
+                    type: string
+                  originalName:
+                    type: string
+                  size:
+                    type: integer
+                  mimetype:
+                    type: string
+                  certificateUrl:
+                    type: string
+                    format: uri
+
+deleteFile:
+  tags:
+    - File Uploads
+  summary: Delete Uploaded File
+  description: Delete an uploaded file
+  security:
+    - BearerAuth: []
+  parameters:
+    - name: filename
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Name of the file to delete
+    - name: type
+      in: query
+      required: false
+      schema:
+        type: string
+        enum: [screenshots, course-images, lesson-materials, user-avatars, certificates]
+      description: File type for proper deletion
+  responses:
+    '200':
+      description: File deleted successfully
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success:
+                type: boolean
+              message:
+                type: string
+    '400':
+      description: Invalid file type specified
+    '404':
+      description: File not found
+
+listFiles:
+  tags:
+    - File Uploads
+  summary: List Uploaded Files (Admin Only)
+  description: List all uploaded files (admin only)
+  security:
+    - BearerAuth: []
+  parameters:
+    - name: type
+      in: query
+      required: false
+      schema:
+        type: string
+        enum: [screenshots, course-images, lesson-materials, user-avatars, certificates]
+      description: Filter by file type
+  responses:
+    '200':
+      description: Files listed successfully
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success:
+                type: boolean
+              data:
+                type: object
+                properties:
+                  files:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        filename:
+                          type: string
+                        type:
+                          type: string
+                        url:
+                          type: string
+                          format: uri
+                        path:
+                          type: string
+                  total:
+                    type: integer
+    '403':
+      description: Access denied (non-admin users) 

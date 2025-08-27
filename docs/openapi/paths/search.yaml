@@ -1,0 +1,44 @@
+# Search Endpoints
+getSuggestions:
+  tags:
+    - Search
+  summary: Get Search Suggestions
+  description: Get lightweight search suggestions for search bars
+  security:
+    - BearerAuth: []
+  parameters:
+    - name: scope
+      in: query
+      required: false
+      schema:
+        type: string
+        enum: [classes, discussions]
+      description: Search scope
+    - name: q
+      in: query
+      required: true
+      schema:
+        type: string
+      description: Search query string
+  responses:
+    '200':
+      description: Search suggestions retrieved successfully
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              suggestions:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                      format: uuid
+                    title:
+                      type: string
+                    type:
+                      type: string
+                    relevance:
+                      type: number 

@@ -1,0 +1,30 @@
+# Notification Preferences Schema
+type: object
+properties:
+  emailNotifications:
+    type: boolean
+    default: true
+  pushNotifications:
+    type: boolean
+    default: true
+  courseNotifications:
+    type: boolean
+    default: true
+  classNotifications:
+    type: boolean
+    default: true
+  discussionNotifications:
+    type: boolean
+    default: true
+  testNotifications:
+    type: boolean
+    default: true
+  certificationNotifications:
+    type: boolean
+    default: true
+  paymentNotifications:
+    type: boolean
+    default: true
+  systemNotifications:
+    type: boolean
+    default: true 

@@ -1,0 +1,389 @@
+# Paths Index - References all endpoint path files
+
+# Authentication Endpoints
+/auth/register:
+  $ref: './auth.yaml#/post'
+
+/auth/login:
+  $ref: './auth.yaml#/post'
+
+/auth/admin/login:
+  $ref: './auth.yaml#/adminLogin'
+
+/auth/google:
+  $ref: './auth.yaml#/googleOAuth'
+
+/auth/me:
+  $ref: './auth.yaml#/getMe'
+
+/auth/profile:
+  $ref: './auth.yaml#/getProfile'
+
+/auth/refresh:
+  $ref: './auth.yaml#/refreshToken'
+
+/auth/change-password:
+  $ref: './auth.yaml#/changePassword'
+
+# Payment Endpoints
+/payments/initialize:
+  $ref: './payments.yaml#/initialize'
+
+/payments/verify/{reference}:
+  $ref: './payments.yaml#/verify'
+
+/payments/methods:
+  $ref: './payments.yaml#/getMethods'
+
+/payments/user:
+  $ref: './payments.yaml#/getUserPayments'
+
+/payments/{id}:
+  $ref: './payments.yaml#/getPaymentById'
+
+# Admin Payment Endpoints
+/api/admin/payments:
+  $ref: './admin-payments.yaml#/get'
+
+/api/admin/payments/stats:
+  $ref: './admin-payments.yaml#/get'
+
+# Sponsorship Endpoints
+/sponsorships:
+  $ref: './sponsorships.yaml#/get'
+
+/sponsorships:
+  $ref: './sponsorships.yaml#/post'
+
+/sponsorships/{id}:
+  $ref: './sponsorships.yaml#/get'
+
+/sponsorships/{id}:
+  $ref: './sponsorships.yaml#/put'
+
+/sponsorships/{id}:
+  $ref: './sponsorships.yaml#/delete'
+
+/sponsorships/{id}/use:
+  $ref: './sponsorships.yaml#/post'
+
+/sponsorships/{id}/stats:
+  $ref: './sponsorships.yaml#/get'
+
+/sponsorships/{id}/email:
+  $ref: './sponsorships.yaml#/post'
+
+/sponsorships/code/{discountCode}:
+  $ref: './sponsorships.yaml#/get'
+
+# Sponsorship Opportunities Endpoints
+/sponsorship-opportunities:
+  $ref: './sponsorship-opportunities.yaml#/get'
+
+/sponsorship-opportunities:
+  $ref: './sponsorship-opportunities.yaml#/post'
+
+/sponsorship-opportunities/{id}:
+  $ref: './sponsorship-opportunities.yaml#/get'
+
+/sponsorship-opportunities/{id}:
+  $ref: './sponsorship-opportunities.yaml#/put'
+
+/sponsorship-opportunities/{id}:
+  $ref: './sponsorship-opportunities.yaml#/delete'
+
+/sponsorship-opportunities/{id}/contribute:
+  $ref: './sponsorship-opportunities.yaml#/post'
+
+# Discussion Endpoints
+/discussions:
+  $ref: './discussions.yaml#/get'
+
+/discussions:
+  $ref: './discussions.yaml#/post'
+
+/discussions/{id}:
+  $ref: './discussions.yaml#/get'
+
+/discussions/{id}/replies:
+  $ref: './discussions.yaml#/get'
+
+/discussions/{id}/replies:
+  $ref: './discussions.yaml#/post'
+
+/discussions/{id}/like:
+  $ref: './discussions.yaml#/post'
+
+/discussions/{id}/like:
+  $ref: './discussions.yaml#/delete'
+
+/discussions/categories:
+  $ref: './discussions.yaml#/get'
+
+/discussions/tags:
+  $ref: './discussions.yaml#/get'
+
+/discussions/courses/{courseId}/discussions:
+  $ref: './discussions.yaml#/get'
+
+/discussions/lessons/{lessonId}/discussions:
+  $ref: './discussions.yaml#/get'
+
+# Certification Endpoints
+/certifications/my:
+  $ref: './certifications.yaml#/get'
+
+/certifications/{id}/download:
+  $ref: './certifications.yaml#/get'
+
+/certifications/progress:
+  $ref: './certifications.yaml#/get'
+
+# Certification Programs Endpoints
+/certification-programs:
+  $ref: './certification-programs.yaml#/get'
+
+/certification-programs/{id}/enroll:
+  $ref: './certification-programs.yaml#/post'
+
+# Lesson Endpoints
+/lessons/{id}:
+  $ref: './lessons.yaml#/get'
+
+/lessons/{id}:
+  $ref: './lessons.yaml#/put'
+
+/lessons/{id}:
+  $ref: './lessons.yaml#/delete'
+
+/lessons/{id}/complete:
+  $ref: './lessons.yaml#/post'
+
+/lessons/{id}/progress:
+  $ref: './lessons.yaml#/get'
+
+/lessons/admin/courses/{courseId}/lessons:
+  $ref: './lessons.yaml#/get'
+
+/lessons/admin/courses/{courseId}/lessons:
+  $ref: './lessons.yaml#/post'
+
+/lessons/courses/{id}/lessons:
+  $ref: './lessons.yaml#/get'
+
+# Course Endpoints
+/courses/{id}:
+  $ref: './courses.yaml#/get'
+
+/courses/{id}/enroll:
+  $ref: './courses.yaml#/post'
+
+/courses/{id}/lessons:
+  $ref: './courses.yaml#/get'
+
+/courses/{id}/progression:
+  $ref: './courses.yaml#/get'
+
+/courses/{id}/enrollments/{enrollmentId}:
+  $ref: './courses.yaml#/put'
+
+/courses/{id}/analytics:
+  $ref: './courses.yaml#/get'
+
+# Class Endpoints
+/classes/upcoming:
+  $ref: './classes.yaml#/get'
+
+/classes:
+  $ref: './classes.yaml#/get'
+
+/classes/{id}:
+  $ref: './classes.yaml#/get'
+
+/classes/{id}:
+  $ref: './classes.yaml#/post'
+
+/classes/topics:
+  $ref: './classes.yaml#/get'
+
+# File Upload Endpoints
+/uploads:
+  $ref: './uploads.yaml#/uploadScreenshots'
+
+/uploads/course-image:
+  $ref: './uploads.yaml#/uploadCourseImage'
+
+/uploads/lesson-material:
+  $ref: './uploads.yaml#/uploadLessonMaterial'
+
+/uploads/avatar:
+  $ref: './uploads.yaml#/uploadAvatar'
+
+/uploads/certificate:
+  $ref: './uploads.yaml#/uploadCertificate'
+
+/uploads/{filename}:
+  $ref: './uploads.yaml#/deleteFile'
+
+/uploads/files:
+  $ref: './uploads.yaml#/listFiles'
+
+# Notification Endpoints
+/notifications:
+  $ref: './notifications.yaml#/getNotifications'
+
+/notifications/types:
+  $ref: './notifications.yaml#/getTypes'
+
+/notifications/count:
+  $ref: './notifications.yaml#/getCount'
+
+/notifications/preferences:
+  $ref: './notifications.yaml#/getPreferences'
+
+/notifications/preferences:
+  $ref: './notifications.yaml#/updatePreferences'
+
+/notifications/{id}/read:
+  $ref: './notifications.yaml#/markAsRead'
+
+/notifications/read-all:
+  $ref: './notifications.yaml#/markAllAsRead'
+
+/notifications/read-by-type:
+  $ref: './notifications.yaml#/markByTypeAsRead'
+
+/notifications/{id}:
+  $ref: './notifications.yaml#/deleteNotification'
+
+/notifications/bulk:
+  $ref: './notifications.yaml#/bulkDelete'
+
+/notifications/system:
+  $ref: './notifications.yaml#/sendSystemNotification'
+
+/notifications/cleanup:
+  $ref: './notifications.yaml#/cleanup'
+
+# Search Endpoints
+/search/suggestions:
+  $ref: './search.yaml#/getSuggestions'
+
+# Meta Endpoints
+/meta/classes-facets:
+  $ref: './meta.yaml#/getClassesFacets'
+
+# Debug Endpoints
+/debug/uploads:
+  $ref: './debug.yaml#/debugUploads'
+
+/test-upload/{filename}:
+  $ref: './debug.yaml#/testFileAccess'
+
+# Test Endpoints
+/tests/{id}:
+  $ref: './tests.yaml#/getTestById'
+
+/tests/{id}:
+  $ref: './tests.yaml#/updateTest'
+
+/tests/{id}:
+  $ref: './tests.yaml#/deleteTest'
+
+/tests/{id}/questions:
+  $ref: './tests.yaml#/getTestQuestions'
+
+/tests/{id}/questions:
+  $ref: './tests.yaml#/addQuestionToTest'
+
+/tests/{id}/questions/{questionId}:
+  $ref: './tests.yaml#/updateQuestion'
+
+/tests/{id}/questions/{questionId}:
+  $ref: './tests.yaml#/deleteQuestion'
+
+/tests/{id}/start:
+  $ref: './tests.yaml#/startTestAttempt'
+
+/tests/{id}/attempts/{attemptId}/answer:
+  $ref: './tests.yaml#/submitAnswer'
+
+/tests/{id}/attempts/{attemptId}/submit:
+  $ref: './tests.yaml#/submitTest'
+
+/tests/{id}/proceed:
+  $ref: './tests.yaml#/forceProceedAfterMaxAttempts'
+
+/tests/{id}/attempts/{attemptId}/results:
+  $ref: './tests.yaml#/getTestResults'
+
+/tests/{id}/questions/{questionId}/image/upload:
+  $ref: './tests.yaml#/uploadQuestionImage'
+
+/tests/{id}/analytics:
+  $ref: './tests.yaml#/getTestAnalytics'
+
+/tests/{id}/attempts:
+  $ref: './tests.yaml#/listAllAttemptsForTest'
+
+/tests/{id}/my-attempts:
+  $ref: './tests.yaml#/getUserOwnTestAttempts'
+
+/tests/{id}/attempts/{attemptId}/details:
+  $ref: './tests.yaml#/getDetailedAnswersForStudentAttempt'
+
+# Scraping Management Endpoints
+/scraping/urls:
+  $ref: './scraping.yaml#/getScrapedUrls'
+
+/scraping/urls:
+  $ref: './scraping.yaml#/addUrlToScrapingQueue'
+
+/scraping/urls/bulk:
+  $ref: './scraping.yaml#/addMultipleUrlsToScrapingQueue'
+
+/scraping/urls/pending:
+  $ref: './scraping.yaml#/getPendingUrls'
+
+/scraping/urls/{id}/status:
+  $ref: './scraping.yaml#/updateUrlStatus'
+
+/scraping/stats:
+  $ref: './scraping.yaml#/getScrapingStatistics'
+
+/scraping/urls/reset-failed:
+  $ref: './scraping.yaml#/resetFailedUrls'
+
+/scraping/urls/{id}:
+  $ref: './scraping.yaml#/deleteScrapedUrl'
+
+# User Management Endpoints
+/users/{id}/enrollments:
+  $ref: './users.yaml#/getUserEnrollments'
+
+/users/{id}/dashboard-stats:
+  $ref: './users.yaml#/getUserDashboardStats'
+
+/users/{id}/enrolled-courses:
+  $ref: './users.yaml#/getUserEnrolledCourses'
+
+/users/{id}/enrolled-classes:
+  $ref: './users.yaml#/getUserEnrolledClasses'
+
+/users/enrollments/courses:
+  $ref: './users.yaml#/getCurrentUserEnrolledCourses'
+
+/users/enrollments/classes:
+  $ref: './users.yaml#/getCurrentUserEnrolledClasses'
+
+/users/dashboard-stats:
+  $ref: './users.yaml#/getCurrentUserDashboardStats'
+
+/users/me/settings:
+  $ref: './users.yaml#/getCurrentUserSettings'
+
+/users/me/settings:
+  $ref: './users.yaml#/updateCurrentUserSettings'
+
+/users/me/profile:
+  $ref: './users.yaml#/updateCurrentUserProfile' 

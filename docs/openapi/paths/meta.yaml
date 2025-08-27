@@ -1,0 +1,43 @@
+# Meta Endpoints
+getClassesFacets:
+  tags:
+    - Meta
+  summary: Get Classes Facets
+  description: Get counts per topic/type and price buckets for filter chips
+  security:
+    - BearerAuth: []
+  responses:
+    '200':
+      description: Facets retrieved successfully
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              topics:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    topic:
+                      type: string
+                    count:
+                      type: integer
+              types:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    type:
+                      type: string
+                    count:
+                      type: integer
+              priceRanges:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    range:
+                      type: string
+                    count:
+                      type: integer 

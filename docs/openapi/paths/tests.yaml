@@ -1,0 +1,986 @@
+# Tests Endpoints
+getTestById:
+  tags:
+    - Tests
+  summary: Get Test by ID
+  description: Get test details by ID
+  security:
+    - BearerAuth: []
+  parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Test ID
+  responses:
+    '200':
+      description: Test details retrieved successfully
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              id:
+                type: string
+                format: uuid
+              courseId:
+                type: string
+                format: uuid
+              courseTitle:
+                type: string
+              title:
+                type: string
+              description:
+                type: string
+              durationMinutes:
+                type: integer
+              passingScore:
+                type: integer
+              maxAttempts:
+                type: integer
+              orderIndex:
+                type: integer
+              isPublished:
+                type: boolean
+              createdAt:
+                type: string
+                format: date-time
+              updatedAt:
+                type: string
+                format: date-time
+
+updateTest:
+  tags:
+    - Tests
+  summary: Update Test
+  description: Update test details (instructor/admin only)
+  security:
+    - BearerAuth: []
+  parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Test ID
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          type: object
+          properties:
+            title:
+              type: string
+            description:
+              type: string
+            durationMinutes:
+              type: integer
+            passingScore:
+              type: integer
+            maxAttempts:
+              type: integer
+            orderIndex:
+              type: integer
+            isPublished:
+              type: boolean
+  responses:
+    '200':
+      description: Test updated successfully
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              id:
+                type: string
+                format: uuid
+              title:
+                type: string
+              description:
+                type: string
+              durationMinutes:
+                type: integer
+              passingScore:
+                type: integer
+              maxAttempts:
+                type: integer
+              orderIndex:
+                type: integer
+              isPublished:
+                type: boolean
+              updatedAt:
+                type: string
+                format: date-time
+
+deleteTest:
+  tags:
+    - Tests
+  summary: Delete Test
+  description: Delete a test (instructor/admin only)
+  security:
+    - BearerAuth: []
+  parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Test ID
+  responses:
+    '200':
+      description: Test deleted successfully
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+
+getTestQuestions:
+  tags:
+    - Tests
+  summary: Get Test Questions
+  description: Get all questions for a test
+  security:
+    - BearerAuth: []
+  parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Test ID
+  responses:
+    '200':
+      description: Test questions retrieved successfully
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              questions:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                      format: uuid
+                    question:
+                      type: string
+                    questionType:
+                      type: string
+                      enum: [multiple_choice, true_false, short_answer]
+                    options:
+                      type: array
+                      items:
+                        type: string
+                    correctAnswer:
+                      type: integer
+                    correctAnswerText:
+                      type: string
+                    points:
+                      type: integer
+                    orderIndex:
+                      type: integer
+
+addQuestionToTest:
+  tags:
+    - Tests
+  summary: Add Question to Test
+  description: Add a new question to a test (instructor/admin only)
+  security:
+    - BearerAuth: []
+  parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Test ID
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          type: object
+          required:
+            - question
+            - questionType
+            - points
+          properties:
+            question:
+              type: string
+            questionType:
+              type: string
+              enum: [multiple_choice, true_false, short_answer]
+            options:
+              type: array
+              items:
+                type: string
+            correctAnswer:
+              type: integer
+            points:
+              type: integer
+            orderIndex:
+              type: integer
+  responses:
+    '201':
+      description: Question added successfully
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              id:
+                type: string
+                format: uuid
+              question:
+                type: string
+              questionType:
+                type: string
+              options:
+                type: array
+                items:
+                  type: string
+              correctAnswer:
+                type: integer
+              points:
+                type: integer
+              orderIndex:
+                type: integer
+
+updateQuestion:
+  tags:
+    - Tests
+  summary: Update Question
+  description: Update a question in a test (instructor/admin only)
+  security:
+    - BearerAuth: []
+  parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Test ID
+    - name: questionId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Question ID
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          type: object
+          properties:
+            question:
+              type: string
+            options:
+              type: array
+              items:
+                type: string
+            correctAnswer:
+              type: integer
+            points:
+              type: integer
+  responses:
+    '200':
+      description: Question updated successfully
+
+deleteQuestion:
+  tags:
+    - Tests
+  summary: Delete Question
+  description: Delete a question from a test (instructor/admin only)
+  security:
+    - BearerAuth: []
+  parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Test ID
+    - name: questionId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Question ID
+  responses:
+    '200':
+      description: Question deleted successfully
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+
+startTestAttempt:
+  tags:
+    - Tests
+  summary: Start Test Attempt
+  description: Start a new test attempt
+  security:
+    - BearerAuth: []
+  parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Test ID
+  responses:
+    '200':
+      description: Test attempt started successfully
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              attempt:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  testId:
+                    type: string
+                    format: uuid
+                  userId:
+                    type: string
+                    format: uuid
+                  attemptNumber:
+                    type: integer
+                  status:
+                    type: string
+                    enum: [in_progress, completed, abandoned]
+                  startedAt:
+                    type: string
+                    format: date-time
+              questions:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                      format: uuid
+                    question:
+                      type: string
+                    questionType:
+                      type: string
+                    options:
+                      type: array
+                      items:
+                        type: string
+                    points:
+                      type: integer
+                    orderIndex:
+                      type: integer
+
+submitAnswer:
+  tags:
+    - Tests
+  summary: Submit Answer
+  description: Submit an answer for a test question
+  security:
+    - BearerAuth: []
+  parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Test ID
+    - name: attemptId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Attempt ID
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          type: object
+          required:
+            - questionId
+          properties:
+            questionId:
+              type: string
+              format: uuid
+            selectedAnswer:
+              type: integer
+            answerText:
+              type: string
+  responses:
+    '200':
+      description: Answer submitted successfully
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success:
+                type: boolean
+              message:
+                type: string
+              isCorrect:
+                type: boolean
+              pointsEarned:
+                type: integer
+
+submitTest:
+  tags:
+    - Tests
+  summary: Submit Test
+  description: Submit completed test
+  security:
+    - BearerAuth: []
+  parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Test ID
+    - name: attemptId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Attempt ID
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          type: object
+          properties:
+            forceProceed:
+              type: boolean
+              default: false
+              description: Allow progression even if test is not passed
+  responses:
+    '200':
+      description: Test submitted successfully
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              results:
+                type: object
+                properties:
+                  attemptId:
+                    type: string
+                    format: uuid
+                  score:
+                    type: integer
+                  totalQuestions:
+                    type: integer
+                  correctAnswers:
+                    type: integer
+                  timeTakenMinutes:
+                    type: integer
+                  completedAt:
+                    type: string
+                    format: date-time
+                  passed:
+                    type: boolean
+                  forceProceed:
+                    type: boolean
+                  message:
+                    type: string
+
+forceProceedAfterMaxAttempts:
+  tags:
+    - Tests
+  summary: Force Proceed After Max Attempts
+  description: Force progression after reaching maximum attempts
+  security:
+    - BearerAuth: []
+  parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Test ID
+  responses:
+    '200':
+      description: Proceeding with last attempt score
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+              details:
+                type: object
+                properties:
+                  lastAttemptId:
+                    type: string
+                    format: uuid
+                  score:
+                    type: integer
+                  totalQuestions:
+                    type: integer
+                  correctAnswers:
+                    type: integer
+                  timeTakenMinutes:
+                    type: integer
+                  completedAt:
+                    type: string
+                    format: date-time
+                  passed:
+                    type: boolean
+                  forcedProceed:
+                    type: boolean
+
+getTestResults:
+  tags:
+    - Tests
+  summary: Get Test Results
+  description: Get detailed test results
+  security:
+    - BearerAuth: []
+  parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Test ID
+    - name: attemptId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Attempt ID
+  responses:
+    '200':
+      description: Test results retrieved successfully
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              attempt:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  score:
+                    type: integer
+                  totalQuestions:
+                    type: integer
+                  correctAnswers:
+                    type: integer
+                  timeTakenMinutes:
+                    type: integer
+                  status:
+                    type: string
+                  startedAt:
+                    type: string
+                    format: date-time
+                  completedAt:
+                    type: string
+                    format: date-time
+              questions:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                      format: uuid
+                    question:
+                      type: string
+                    questionType:
+                      type: string
+                    options:
+                      type: array
+                      items:
+                        type: string
+                    correctAnswer:
+                      type: integer
+                    userAnswer:
+                      type: integer
+                    isCorrect:
+                      type: boolean
+                    pointsEarned:
+                      type: integer
+                    points:
+                      type: integer
+
+uploadQuestionImage:
+  tags:
+    - Tests
+  summary: Upload Question Image
+  description: Upload an image for a test question (instructor/admin only)
+  security:
+    - BearerAuth: []
+  parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Test ID
+    - name: questionId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Question ID
+  requestBody:
+    required: true
+    content:
+      multipart/form-data:
+        schema:
+          type: object
+          properties:
+            image:
+              type: string
+              format: binary
+              description: Image file (PNG, JPG, JPEG, GIF, SVG, max 5MB)
+  responses:
+    '200':
+      description: Image uploaded successfully
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success:
+                type: boolean
+              imageUrl:
+                type: string
+              message:
+                type: string
+
+getTestAnalytics:
+  tags:
+    - Tests
+  summary: Get Test Analytics
+  description: Get comprehensive analytics for a test (admin/instructor only)
+  security:
+    - BearerAuth: []
+  parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Test ID
+  responses:
+    '200':
+      description: Test analytics retrieved successfully
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              totalAttempts:
+                type: integer
+              averageScore:
+                type: number
+              passRate:
+                type: number
+              averageTimeMinutes:
+                type: number
+              questionAnalytics:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    questionId:
+                      type: string
+                      format: uuid
+                    question:
+                      type: string
+                    questionType:
+                      type: string
+                    points:
+                      type: integer
+                    totalAnswers:
+                      type: integer
+                    correctAnswers:
+                      type: integer
+                    correctRate:
+                      type: number
+
+listAllAttemptsForTest:
+  tags:
+    - Tests
+  summary: List All Attempts for a Test
+  description: List all attempts for a test (admin/instructor only)
+  security:
+    - BearerAuth: []
+  parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Test ID
+    - name: limit
+      in: query
+      required: false
+      schema:
+        type: integer
+        default: 20
+        maximum: 100
+      description: Number of results to return
+    - name: offset
+      in: query
+      required: false
+      schema:
+        type: integer
+        default: 0
+      description: Number of results to skip
+  responses:
+    '200':
+      description: Test attempts retrieved successfully
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              test:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  title:
+                    type: string
+                  passingScore:
+                    type: integer
+              attempts:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                      format: uuid
+                    userId:
+                      type: string
+                      format: uuid
+                    userName:
+                      type: string
+                    userEmail:
+                      type: string
+                    attemptNumber:
+                      type: integer
+                    score:
+                      type: integer
+                    totalQuestions:
+                      type: integer
+                    correctAnswers:
+                      type: integer
+                    status:
+                      type: string
+                    startedAt:
+                      type: string
+                      format: date-time
+                    completedAt:
+                      type: string
+                      format: date-time
+                    timeTakenMinutes:
+                      type: integer
+                    passed:
+                      type: boolean
+              pagination:
+                type: object
+                properties:
+                  total:
+                    type: integer
+                  limit:
+                    type: integer
+                  offset:
+                    type: integer
+
+getUserOwnTestAttempts:
+  tags:
+    - Tests
+  summary: Get User's Own Test Attempts
+  description: Get user's own test attempts (student view)
+  security:
+    - BearerAuth: []
+  parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Test ID
+  responses:
+    '200':
+      description: User's test attempts retrieved successfully
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              test:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  title:
+                    type: string
+                  passingScore:
+                    type: integer
+                  maxAttempts:
+                    type: integer
+              attempts:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                      format: uuid
+                    attemptNumber:
+                      type: integer
+                    score:
+                      type: integer
+                    totalQuestions:
+                      type: integer
+                    correctAnswers:
+                      type: integer
+                    status:
+                      type: string
+                    startedAt:
+                      type: string
+                      format: date-time
+                    completedAt:
+                      type: string
+                      format: date-time
+                    timeTakenMinutes:
+                      type: integer
+                    passed:
+                      type: boolean
+              currentAttempts:
+                type: integer
+              canStartNew:
+                type: boolean
+
+getDetailedAnswersForStudentAttempt:
+  tags:
+    - Tests
+  summary: Get Detailed Answers for a Student's Attempt
+  description: Get detailed answers for a student's attempt (admin/instructor only)
+  security:
+    - BearerAuth: []
+  parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Test ID
+    - name: attemptId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Attempt ID
+  responses:
+    '200':
+      description: Detailed answers retrieved successfully
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              attempt:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  studentName:
+                    type: string
+                  studentEmail:
+                    type: string
+                  score:
+                    type: integer
+                  timeSpent:
+                    type: integer
+                  attemptNumber:
+                    type: integer
+                  completedAt:
+                    type: string
+                    format: date-time
+                  status:
+                    type: string
+              answers:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    questionId:
+                      type: string
+                      format: uuid
+                    question:
+                      type: string
+                    questionType:
+                      type: string
+                    options:
+                      type: array
+                      items:
+                        type: string
+                    correctAnswer:
+                      type: integer
+                    correctAnswerText:
+                      type: string
+                    userAnswer:
+                      type: integer
+                    userAnswerText:
+                      type: string
+                    isCorrect:
+                      type: boolean
+                    pointsEarned:
+                      type: integer 

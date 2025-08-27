@@ -1,0 +1,466 @@
+# Sponsorships Endpoints
+
+# Get All Sponsorships (Sponsor)
+get:
+  tags:
+    - Sponsorships
+  summary: Get all sponsorships for the authenticated sponsor
+  description: Retrieve a list of sponsorships created by the authenticated sponsor with optional filtering
+  security:
+    - BearerAuth: []
+  parameters:
+    - name: status
+      in: query
+      description: Filter by sponsorship status
+      schema:
+        type: string
+        enum: [active, paused, expired, completed]
+    - name: courseId
+      in: query
+      description: Filter by course ID
+      schema:
+        type: string
+        format: uuid
+  responses:
+    '200':
+      description: List of sponsorships retrieved successfully
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              sponsorships:
+                type: array
+                items:
+                  $ref: '../schemas/Sponsorship.yaml'
+    '401':
+      $ref: '../responses/Unauthorized.yaml'
+    '403':
+      $ref: '../responses/Forbidden.yaml'
+
+# Create Sponsorship
+post:
+  tags:
+    - Sponsorships
+  summary: Create a new sponsorship
+  description: Create a new sponsorship for a course (sponsor only)
+  security:
+    - BearerAuth: []
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          type: object
+          required:
+            - courseId
+            - discountType
+            - discountValue
+            - maxStudents
+            - duration
+          properties:
+            courseId:
+              type: string
+              format: uuid
+              description: ID of the course to sponsor
+            discountType:
+              type: string
+              enum: [percentage, fixed]
+              description: Type of discount to apply
+            discountValue:
+              type: number
+              minimum: 0
+              description: Value of the discount (percentage or fixed amount)
+            maxStudents:
+              type: integer
+              minimum: 1
+              description: Maximum number of students who can use this sponsorship
+            duration:
+              type: integer
+              minimum: 1
+              description: Duration of sponsorship in months
+            notes:
+              type: string
+              description: Additional notes about the sponsorship
+  responses:
+    '201':
+      description: Sponsorship created successfully
+      content:
+        application/json:
+          schema:
+            $ref: '../schemas/Sponsorship.yaml'
+    '400':
+      $ref: '../responses/BadRequest.yaml'
+    '401':
+      $ref: '../responses/Unauthorized.yaml'
+    '403':
+      $ref: '../responses/Forbidden.yaml'
+
+# Get Specific Sponsorship
+/{id}:
+  get:
+    tags:
+      - Sponsorships
+    summary: Get details of a specific sponsorship
+    description: Retrieve detailed information about a specific sponsorship
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Sponsorship ID
+        schema:
+          type: string
+          format: uuid
+    responses:
+      '200':
+        description: Sponsorship details retrieved successfully
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/Sponsorship.yaml'
+      '401':
+        $ref: '../responses/Unauthorized.yaml'
+      '404':
+        $ref: '../responses/NotFound.yaml'
+
+  # Update Sponsorship
+  put:
+    tags:
+      - Sponsorships
+    summary: Update sponsorship details
+    description: Update an existing sponsorship (owner/admin only)
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Sponsorship ID
+        schema:
+          type: string
+          format: uuid
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              status:
+                type: string
+                enum: [active, paused, expired, completed]
+                description: New status for the sponsorship
+              notes:
+                type: string
+                description: Updated notes for the sponsorship
+    responses:
+      '200':
+        description: Sponsorship updated successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                id:
+                  type: string
+                  format: uuid
+                status:
+                  type: string
+                notes:
+                  type: string
+                updatedAt:
+                  type: string
+                  format: date-time
+      '400':
+        $ref: '../responses/BadRequest.yaml'
+      '401':
+        $ref: '../responses/Unauthorized.yaml'
+      '403':
+        $ref: '../responses/Forbidden.yaml'
+      '404':
+        $ref: '../responses/NotFound.yaml'
+
+  # Delete Sponsorship
+  delete:
+    tags:
+      - Sponsorships
+    summary: Delete a sponsorship
+    description: Delete a sponsorship (owner/admin only)
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Sponsorship ID
+        schema:
+          type: string
+          format: uuid
+    responses:
+      '200':
+        description: Sponsorship deleted successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+                  example: "Sponsorship deleted successfully"
+      '401':
+        $ref: '../responses/Unauthorized.yaml'
+      '403':
+        $ref: '../responses/Forbidden.yaml'
+      '404':
+        $ref: '../responses/NotFound.yaml'
+
+  # Use Sponsorship Code
+  post:
+    tags:
+      - Sponsorships
+    summary: Use a sponsorship code for enrollment
+    description: Apply a sponsorship code to enroll in a course or class
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Sponsorship ID
+        schema:
+          type: string
+          format: uuid
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - studentId
+              - courseId
+            properties:
+              studentId:
+                type: string
+                format: uuid
+                description: ID of the student using the sponsorship
+              courseId:
+                type: string
+                format: uuid
+                description: ID of the course to enroll in
+    responses:
+      '200':
+        description: Sponsorship code applied successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                  example: true
+                originalPrice:
+                  type: number
+                  description: Original price before discount
+                discountAmount:
+                  type: number
+                  description: Amount of discount applied
+                finalPrice:
+                  type: number
+                  description: Final price after discount
+                message:
+                  type: string
+                  example: "Sponsorship code applied successfully"
+      '400':
+        $ref: '../responses/BadRequest.yaml'
+      '401':
+        $ref: '../responses/Unauthorized.yaml'
+      '404':
+        $ref: '../responses/NotFound.yaml'
+
+  # Get Sponsorship Statistics
+  get:
+    tags:
+      - Sponsorships
+    summary: Get detailed sponsorship statistics
+    description: Retrieve comprehensive statistics for a specific sponsorship (owner/admin only)
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Sponsorship ID
+        schema:
+          type: string
+          format: uuid
+    responses:
+      '200':
+        description: Sponsorship statistics retrieved successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                sponsorship:
+                  $ref: '../schemas/Sponsorship.yaml'
+                stats:
+                  type: object
+                  properties:
+                    totalUsage:
+                      type: integer
+                      description: Total number of times sponsorship was used
+                    totalDiscountGiven:
+                      type: number
+                      description: Total amount of discount given
+                    averageFinalPrice:
+                      type: number
+                      description: Average final price paid by students
+                    utilizationRate:
+                      type: string
+                      description: Percentage of sponsorship utilization
+                monthlyStats:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      month:
+                        type: string
+                        description: Month in YYYY-MM format
+                      studentsEnrolled:
+                        type: integer
+                        description: Number of students enrolled in that month
+      '401':
+        $ref: '../responses/Unauthorized.yaml'
+      '403':
+        $ref: '../responses/Forbidden.yaml'
+      '404':
+        $ref: '../responses/NotFound.yaml'
+
+  # Send Sponsorship Email
+  post:
+    tags:
+      - Sponsorships
+    summary: Send sponsorship details via email
+    description: Send sponsorship information to a recipient via email (owner/admin only)
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Sponsorship ID
+        schema:
+          type: string
+          format: uuid
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - recipientEmail
+            properties:
+              recipientEmail:
+                type: string
+                format: email
+                description: Email address of the recipient
+              isForRecipient:
+                type: boolean
+                default: true
+                description: Whether the email is intended for the recipient
+              customMessage:
+                type: string
+                description: Custom message to include in the email
+    responses:
+      '200':
+        description: Sponsorship email sent successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                  example: true
+                message:
+                  type: string
+                  example: "Sponsorship details sent successfully"
+      '400':
+        $ref: '../responses/BadRequest.yaml'
+      '401':
+        $ref: '../responses/Unauthorized.yaml'
+      '403':
+        $ref: '../responses/Forbidden.yaml'
+      '404':
+        $ref: '../responses/NotFound.yaml'
+
+# Validate Sponsorship Code (Public endpoint)
+/code/{discountCode}:
+  get:
+    tags:
+      - Sponsorships
+    summary: Validate a sponsorship discount code
+    description: Public endpoint to validate a sponsorship discount code
+    parameters:
+      - name: discountCode
+        in: path
+        required: true
+        description: Discount code to validate
+        schema:
+          type: string
+    responses:
+      '200':
+        description: Sponsorship code validation result
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                valid:
+                  type: boolean
+                  description: Whether the code is valid
+                sponsorship:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                      format: uuid
+                    courseName:
+                      type: string
+                      description: Name of the sponsored course
+                    coursePrice:
+                      type: number
+                      description: Original course price
+                    discountType:
+                      type: string
+                      enum: [percentage, fixed]
+                    discountValue:
+                      type: number
+                      description: Value of the discount
+                    maxStudents:
+                      type: integer
+                      description: Maximum number of students
+                    studentsUsed:
+                      type: integer
+                      description: Number of students who used the code
+                    remainingSpots:
+                      type: integer
+                      description: Remaining available spots
+                    startDate:
+                      type: string
+                      format: date
+                    endDate:
+                      type: string
+                      format: date
+                    isExpired:
+                      type: boolean
+                      description: Whether the sponsorship has expired
+                    isFull:
+                      type: boolean
+                      description: Whether the sponsorship is full
+      '400':
+        $ref: '../responses/BadRequest.yaml' 

@@ -1,0 +1,25 @@
+# Notification Schema
+type: object
+properties:
+  id:
+    type: string
+    format: uuid
+  type:
+    type: string
+  title:
+    type: string
+  message:
+    type: string
+  data:
+    type: object
+  isRead:
+    type: boolean
+  priority:
+    type: string
+    enum: [low, normal, high, urgent]
+  createdAt:
+    type: string
+    format: date-time
+  readAt:
+    type: string
+    format: date-time 

@@ -1,0 +1,77 @@
+# Certification Programs Endpoints
+
+# Get Certification Programs
+get:
+  tags:
+    - Certification Programs
+  summary: List available certification programs with modules and pricing
+  description: Retrieve all available certification programs with their modules and pricing information
+  security:
+    - BearerAuth: []
+  responses:
+    '200':
+      description: Certification programs retrieved successfully
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              programs:
+                type: array
+                items:
+                  $ref: '../schemas/CertificationProgram.yaml'
+      '401':
+        $ref: '../responses/Unauthorized.yaml'
+
+# Enroll in Certification Program
+/{id}/enroll:
+  post:
+    tags:
+      - Certification Programs
+    summary: Enroll in a certification track
+    description: Enroll the authenticated user in a specific certification program
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Certification program ID
+        schema:
+          type: string
+          format: uuid
+    responses:
+      '201':
+        description: Successfully enrolled in certification program
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+                  example: "Successfully enrolled in certification program"
+                enrollment:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                      format: uuid
+                    programId:
+                      type: string
+                      format: uuid
+                    userId:
+                      type: string
+                      format: uuid
+                    enrolledAt:
+                      type: string
+                      format: date-time
+                    status:
+                      type: string
+                      example: "enrolled"
+      '400':
+        $ref: '../responses/BadRequest.yaml'
+      '401':
+        $ref: '../responses/Unauthorized.yaml'
+      '404':
+        $ref: '../responses/NotFound.yaml' 

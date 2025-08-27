@@ -1,0 +1,97 @@
+openapi: 3.0.3
+info:
+  title: TheMobileProf API
+  description: |
+    RESTful API for TheMobileProf Learning Management System (LMS) that supports course management, 
+    user authentication, sponsorship programs, testing systems, file uploads, and more.
+    
+    **Test Type Rule**: 
+    - Only `lesson_id` is nullable in the tests table.
+    - If a test has both `course_id` and `lesson_id`, it is a **lesson test** (attached to a specific lesson).
+    - If a test has a `course_id` but no `lesson_id`, it is a **course test** (attached to the course as a whole).
+    
+    **100% Discount Logic (Free Enrollments):**
+    - **Automatic Handling**: When sponsorship codes provide 100% discount, the system automatically handles free enrollments
+    - **Payment Flow**: Free enrollments skip Flutterwave payment processing and create enrollments immediately
+    - **Response Format**: Free enrollments return `is_free_enrollment: true` flag with immediate enrollment data
+    - **No Verification Required**: Free enrollments don't require payment verification since they're already successful
+    
+    **Payment Flow Types:**
+    1. **Regular Payments**: User provides payment details → Flutterwave payment → Verification → Enrollment
+    2. **Free Enrollments**: Sponsorship code with 100% discount → Immediate enrollment → No payment processing
+    
+    **Implementation Status**: All documented endpoints are fully implemented and tested, including the complete file upload system with persistent storage support and comprehensive sponsorship discount handling.
+  version: 1.0.0
+  contact:
+    name: TheMobileProf API Support
+    email: api-support@themobileprof.com
+    url: https://docs.themobileprof.com
+  license:
+    name: Proprietary
+    url: https://themobileprof.com/license
+
+servers:
+  - url: https://api.themobileprof.com
+    description: Production server
+  - url: http://localhost:3000
+    description: Development server
+
+security:
+  - BearerAuth: []
+
+paths:
+  $ref: './paths/index.yaml'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token for authentication
+  
+  schemas:
+    $ref: './schemas/index.yaml'
+  
+  responses:
+    $ref: './responses/index.yaml'
+
+tags:
+  - name: Authentication
+    description: User authentication and authorization endpoints
+  - name: Payments
+    description: Payment processing and enrollment management with automatic 100% discount handling
+  - name: Admin Payments
+    description: Admin payment management and analytics
+  - name: Sponsorships
+    description: Sponsorship management and discount code system
+  - name: Sponsorship Opportunities
+    description: Sponsorship opportunity creation and management
+  - name: Discussions
+    description: Discussion forum and community engagement system
+  - name: Certifications
+    description: User certification and credential management
+  - name: Certification Programs
+    description: Certification program enrollment and progress tracking
+  - name: Lessons
+    description: Course lesson management and progress tracking
+  - name: Courses
+    description: Course management and enrollment system
+  - name: Classes
+    description: Live class scheduling and enrollment management
+  - name: File Uploads
+    description: File upload and management endpoints
+  - name: Notifications
+    description: User notification system and preferences
+  - name: Search
+    description: Search and discovery endpoints
+  - name: Meta
+    description: Metadata and system information endpoints
+  - name: Debug
+    description: Debug and testing endpoints
+  - name: Tests
+    description: Test management and assessment endpoints
+  - name: Scraping
+    description: Web scraping management and URL processing endpoints
+  - name: Users
+    description: User management and profile endpoints 

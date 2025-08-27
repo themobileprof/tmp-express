@@ -1,0 +1,85 @@
+# Payment Schema
+type: object
+properties:
+  id:
+    type: string
+    format: uuid
+    description: Unique identifier for the payment
+  userId:
+    type: string
+    format: uuid
+    description: ID of the user making the payment
+  courseId:
+    type: string
+    format: uuid
+    nullable: true
+    description: ID of the course (if payment is for course enrollment)
+  classId:
+    type: string
+    format: uuid
+    nullable: true
+    description: ID of the class (if payment is for class enrollment)
+  paymentType:
+    type: string
+    enum: [course, class]
+    description: Type of item being purchased
+  amount:
+    type: number
+    description: Final amount paid after discounts
+  originalAmount:
+    type: number
+    description: Original price before any discounts
+  discountAmount:
+    type: number
+    description: Amount of discount applied
+  currency:
+    type: string
+    default: NGN
+    description: Currency of the payment
+  flutterwaveReference:
+    type: string
+    description: Flutterwave payment reference
+  flutterwaveTransactionId:
+    type: string
+    nullable: true
+    description: Flutterwave transaction ID (null for free enrollments)
+  paymentMethod:
+    type: string
+    enum: [card, bank_transfer, ussd, mobile_money, qr_code, barter, mpesa, gh_mobile_money, ug_mobile_money, franc_mobile_money, emalipay]
+    description: Payment method used
+  status:
+    type: string
+    enum: [pending, successful, failed, cancelled, refunded]
+    description: Current status of the payment
+  isFreeEnrollment:
+    type: boolean
+    description: Whether this payment represents a free enrollment (100% discount)
+  sponsorshipId:
+    type: string
+    format: uuid
+    nullable: true
+    description: ID of the sponsorship used (if applicable)
+  metadata:
+    type: object
+    description: Additional payment metadata
+  errorMessage:
+    type: string
+    nullable: true
+    description: Error message if payment failed
+  createdAt:
+    type: string
+    format: date-time
+    description: When the payment was created
+  updatedAt:
+    type: string
+    format: date-time
+    description: When the payment was last updated
+required:
+  - id
+  - userId
+  - paymentType
+  - amount
+  - status
+  - isFreeEnrollment
+  - createdAt
+  - updatedAt 

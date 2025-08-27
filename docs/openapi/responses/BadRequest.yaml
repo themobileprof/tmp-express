@@ -1,0 +1,17 @@
+# Bad Request Response (400)
+description: Bad Request
+content:
+  application/json:
+    schema:
+      type: object
+      properties:
+        error:
+          type: string
+          example: "VALIDATION_ERROR"
+        message:
+          type: string
+          example: "Validation failed"
+        details:
+          type: object
+          additionalProperties:
+            type: string 

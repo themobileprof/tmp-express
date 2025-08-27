@@ -1,0 +1,13 @@
+# Conflict Response (409)
+description: Conflict
+content:
+  application/json:
+    schema:
+      type: object
+      properties:
+        error:
+          type: string
+          example: "CONFLICT"
+        message:
+          type: string
+          example: "Resource already exists" 

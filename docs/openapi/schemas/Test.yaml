@@ -1,0 +1,32 @@
+# Test Schema
+type: object
+properties:
+  id:
+    type: string
+    format: uuid
+  courseId:
+    type: string
+    format: uuid
+  lessonId:
+    type: string
+    format: uuid
+  title:
+    type: string
+  description:
+    type: string
+  durationMinutes:
+    type: integer
+  passingScore:
+    type: integer
+  maxAttempts:
+    type: integer
+  orderIndex:
+    type: integer
+  isPublished:
+    type: boolean
+  createdAt:
+    type: string
+    format: date-time
+  updatedAt:
+    type: string
+    format: date-time 

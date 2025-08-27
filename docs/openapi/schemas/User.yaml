@@ -1,0 +1,38 @@
+# User Schema
+type: object
+properties:
+  id:
+    type: string
+    format: uuid
+  email:
+    type: string
+    format: email
+  firstName:
+    type: string
+  lastName:
+    type: string
+  role:
+    type: string
+    enum: [student, instructor, admin, sponsor]
+  avatarUrl:
+    type: string
+    format: uri
+  bio:
+    type: string
+  googleId:
+    type: string
+  googleEmail:
+    type: string
+  authProvider:
+    type: string
+    enum: [local, google]
+  emailVerified:
+    type: boolean
+  createdAt:
+    type: string
+    format: date-time
+  updatedAt:
+    type: string
+    format: date-time
+  isActive:
+    type: boolean 

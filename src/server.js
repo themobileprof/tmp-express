@@ -7,6 +7,10 @@ const rateLimit = require('express-rate-limit');
 const path = require('path');
 require('dotenv').config();
 
+// Swagger UI imports
+const swaggerUi = require('swagger-ui-express');
+const YAML = require('yamljs');
+
 const authRoutes = require('./routes/auth');
 const userRoutes = require('./routes/users');
 const courseRoutes = require('./routes/courses');
@@ -34,6 +38,9 @@ const maintenanceMiddleware = require('./middleware/maintenance');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// Load OpenAPI specification
+const openApiSpec = YAML.load(path.join(__dirname, '../docs/openapi/openapi.yaml'));
 
 // Trust proxy configuration for rate limiting
 app.set('trust proxy', 1);
@@ -72,6 +79,19 @@ app.use('/api/', limiter);
 
 // Upload routes (must come before JSON parser to handle multipart data)
 app.use('/api/uploads', uploadRoutes); // Standard upload endpoint
+
+// Swagger UI Documentation
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(openApiSpec, {
+  customCss: '.swagger-ui .topbar { display: none }',
+  customSiteTitle: 'TheMobileProf API Documentation',
+  customfavIcon: '/favicon.ico',
+  swaggerOptions: {
+    docExpansion: 'list',
+    filter: true,
+    showRequestHeaders: true,
+    tryItOutEnabled: true
+  }
+}));
 
 // Body parsing middleware
 app.use(express.json({ limit: '10mb' }));
@@ -170,159 +190,13 @@ app.get('/health', (req, res) => {
   });
 });
 
-// API landing page
-app.get('/', async (req, res) => {
-  // Check if request wants JSON (API client) or HTML (browser)
-  const wantsJson = req.headers.accept && req.headers.accept.includes('application/json');
-  
-  if (wantsJson) {
-    // Get system settings
-    const siteDescription = await getSystemSetting('site_description', 'Learning Management System Backend API');
-    const supportEmail = await getSystemSetting('support_email', 'support@themobileprof.com');
-    
-    // Return JSON for API clients
-    res.status(200).json({
-      name: 'TheMobileProf LMS API',
-      version: '1.0.0',
-      description: siteDescription,
-      status: 'running',
-      timestamp: new Date().toISOString(),
-      endpoints: {
-        health: '/health',
-        api: '/api',
-        auth: '/api/auth',
-        users: '/api/users',
-        courses: '/api/courses',
-        classes: '/api/classes',
-        tests: '/api/tests',
-        sponsorships: '/api/sponsorships',
-        payments: '/api/payments',
-        discussions: '/api/discussions',
-        certifications: '/api/certifications',
-        admin: '/api/admin',
-        scraping: '/api/scraping'
-      },
-      documentation: 'https://github.com/your-username/themobileprof-backend',
-      support: supportEmail
-    });
-  } else {
-    // Get system settings for HTML
-    const siteDescription = await getSystemSetting('site_description', 'Learning Management System Backend API');
-    const supportEmail = await getSystemSetting('support_email', 'support@themobileprof.com');
-    
-    // Return HTML for browser requests
-    res.status(200).send(`
-      <!DOCTYPE html>
-      <html lang="en">
-      <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>TheMobileProf LMS API</title>
-        <style>
-          body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 2rem;
-            line-height: 1.6;
-            color: #333;
-          }
-          .header {
-            text-align: center;
-            margin-bottom: 3rem;
-            padding-bottom: 2rem;
-            border-bottom: 2px solid #e1e5e9;
-          }
-          .status {
-            display: inline-block;
-            background: #28a745;
-            color: white;
-            padding: 0.25rem 0.75rem;
-            border-radius: 20px;
-            font-size: 0.875rem;
-            font-weight: 500;
-          }
-          .endpoints {
-            background: #f8f9fa;
-            padding: 1.5rem;
-            border-radius: 8px;
-            margin: 2rem 0;
-          }
-          .endpoint {
-            margin: 0.5rem 0;
-            font-family: 'Monaco', 'Menlo', monospace;
-            color: #0066cc;
-          }
-          .info {
-            background: #e7f3ff;
-            padding: 1rem;
-            border-radius: 6px;
-            border-left: 4px solid #0066cc;
-            margin: 1rem 0;
-          }
-          .footer {
-            margin-top: 3rem;
-            padding-top: 2rem;
-            border-top: 1px solid #e1e5e9;
-            text-align: center;
-            color: #666;
-            font-size: 0.875rem;
-          }
-        </style>
-      </head>
-      <body>
-        <div class="header">
-          <h1>🚀 TheMobileProf LMS API</h1>
-          <p>${siteDescription}</p>
-          <span class="status">Running</span>
-        </div>
-        
-        <div class="info">
-          <strong>API Status:</strong> The API is running successfully. Use the endpoints below to interact with the system.
-        </div>
-        
-        <h2>Available Endpoints</h2>
-        <div class="endpoints">
-          <div class="endpoint">GET /health - Health check</div>
-          <div class="endpoint">POST /api/auth/register - User registration</div>
-          <div class="endpoint">POST /api/auth/login - User login</div>
-          <div class="endpoint">POST /api/auth/admin/login - Admin login</div>
-          <div class="endpoint">GET /api/courses - List courses</div>
-          <div class="endpoint">GET /api/classes - List classes</div>
-          <div class="endpoint">GET /api/sponsorships - List sponsorships</div>
-          <div class="endpoint">POST /api/payments/initialize - Initialize payment</div>
-          <div class="endpoint">GET /api/discussions - List discussions</div>
-          <div class="endpoint">GET /api/certifications - List certifications</div>
-          <div class="endpoint">GET /api/admin/users - Admin: List users</div>
-          <div class="endpoint">GET /api/admin/courses - Admin: List courses</div>
-          <div class="endpoint">GET /api/admin/classes - Admin: List classes</div>
-          <div class="endpoint">GET /api/admin/sponsorships - Admin: List sponsorships</div>
-          <div class="endpoint">GET /api/admin/discussions - Admin: List discussions</div>
-          <div class="endpoint">GET /api/admin/certifications - Admin: List certifications</div>
-          <div class="endpoint">GET /api/admin/payments - Admin: Payment history</div>
-          <div class="endpoint">GET /api/admin/stats/overview - Admin: System overview</div>
-          <div class="endpoint">GET /api/admin/stats/users - Admin: User statistics</div>
-          <div class="endpoint">GET /api/admin/stats/courses - Admin: Course statistics</div>
-          <div class="endpoint">GET /api/admin/stats/revenue - Admin: Revenue statistics</div>
-          <div class="endpoint">GET /api/admin/settings - Admin: System settings</div>
-        </div>
-        
-        <div class="info">
-          <strong>Authentication:</strong> Most endpoints require JWT authentication. Include your token in the Authorization header: <code>Authorization: Bearer YOUR_TOKEN</code>
-        </div>
-        
-        <div class="footer">
-          <p>Version 1.0.0 | <a href="https://github.com/your-username/themobileprof-backend">Documentation</a> | <a href="mailto:${supportEmail}">Support</a></p>
-          <p>Last updated: ${new Date().toLocaleString()}</p>
-        </div>
-      </body>
-      </html>
-    `);
-  }
-});
-
 // Maintenance mode (before most routes)
 app.use(maintenanceMiddleware);
+
+// Redirect root to API documentation
+app.get('/', (req, res) => {
+  res.redirect('/api-docs');
+});
 
 // API routes
 app.use('/api/auth', authRoutes);
@@ -434,7 +308,7 @@ app.use(errorHandler);
 app.listen(PORT, () => {
   console.log(`🚀 TheMobileProf Backend API server running on port ${PORT}`);
   console.log(`📊 Health check available at http://localhost:${PORT}/health`);
-  console.log(`🔗 API documentation: http://localhost:${PORT}/api`);
+  console.log(`🔗 API documentation: http://localhost:${PORT}/api-docs`);
 });
 
 module.exports = app; 

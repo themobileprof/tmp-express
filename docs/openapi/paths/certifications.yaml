@@ -1,0 +1,114 @@
+# Certifications Endpoints
+
+# Get User's Certifications
+/my:
+  get:
+    tags:
+      - Certifications
+    summary: Get user's earned certificates
+    description: Retrieve all certifications earned by the authenticated user
+    security:
+      - BearerAuth: []
+    responses:
+      '200':
+        description: User certifications retrieved successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                certifications:
+                  type: array
+                  items:
+                    $ref: '../schemas/Certification.yaml'
+      '401':
+        $ref: '../responses/Unauthorized.yaml'
+
+# Download Certificate
+/{id}/download:
+  get:
+    tags:
+      - Certifications
+    summary: Download certificate file or return signed URL
+    description: Get a download link or signed URL for a specific certificate
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Certification ID
+        schema:
+          type: string
+          format: uuid
+    responses:
+      '200':
+        description: Certificate download information retrieved successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                certificateUrl:
+                  type: string
+                  description: Original certificate URL
+                downloadUrl:
+                  type: string
+                  description: Direct download URL
+                expiresAt:
+                  type: string
+                  format: date-time
+                  description: When the download URL expires
+      '401':
+        $ref: '../responses/Unauthorized.yaml'
+      '404':
+        $ref: '../responses/NotFound.yaml'
+
+# Get Certification Progress
+/progress:
+  get:
+    tags:
+      - Certifications
+    summary: Get in-progress programs with progress fields
+    description: Retrieve all certification programs the user is currently enrolled in with progress details
+    security:
+      - BearerAuth: []
+    responses:
+      '200':
+        description: Certification progress retrieved successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                programs:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      title:
+                        type: string
+                        description: Program title
+                      progress:
+                        type: integer
+                        minimum: 0
+                        maximum: 100
+                        description: Overall progress percentage
+                      completedModules:
+                        type: integer
+                        description: Number of completed modules
+                      totalModules:
+                        type: integer
+                        description: Total number of modules
+                      nextRequirement:
+                        type: string
+                        description: Next requirement to complete
+                      estimatedCompletion:
+                        type: string
+                        format: date-time
+                        description: Estimated completion date
+      '401':
+        $ref: '../responses/Unauthorized.yaml' 

@@ -1,0 +1,56 @@
+Certification:
+  type: object
+  properties:
+    id:
+      type: string
+      format: uuid
+      description: Unique identifier for the certification
+    title:
+      type: string
+      description: Title of the certification
+    description:
+      type: string
+      description: Description of the certification
+    issuerName:
+      type: string
+      description: Name of the issuing organization
+    issuedAt:
+      type: string
+      format: date-time
+      description: When the certification was issued
+    expiryDate:
+      type: string
+      format: date-time
+      nullable: true
+      description: When the certification expires (if applicable)
+    certificateUrl:
+      type: string
+      description: URL to the certificate file
+    verificationCode:
+      type: string
+      description: Unique verification code for the certification
+    status:
+      type: string
+      enum: [issued, expired, revoked]
+      description: Current status of the certification
+    courseId:
+      type: string
+      format: uuid
+      nullable: true
+      description: ID of the associated course
+    classId:
+      type: string
+      format: uuid
+      nullable: true
+      description: ID of the associated class
+    createdAt:
+      type: string
+      format: date-time
+      description: When the certification was created
+  required:
+    - id
+    - title
+    - issuerName
+    - issuedAt
+    - verificationCode
+    - status 

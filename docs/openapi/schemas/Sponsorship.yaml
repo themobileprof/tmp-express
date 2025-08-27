@@ -1,0 +1,81 @@
+# Sponsorship Schema
+type: object
+properties:
+  id:
+    type: string
+    format: uuid
+    description: Unique identifier for the sponsorship
+  sponsorId:
+    type: string
+    format: uuid
+    description: ID of the sponsor creating the sponsorship
+  courseId:
+    type: string
+    format: uuid
+    description: ID of the course being sponsored
+  discountCode:
+    type: string
+    description: Unique discount code for students to use
+  discountType:
+    type: string
+    enum: [percentage, fixed]
+    description: Type of discount (percentage or fixed amount)
+  discountValue:
+    type: number
+    description: Value of the discount (percentage as decimal or fixed amount)
+  maxStudents:
+    type: integer
+    minimum: 1
+    description: Maximum number of students who can use this sponsorship
+  studentsUsed:
+    type: integer
+    minimum: 0
+    description: Number of students who have already used this sponsorship
+  remainingSpots:
+    type: integer
+    minimum: 0
+    description: Number of remaining spots available
+  startDate:
+    type: string
+    format: date
+    description: Start date when the sponsorship becomes active
+  endDate:
+    type: string
+    format: date
+    description: End date when the sponsorship expires
+  status:
+    type: string
+    enum: [active, paused, expired, completed]
+    description: Current status of the sponsorship
+  completionRate:
+    type: number
+    minimum: 0
+    maximum: 100
+    description: Completion rate percentage of sponsored students
+  notes:
+    type: string
+    description: Additional notes about the sponsorship
+  isFullyFunded:
+    type: boolean
+    description: Whether the sponsorship provides 100% discount (free enrollment)
+  createdAt:
+    type: string
+    format: date-time
+    description: When the sponsorship was created
+  updatedAt:
+    type: string
+    format: date-time
+    description: When the sponsorship was last updated
+required:
+  - id
+  - sponsorId
+  - courseId
+  - discountCode
+  - discountType
+  - discountValue
+  - maxStudents
+  - startDate
+  - endDate
+  - status
+  - createdAt
+  - updatedAt 

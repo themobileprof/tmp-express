@@ -1,0 +1,341 @@
+# Payment Endpoints
+initialize:
+  tags:
+    - Payments
+  summary: Initialize Payment
+  description: |
+    Initialize a payment for course or class enrollment using Flutterwave Standard v3.0.0.
+    
+    **Special Handling for 100% Discounts:**
+    - If a sponsorship code provides 100% discount, the payment is automatically marked as successful
+    - No Flutterwave payment is required for free enrollments
+    - Enrollment is created immediately
+    - Response includes `is_free_enrollment: true` flag
+    
+    **Payment Flow Logic:**
+    1. **Regular Payments**: User provides payment details → Flutterwave payment → Verification → Enrollment
+    2. **Free Enrollments**: Sponsorship code with 100% discount → Immediate enrollment → No payment processing
+    
+    **Response Format:**
+    - Free enrollments return `is_free_enrollment: true` with immediate enrollment data
+    - Regular payments return `is_free_enrollment: false` with Flutterwave checkout URL
+  security:
+    - BearerAuth: []
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          type: object
+          required:
+            - paymentType
+            - itemId
+          properties:
+            paymentType:
+              type: string
+              enum: [course, class]
+              description: Type of item being purchased
+            itemId:
+              type: string
+              format: uuid
+              description: ID of the course or class
+            paymentMethod:
+              type: string
+              enum: [card, bank_transfer, ussd, mobile_money, qr_code, barter, mpesa, gh_mobile_money, ug_mobile_money, franc_mobile_money, emalipay]
+              description: Payment method to use (ignored for free enrollments)
+            sponsorshipCode:
+              type: string
+              description: Optional sponsorship discount code (can result in free enrollment)
+            callbackUrl:
+              type: string
+              description: URL where user will be redirected after payment completion
+  responses:
+    '200':
+      description: Payment initialized successfully
+      content:
+        application/json:
+          schema:
+            oneOf:
+              - type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Free enrollment successful"
+                  data:
+                    type: object
+                    properties:
+                      is_free_enrollment:
+                        type: boolean
+                        example: true
+                        description: Indicates this is a free enrollment (100% discount)
+                      enrollment:
+                        $ref: '../schemas/Enrollment.yaml'
+                        description: Immediately created enrollment for free course/class
+                      sponsorship:
+                        $ref: '../schemas/Sponsorship.yaml'
+                        description: Sponsorship details that provided the free enrollment
+                      originalPrice:
+                        type: number
+                        description: Original price before discount
+                      discountAmount:
+                        type: number
+                        description: Full discount amount (100% of original price)
+                      finalPrice:
+                        type: number
+                        example: 0
+                        description: Final price after discount (0 for free enrollments)
+              - type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Payment initialized successfully"
+                  data:
+                    type: object
+                    properties:
+                      payment_id:
+                        type: string
+                        format: uuid
+                        description: Internal payment identifier
+                      reference:
+                        type: string
+                        description: Payment reference for tracking
+                      flutterwave_reference:
+                        type: string
+                        description: Flutterwave payment reference
+                      checkout_url:
+                        type: string
+                        description: Flutterwave checkout URL for payment completion
+                      original_amount:
+                        type: number
+                        description: Original price before any discounts
+                      final_amount:
+                        type: number
+                        description: Final amount to pay after discounts
+                      discount_amount:
+                        type: number
+                        description: Amount of discount applied
+                      payment_type:
+                        type: string
+                        enum: [course, class]
+                        description: Type of item being purchased
+                      sponsorship:
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                            format: uuid
+                          discountCode:
+                            type: string
+                          discountType:
+                            type: string
+                            enum: [percentage, fixed]
+                          discountValue:
+                            type: number
+                          discountAmount:
+                            type: number
+                          originalPrice:
+                            type: number
+                          finalPrice:
+                            type: number
+                        description: Sponsorship details if discount code was used
+                      is_free_enrollment:
+                        type: boolean
+                        example: false
+                        description: Always false for regular payments
+    '400':
+      $ref: '../responses/BadRequest.yaml'
+    '401':
+      $ref: '../responses/Unauthorized.yaml'
+    '404':
+      $ref: '../responses/NotFound.yaml'
+
+verify:
+  tags:
+    - Payments
+  summary: Verify Payment
+  description: |
+    Payment verification method. Called by frontend when user returns from Flutterwave.
+    
+    **Handles Both Payment Types:**
+    - **Regular payments**: Verifies with Flutterwave and creates enrollment
+    - **Free enrollments (100% discount)**: Already marked as successful, proceeds with enrollment
+    
+    **Verification Flow:**
+    1. **Free Enrollments**: No verification needed, enrollment already exists
+    2. **Regular Payments**: Verify with Flutterwave → Confirm payment → Create enrollment
+    
+    **Note**: This endpoint is primarily for regular payments. Free enrollments are handled
+    immediately during initialization and don't require verification.
+  security:
+    - BearerAuth: []
+  parameters:
+    - name: reference
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Payment reference from our system (TMP_...)
+  responses:
+    '200':
+      description: Payment verified and enrollment completed
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success:
+                type: boolean
+                description: Whether verification was successful
+              message:
+                type: string
+                description: Success or error message
+              payment:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  amount:
+                    type: number
+                  status:
+                    type: string
+                  transactionId:
+                    type: string
+                description: Payment details (null for free enrollments)
+              enrollment:
+                $ref: '../schemas/Enrollment.yaml'
+                description: Created enrollment details
+      '400':
+        $ref: '../responses/BadRequest.yaml'
+      '401':
+        $ref: '../responses/Unauthorized.yaml'
+      '404':
+        $ref: '../responses/NotFound.yaml'
+
+# Get Supported Payment Methods
+methods:
+  get:
+    tags:
+      - Payments
+    summary: Get supported payment methods for a specific country
+    description: |
+      Retrieve supported payment methods for a specific country.
+      
+      **Note**: Payment methods are only relevant for regular payments.
+      Free enrollments (100% discount) don't require payment method selection.
+    parameters:
+      - name: country
+        in: query
+        description: Country code
+        schema:
+          type: string
+          default: NG
+          enum: [NG, GH, KE, UG, CM, ET]
+    responses:
+      '200':
+        description: Supported payment methods retrieved successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                country:
+                  type: string
+                  description: Country code
+                supportedMethods:
+                  type: array
+                  items:
+                    type: string
+                  description: List of supported payment methods
+                message:
+                  type: string
+                  description: Description of available methods
+
+# Get User Payments
+user:
+  get:
+    tags:
+      - Payments
+    summary: Get current user's payment history
+    description: |
+      Retrieve payment history for the authenticated user.
+      
+      **Payment Types Included:**
+      - Regular payments (with Flutterwave transaction details)
+      - Free enrollments (marked with `is_free_enrollment: true`)
+      - Failed payments
+      - Cancelled payments
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: limit
+        in: query
+        description: Number of results to return
+        schema:
+          type: integer
+          default: 20
+          minimum: 1
+          maximum: 100
+      - name: offset
+        in: query
+        description: Number of results to skip
+        schema:
+          type: integer
+          default: 0
+          minimum: 0
+    responses:
+      '200':
+        description: User payments retrieved successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                payments:
+                  type: array
+                  items:
+                    $ref: '../schemas/Payment.yaml'
+      '401':
+        $ref: '../responses/Unauthorized.yaml'
+
+# Get Payment by ID
+/{id}:
+  get:
+    tags:
+      - Payments
+    summary: Get specific payment details
+    description: |
+      Retrieve detailed information about a specific payment.
+      
+      **Payment Details Include:**
+      - Payment information (amount, status, method)
+      - Sponsorship details (if applicable)
+      - Enrollment information
+      - Free enrollment flag (`is_free_enrollment`)
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Payment ID
+        schema:
+          type: string
+          format: uuid
+    responses:
+      '200':
+        description: Payment details retrieved successfully
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/Payment.yaml'
+      '401':
+        $ref: '../responses/Unauthorized.yaml'
+      '404':
+        $ref: '../responses/NotFound.yaml' 

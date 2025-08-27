@@ -1,0 +1,13 @@
+# Forbidden Response (403)
+description: Forbidden
+content:
+  application/json:
+    schema:
+      type: object
+      properties:
+        error:
+          type: string
+          example: "FORBIDDEN"
+        message:
+          type: string
+          example: "Insufficient permissions" 
