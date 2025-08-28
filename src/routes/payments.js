@@ -160,6 +160,72 @@ router.post('/initialize', authenticateToken, asyncHandler(async (req, res) => {
     
     // Update payment status to successful immediately
     await query('UPDATE payments SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2', ['successful', payment.id]);
+
+    // If a sponsorship code was applied, record usage (idempotent)
+    if (sponsorshipCode) {
+      try {
+        const sponsorship = await getRow(
+          `SELECT s.* FROM sponsorships s
+           JOIN sponsorship_courses sc ON s.id = sc.sponsorship_id
+           WHERE s.discount_code = $1 AND s.status = 'active' AND sc.course_id = $2`,
+          [sponsorshipCode, paymentType === 'course' ? itemId : payment.course_id]
+        );
+        if (sponsorship) {
+          const existingUsage = await getRow(
+            'SELECT id FROM sponsorship_usage WHERE sponsorship_id = $1 AND student_id = $2',
+            [sponsorship.id, userId]
+          );
+          if (!existingUsage) {
+            // Enforce capacity
+            if (sponsorship.students_used < sponsorship.max_students) {
+              await query(
+                `INSERT INTO sponsorship_usage (
+                  sponsorship_id, student_id, course_id, original_price, discount_amount, final_price, used_at
+                ) VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP)`,
+                [
+                  sponsorship.id,
+                  userId,
+                  paymentType === 'course' ? itemId : null,
+                  item.price,
+                  discountAmount,
+                  finalAmount
+                ]
+              );
+              await query('UPDATE sponsorships SET students_used = students_used + 1 WHERE id = $1', [sponsorship.id]);
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Error recording sponsorship usage for free enrollment:', err);
+      }
+    }
+
+    // Create enrollment immediately
+    try {
+      if (paymentType === 'course') {
+        await query(
+          `INSERT INTO enrollments (user_id, course_id, enrollment_type, sponsorship_id) VALUES ($1, $2, 'course', $3)`,
+          [
+            userId,
+            itemId,
+            sponsorshipCode ? (await getRow('SELECT id FROM sponsorships WHERE discount_code = $1', [sponsorshipCode]))?.id : null
+          ]
+        );
+        await query('UPDATE courses SET student_count = student_count + 1 WHERE id = $1', [itemId]);
+      } else if (paymentType === 'class') {
+        await query(
+          `INSERT INTO enrollments (user_id, class_id, enrollment_type, sponsorship_id) VALUES ($1, $2, 'class', $3)`,
+          [
+            userId,
+            itemId,
+            sponsorshipCode ? (await getRow('SELECT id FROM sponsorships WHERE discount_code = $1', [sponsorshipCode]))?.id : null
+          ]
+        );
+        await query('UPDATE classes SET available_slots = available_slots - 1 WHERE id = $1', [itemId]);
+      }
+    } catch (err) {
+      console.error('Error creating enrollment for free enrollment:', err);
+    }
     
     // Return success with special flag for frontend to handle
     res.json({
@@ -272,89 +338,6 @@ router.get('/verify/:reference', authenticateToken, asyncHandler(async (req, res
     console.log('Payment already successful, proceeding with enrollment:', { reference, paymentId: payment.id });
     
     // Handle sponsorship usage and enrollment (same logic as below)
-    if (payment.metadata?.sponsorshipCode) {
-      try {
-        const sponsorship = await getRow(
-          'SELECT * FROM sponsorships WHERE discount_code = $1',
-          [payment.metadata.sponsorshipCode]
-        );
-        if (sponsorship) {
-          await query(
-            `INSERT INTO sponsorship_usage (
-              sponsorship_id, student_id, course_id, original_price, 
-              discount_amount, final_price, used_at
-            ) VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP)`,
-            [
-              sponsorship.id, userId, payment.course_id || payment.class_id,
-              payment.metadata.originalPrice, payment.metadata.discountAmount, payment.metadata.finalPrice
-            ]
-          );
-          await query('UPDATE sponsorships SET students_used = students_used + 1 WHERE id = $1', [sponsorship.id]);
-        }
-      } catch (sponsorshipError) {
-        console.error('Error recording sponsorship usage:', sponsorshipError);
-      }
-    }
-
-    if (payment.payment_type === 'course') {
-      await query(
-        `INSERT INTO enrollments (user_id, course_id, enrollment_type, sponsorship_id) VALUES ($1, $2, 'course', $3)`,
-        [userId, payment.course_id, payment.metadata?.sponsorshipCode ? 
-          (await getRow('SELECT id FROM sponsorships WHERE discount_code = $1', [payment.metadata.sponsorshipCode]))?.id : null]
-      );
-      await query('UPDATE courses SET student_count = student_count + 1 WHERE id = $1', [payment.course_id]);
-    } else {
-      await query(
-        `INSERT INTO enrollments (user_id, class_id, enrollment_type, sponsorship_id) VALUES ($1, $2, 'class', $3)`,
-        [userId, payment.class_id, payment.metadata?.sponsorshipCode ? 
-          (await getRow('SELECT id FROM sponsorships WHERE discount_code = $1', [payment.metadata.sponsorshipCode]))?.id : null]
-      );
-      await query('UPDATE classes SET available_slots = available_slots - 1 WHERE id = $1', [payment.class_id]);
-    }
-
-    // Send payment success notification
-    try {
-      let itemTitle = '';
-      if (payment.payment_type === 'course') {
-        const course = await getRow('SELECT title FROM courses WHERE id = $1', [payment.course_id]);
-        itemTitle = course?.title || 'Course';
-      } else {
-        const classData = await getRow('SELECT title FROM classes WHERE id = $1', [payment.class_id]);
-        itemTitle = classData?.title || 'Class';
-      }
-      
-      await notifyPaymentSuccess(userId, payment.id, payment.amount, itemTitle);
-    } catch (error) {
-      console.error('Failed to send payment success notification:', error);
-    }
-
-    res.json({
-      success: true,
-      message: 'Enrollment completed successfully',
-      payment: {
-        id: payment.id,
-        amount: payment.amount,
-        status: 'successful',
-        transactionId: null,
-        is_free_enrollment: payment.amount === 0
-      }
-    });
-    return;
-  }
-
-  // For pending payments, verify with Flutterwave
-  const accessToken = await getFlutterwaveToken();
-  const response = await axios.get(
-    `${baseUrl}/transactions/verify_by_reference?tx_ref=${reference}`,
-    { headers: { Authorization: `Bearer ${accessToken}` } }
-  );
-
-  if (response.data.status === 'success' && response.data.data.status === 'successful') {
-    await query(
-      'UPDATE payments SET status = $1, flutterwave_transaction_id = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3',
-      ['successful', response.data.data.id, payment.id]
-    );
-
     if (payment.metadata?.sponsorshipCode) {
       try {
         const sponsorship = await getRow(

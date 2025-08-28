@@ -543,8 +543,10 @@ router.post('/:id/enroll', authenticateToken, validateEnrollment, asyncHandler(a
   // Verify sponsorship if provided
   if (sponsorshipId) {
     const sponsorship = await getRow(
-      `SELECT s.* FROM sponsorships s
+      `SELECT s.*, c.price AS course_price
+       FROM sponsorships s
        JOIN sponsorship_courses sc ON s.id = sc.sponsorship_id
+       JOIN courses c ON sc.course_id = c.id
        WHERE s.id = $1 AND sc.course_id = $2 AND s.status = $3`,
       [sponsorshipId, id, 'active']
     );
@@ -553,14 +555,37 @@ router.post('/:id/enroll', authenticateToken, validateEnrollment, asyncHandler(a
       throw new AppError('Invalid or inactive sponsorship for this course', 400, 'Invalid Sponsorship');
     }
 
-    // Check if sponsorship has been used by this user
+    // Check if sponsorship has been used by this user; if not, create usage now
     const sponsorshipUsage = await getRow(
-      'SELECT * FROM sponsorship_usage WHERE sponsorship_id = $1 AND student_id = $2',
+      'SELECT id FROM sponsorship_usage WHERE sponsorship_id = $1 AND student_id = $2',
       [sponsorshipId, userId]
     );
 
     if (!sponsorshipUsage) {
-      throw new AppError('Sponsorship has not been used by this user', 400, 'Sponsorship Not Used');
+      // Ensure capacity
+      if (sponsorship.students_used >= sponsorship.max_students) {
+        throw new AppError('Sponsorship has reached its maximum number of students', 400, 'Sponsorship Full');
+      }
+
+      // Compute discount amounts for audit trail
+      const originalPrice = sponsorship.course_price;
+      let discountAmount = 0;
+      let finalPrice = originalPrice;
+      if (sponsorship.discount_type === 'percentage') {
+        discountAmount = (originalPrice * Number(sponsorship.discount_value)) / 100;
+      } else {
+        discountAmount = Number(sponsorship.discount_value);
+      }
+      finalPrice = Math.max(0, originalPrice - discountAmount);
+
+      // Record usage and increment students_used
+      await query(
+        `INSERT INTO sponsorship_usage (sponsorship_id, student_id, course_id, original_price, discount_amount, final_price)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [sponsorshipId, userId, id, originalPrice, discountAmount, finalPrice]
+      );
+
+      await query('UPDATE sponsorships SET students_used = students_used + 1 WHERE id = $1', [sponsorshipId]);
     }
   }
 
