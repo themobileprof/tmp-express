@@ -42,6 +42,33 @@ const PORT = process.env.PORT || 3000;
 // Load OpenAPI specification
 const openApiSpec = YAML.load(path.join(__dirname, '../docs/openapi/openapi.yaml'));
 
+// Create development-specific spec without auth endpoints
+const createDevSpec = (spec) => {
+  const devSpec = JSON.parse(JSON.stringify(spec));
+  
+  // Remove auth paths from development spec
+  if (devSpec.paths) {
+    delete devSpec.paths['/api/auth/login'];
+    delete devSpec.paths['/api/auth/register'];
+    delete devSpec.paths['/api/auth/google'];
+    delete devSpec.paths['/api/auth/verify-email'];
+    delete devSpec.paths['/api/auth/resend-verification'];
+    delete devSpec.paths['/api/auth/forgot-password'];
+    delete devSpec.paths['/api/auth/reset-password'];
+    delete devSpec.paths['/api/auth/refresh-token'];
+    delete devSpec.paths['/api/auth/logout'];
+  }
+  
+  // Add note about dev token tool
+  if (devSpec.info) {
+    devSpec.info.description = (devSpec.info.description || '') + '\n\n**🔧 Development Note**: Authentication endpoints are hidden in development. Use `/dev/token/:email` to generate JWT tokens for testing.';
+  }
+  
+  return devSpec;
+};
+
+const devSpec = createDevSpec(openApiSpec);
+
 // Trust proxy configuration for rate limiting
 app.set('trust proxy', 1);
 
@@ -80,12 +107,16 @@ app.use('/api/', limiter);
 // Upload routes (must come before JSON parser to handle multipart data)
 app.use('/api/uploads', uploadRoutes); // Standard upload endpoint
 
-// Swagger UI Documentation
-app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(openApiSpec, {
+// Serve OpenAPI docs directory for $ref resolution
+app.use('/docs/openapi', express.static(path.join(__dirname, '../docs/openapi')));
+
+// Swagger UI Documentation (load spec via URL so $refs resolve)
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(null, {
   customCss: '.swagger-ui .topbar { display: none }',
   customSiteTitle: 'TheMobileProf API Documentation',
   customfavIcon: '/favicon.ico',
   swaggerOptions: {
+    url: '/docs/openapi/openapi.yaml',
     docExpansion: 'list',
     filter: true,
     showRequestHeaders: true,
@@ -189,6 +220,127 @@ app.get('/health', (req, res) => {
     uptime: process.uptime()
   });
 });
+
+// Development-only token generation tool
+if (process.env.NODE_ENV === 'development') {
+  // List available users for token generation
+  app.get('/dev/users', async (req, res) => {
+    try {
+      // Only allow localhost and specific dev IPs
+      const allowedIPs = ['127.0.0.1', '::1', 'localhost'];
+      const clientIP = req.ip || req.connection.remoteAddress;
+      
+      if (!allowedIPs.includes(clientIP) && !clientIP.startsWith('192.168.') && !clientIP.startsWith('10.0.')) {
+        return res.status(403).json({
+          error: 'Access denied',
+          message: 'This endpoint is only available from localhost and development networks',
+          clientIP: clientIP
+        });
+      }
+      
+      // Get all active users from database
+      const { query } = require('./database/config');
+      const result = await query(
+        'SELECT id, email, first_name, last_name, role, is_active, created_at FROM users WHERE is_active = true ORDER BY created_at DESC'
+      );
+      
+      res.json({
+        success: true,
+        message: 'Available users for development token generation',
+        users: result.rows.map(user => ({
+          id: user.id,
+          email: user.email,
+          firstName: user.first_name,
+          lastName: user.last_name,
+          role: user.role,
+          createdAt: user.created_at
+        })),
+        note: 'Use /dev/token/:email to generate a JWT token for any of these users'
+      });
+      
+    } catch (error) {
+      console.error('Dev users list error:', error);
+      res.status(500).json({
+        error: 'Internal server error',
+        message: error.message
+      });
+    }
+  });
+  
+  app.get('/dev/token/:email', async (req, res) => {
+    try {
+      const { email } = req.params;
+      
+      // Only allow localhost and specific dev IPs
+      const allowedIPs = ['127.0.0.1', '::1', 'localhost'];
+      const clientIP = req.ip || req.connection.remoteAddress;
+      
+      if (!allowedIPs.includes(clientIP) && !clientIP.startsWith('192.168.') && !clientIP.startsWith('10.0.')) {
+        return res.status(403).json({
+          error: 'Access denied',
+          message: 'This endpoint is only available from localhost and development networks',
+          clientIP: clientIP
+        });
+      }
+      
+      // Get user from database
+      const { getRow } = require('./database/config');
+      const user = await getRow(
+        'SELECT id, email, first_name, last_name, role, is_active FROM users WHERE email = $1',
+        [email]
+      );
+      
+      if (!user) {
+        return res.status(404).json({
+          error: 'User not found',
+          message: `No user found with email: ${email}`,
+          tip: 'Use /dev/users to see available users'
+        });
+      }
+      
+      if (!user.is_active) {
+        return res.status(400).json({
+          error: 'User inactive',
+          message: 'This user account is deactivated'
+        });
+      }
+      
+      // Generate JWT token
+      const jwt = require('jsonwebtoken');
+      const token = jwt.sign(
+        { user_id: user.id, email: user.email, role: user.role },
+        process.env.JWT_SECRET,
+        { expiresIn: process.env.JWT_EXPIRES_IN || '24h' }
+      );
+      
+      res.json({
+        success: true,
+        message: 'Development token generated successfully',
+        user: {
+          id: user.id,
+          email: user.email,
+          firstName: user.first_name,
+          lastName: user.last_name,
+          role: user.role
+        },
+        token: token,
+        expiresIn: process.env.JWT_EXPIRES_IN || '24h',
+        note: 'This endpoint is for development use only'
+      });
+      
+    } catch (error) {
+      console.error('Dev token generation error:', error);
+      res.status(500).json({
+        error: 'Internal server error',
+        message: error.message
+      });
+    }
+  });
+  
+  console.log('🔧 Development tools enabled:');
+  console.log('   📋 /dev/users - List available users');
+  console.log('   🔑 /dev/token/:email - Generate JWT token');
+}
 
 // Maintenance mode (before most routes)
 app.use(maintenanceMiddleware);

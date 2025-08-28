@@ -543,12 +543,14 @@ router.post('/:id/enroll', authenticateToken, validateEnrollment, asyncHandler(a
   // Verify sponsorship if provided
   if (sponsorshipId) {
     const sponsorship = await getRow(
-      'SELECT * FROM sponsorships WHERE id = $1 AND course_id = $2 AND status = $3',
+      `SELECT s.* FROM sponsorships s
+       JOIN sponsorship_courses sc ON s.id = sc.sponsorship_id
+       WHERE s.id = $1 AND sc.course_id = $2 AND s.status = $3`,
       [sponsorshipId, id, 'active']
     );
 
     if (!sponsorship) {
-      throw new AppError('Invalid or inactive sponsorship', 400, 'Invalid Sponsorship');
+      throw new AppError('Invalid or inactive sponsorship for this course', 400, 'Invalid Sponsorship');
     }
 
     // Check if sponsorship has been used by this user

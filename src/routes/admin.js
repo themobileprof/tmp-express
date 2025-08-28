@@ -1366,15 +1366,15 @@ router.get('/sponsorships', asyncHandler(async (req, res) => {
 
   if (search) {
     paramCount++;
-    whereClause += ` AND (c.title ILIKE $${paramCount} OR s.discount_code ILIKE $${paramCount})`;
+    whereClause += ` AND (s.discount_code ILIKE $${paramCount} OR u.first_name ILIKE $${paramCount} OR u.last_name ILIKE $${paramCount})`;
     params.push(`%${search}%`);
   }
 
   // Get total count
   const countResult = await getRow(
-    `SELECT COUNT(*) as total FROM sponsorships s 
+    `SELECT COUNT(DISTINCT s.id) as total FROM sponsorships s 
      LEFT JOIN users u ON s.sponsor_id = u.id
-     LEFT JOIN courses c ON s.course_id = c.id ${whereClause}`,
+     ${whereClause}`,
     params
   );
   const total = parseInt(countResult.total);
@@ -1383,14 +1383,16 @@ router.get('/sponsorships', asyncHandler(async (req, res) => {
   const sponsorships = await getRows(
     `SELECT s.*, 
             u.first_name as sponsor_first_name, u.last_name as sponsor_last_name,
-            c.title as course_title,
-            COUNT(su.id) as usage_count
+            array_agg(DISTINCT c.title) as course_titles,
+            array_agg(DISTINCT c.id) as course_ids,
+            COUNT(DISTINCT su.id) as usage_count
      FROM sponsorships s
      LEFT JOIN users u ON s.sponsor_id = u.id
-     LEFT JOIN courses c ON s.course_id = c.id
+     LEFT JOIN sponsorship_courses sc ON s.id = sc.sponsorship_id
+     LEFT JOIN courses c ON sc.course_id = c.id
      LEFT JOIN sponsorship_usage su ON s.id = su.sponsorship_id
      ${whereClause}
-     GROUP BY s.id, u.first_name, u.last_name, c.title
+     GROUP BY s.id, u.first_name, u.last_name
      ORDER BY s.created_at DESC
      LIMIT $${paramCount + 1} OFFSET $${paramCount + 2}`,
     [...params, limit, offset]
@@ -1410,7 +1412,8 @@ router.get('/sponsorships', asyncHandler(async (req, res) => {
 // Create sponsorship
 router.post('/sponsorships', [
   body('sponsorId').isUUID().withMessage('Valid sponsor ID is required'),
-  body('courseId').isUUID().withMessage('Valid course ID is required'),
+  body('courseIds').isArray({ min: 1 }).withMessage('At least one course ID is required'),
+  body('courseIds.*').isUUID().withMessage('All course IDs must be valid UUIDs'),
   body('discountType').isIn(['percentage', 'fixed']).withMessage('Discount type must be percentage or fixed'),
   body('discountValue').isFloat({ min: 0 }).withMessage('Discount value must be a positive number'),
   body('maxStudents').isInt({ min: 1 }).withMessage('Maximum students must be at least 1'),
@@ -1428,7 +1431,7 @@ router.post('/sponsorships', [
     throw new AppError('Validation failed', 400, 'Validation Error', errorDetails);
   }
 
-  const { sponsorId, courseId, discountType, discountValue, maxStudents, startDate, endDate, notes } = req.body;
+  const { sponsorId, courseIds, discountType, discountValue, maxStudents, startDate, endDate, notes } = req.body;
 
   // Check if sponsor exists and is a sponsor
   const sponsor = await getRow(
@@ -1439,11 +1442,14 @@ router.post('/sponsorships', [
     throw new AppError('Sponsor not found', 404, 'Sponsor Not Found');
   }
 
-  // Check if course exists
-  const course = await getRow('SELECT id FROM courses WHERE id = $1', [courseId]);
-  if (!course) {
-    throw new AppError('Course not found', 404, 'Course Not Found');
-  }
+  // Check if all courses exist
+  const courseChecks = await Promise.all(courseIds.map(async (courseId) => {
+    const course = await getRow('SELECT id FROM courses WHERE id = $1', [courseId]);
+    if (!course) {
+      throw new AppError(`Course with ID ${courseId} not found`, 404, 'Course Not Found');
+    }
+    return course;
+  }));
 
   // Generate unique discount code
   const generateDiscountCode = () => {
@@ -1465,15 +1471,31 @@ router.post('/sponsorships', [
     }
   }
 
+  // Create sponsorship
   const result = await query(
-    `INSERT INTO sponsorships (sponsor_id, course_id, discount_code, discount_type, discount_value, max_students, start_date, end_date, notes)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+    `INSERT INTO sponsorships (sponsor_id, discount_code, discount_type, discount_value, max_students, start_date, end_date, notes)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
      RETURNING *`,
-    [sponsorId, courseId, discountCode, discountType, discountValue, maxStudents, startDate, endDate, notes]
+    [sponsorId, discountCode, discountType, discountValue, maxStudents, startDate, endDate, notes]
   );
 
+  const sponsorship = result.rows[0];
+
+  // Link sponsorship to all courses
+  const courseLinkPromises = courseIds.map(async (courseId) => {
+    await query(
+      `INSERT INTO sponsorship_courses (sponsorship_id, course_id) VALUES ($1, $2)`,
+      [sponsorship.id, courseId]
+    );
+  });
+
+  await Promise.all(courseLinkPromises);
+
   res.status(201).json({
-    sponsorship: result.rows[0]
+    sponsorship: {
+      ...sponsorship,
+      courseIds: courseIds
+    }
   });
 }));
 

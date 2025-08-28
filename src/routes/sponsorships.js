@@ -11,7 +11,8 @@ const router = express.Router();
 
 // Validation middleware
 const validateSponsorship = [
-  body('courseId').isUUID().withMessage('Valid course ID is required'),
+  body('courseIds').isArray({ min: 1 }).withMessage('At least one course ID is required'),
+  body('courseIds.*').isUUID().withMessage('All course IDs must be valid UUIDs'),
   body('discountType').isIn(['percentage', 'fixed']).withMessage('Discount type must be percentage or fixed'),
   body('discountValue').isFloat({ min: 0 }).withMessage('Discount value must be a positive number'),
   body('maxStudents').isInt({ min: 1 }).withMessage('Maximum students must be at least 1'),
@@ -47,21 +48,26 @@ router.post('/', authenticateToken, authorizeSponsor, validateSponsorship, async
     throw new AppError('Validation failed', 400, 'Validation Error');
   }
 
-  const { courseId, discountType, discountValue, maxStudents, duration, notes } = req.body;
+  const { courseIds, discountType, discountValue, maxStudents, duration, notes } = req.body;
   const sponsorId = req.user.id;
 
-  // Verify course exists
-  const course = await getRow('SELECT id, price FROM courses WHERE id = $1', [courseId]);
-  if (!course) {
-    throw new AppError('Course not found', 404, 'Course Not Found');
-  }
+  // Verify courses exist
+  const courses = await Promise.all(courseIds.map(async (courseId) => {
+    const course = await getRow('SELECT id, price FROM courses WHERE id = $1', [courseId]);
+    if (!course) {
+      throw new AppError(`Course with ID ${courseId} not found`, 404, 'Course Not Found');
+    }
+    return course;
+  }));
 
   // Validate discount value
   if (discountType === 'percentage' && discountValue > 100) {
     throw new AppError('Percentage discount cannot exceed 100%', 400, 'Invalid Discount');
   }
 
-  if (discountType === 'fixed' && discountValue >= course.price) {
+  // Determine the minimum course price for fixed discount validation
+  const minCoursePrice = Math.min(...courses.map(c => c.price));
+  if (discountType === 'fixed' && discountValue >= minCoursePrice) {
     throw new AppError('Fixed discount cannot exceed or equal course price', 400, 'Invalid Discount');
   }
 
@@ -80,19 +86,29 @@ router.post('/', authenticateToken, authorizeSponsor, validateSponsorship, async
   // Create sponsorship
   const result = await query(
     `INSERT INTO sponsorships (
-      sponsor_id, course_id, discount_code, discount_type, discount_value,
+      sponsor_id, discount_code, discount_type, discount_value,
       max_students, start_date, end_date, notes
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
     RETURNING *`,
-    [sponsorId, courseId, discountCode, discountType, discountValue, maxStudents, startDate, endDate, notes]
+    [sponsorId, discountCode, discountType, discountValue, maxStudents, startDate, endDate, notes]
   );
 
   const sponsorship = result.rows[0];
 
+  // Link sponsorship to all courses
+  const courseLinkPromises = courseIds.map(async (courseId) => {
+    await query(
+      `INSERT INTO sponsorship_courses (sponsorship_id, course_id) VALUES ($1, $2)`,
+      [sponsorship.id, courseId]
+    );
+  });
+
+  await Promise.all(courseLinkPromises);
+
   res.status(201).json({
     id: sponsorship.id,
     sponsorId: sponsorship.sponsor_id,
-    courseId: sponsorship.course_id,
+    courseIds: courseIds,
     discountCode: sponsorship.discount_code,
     discountType: sponsorship.discount_type,
     discountValue: sponsorship.discount_value,
@@ -127,10 +143,15 @@ router.get('/', authenticateToken, authorizeSponsor, asyncHandler(async (req, re
   }
 
   const sponsorships = await getRows(
-    `SELECT s.*, c.title as course_title, c.price as course_price
+    `SELECT DISTINCT s.*, 
+            array_agg(c.title) as course_titles,
+            array_agg(c.price) as course_prices,
+            array_agg(c.id) as course_ids
      FROM sponsorships s
-     JOIN courses c ON s.course_id = c.id
+     JOIN sponsorship_courses sc ON s.id = sc.sponsorship_id
+     JOIN courses c ON sc.course_id = c.id
      ${whereClause}
+     GROUP BY s.id
      ORDER BY s.created_at DESC`,
     params
   );
@@ -138,9 +159,9 @@ router.get('/', authenticateToken, authorizeSponsor, asyncHandler(async (req, re
   res.json({
     sponsorships: sponsorships.map(s => ({
       id: s.id,
-      courseId: s.course_id,
-      courseTitle: s.course_title,
-      coursePrice: s.course_price,
+      courseIds: s.course_ids,
+      courseTitles: s.course_titles,
+      coursePrices: s.course_prices,
       discountCode: s.discount_code,
       discountType: s.discount_type,
       discountValue: s.discount_value,
@@ -162,12 +183,18 @@ router.get('/:id', authenticateToken, authorizeOwnerOrAdmin('sponsorships'), asy
   const { id } = req.params;
 
   const sponsorship = await getRow(
-    `SELECT s.*, c.title as course_title, c.price as course_price, c.description as course_description,
+    `SELECT s.*, 
+            array_agg(c.title) as course_titles,
+            array_agg(c.price) as course_prices,
+            array_agg(c.id) as course_ids,
+            array_agg(c.description) as course_descriptions,
             u.first_name as sponsor_first_name, u.last_name as sponsor_last_name
      FROM sponsorships s
-     JOIN courses c ON s.course_id = c.id
+     JOIN sponsorship_courses sc ON s.id = sc.sponsorship_id
+     JOIN courses c ON sc.course_id = c.id
      JOIN users u ON s.sponsor_id = u.id
-     WHERE s.id = $1`,
+     WHERE s.id = $1
+     GROUP BY s.id, u.first_name, u.last_name`,
     [id]
   );
 
@@ -179,10 +206,10 @@ router.get('/:id', authenticateToken, authorizeOwnerOrAdmin('sponsorships'), asy
     id: sponsorship.id,
     sponsorId: sponsorship.sponsor_id,
     sponsorName: `${sponsorship.sponsor_first_name} ${sponsorship.sponsor_last_name}`,
-    courseId: sponsorship.course_id,
-    courseTitle: sponsorship.course_title,
-    coursePrice: sponsorship.course_price,
-    courseDescription: sponsorship.course_description,
+    courseIds: sponsorship.course_ids,
+    courseTitles: sponsorship.course_titles,
+    coursePrices: sponsorship.course_prices,
+    courseDescriptions: sponsorship.course_descriptions,
     discountCode: sponsorship.discount_code,
     discountType: sponsorship.discount_type,
     discountValue: sponsorship.discount_value,
@@ -261,19 +288,20 @@ router.post('/:id/use', authenticateToken, validateSponsorshipUsage, asyncHandle
   const sponsorship = await getRow(
     `SELECT s.*, c.price as course_price, c.title as course_title
      FROM sponsorships s
-     JOIN courses c ON s.course_id = c.id
-     WHERE s.id = $1 AND s.status = 'active'`,
-    [id]
+     JOIN sponsorship_courses sc ON s.id = sc.sponsorship_id
+     JOIN courses c ON sc.course_id = c.id
+     WHERE s.id = $1 AND s.status = 'active' AND c.id = $2`,
+    [id, courseId]
   );
 
   if (!sponsorship) {
-    throw new AppError('Sponsorship not found or inactive', 404, 'Sponsorship Not Found');
+    throw new AppError('Sponsorship not found or inactive for this course', 404, 'Sponsorship Not Found');
   }
 
-  // Verify course matches
-  if (sponsorship.course_id !== courseId) {
-    throw new AppError('Sponsorship is not valid for this course', 400, 'Invalid Course');
-  }
+  // Verify course matches (no longer needed since we filter by courseId in the query above)
+  // if (sponsorship.course_id !== courseId) {
+  //   throw new AppError('Sponsorship is not valid for this course', 400, 'Invalid Course');
+  // }
 
   // Check if sponsorship is still valid
   const now = new Date();
@@ -343,10 +371,15 @@ router.get('/code/:discountCode', asyncHandler(async (req, res) => {
   const { discountCode } = req.params;
 
   const sponsorship = await getRow(
-    `SELECT s.*, c.title as course_title, c.price as course_price
+    `SELECT s.*, 
+            array_agg(c.title) as course_titles,
+            array_agg(c.price) as course_prices,
+            array_agg(c.id) as course_ids
      FROM sponsorships s
-     JOIN courses c ON s.course_id = c.id
-     WHERE s.discount_code = $1 AND s.status = 'active'`,
+     JOIN sponsorship_courses sc ON s.id = sc.sponsorship_id
+     JOIN courses c ON sc.course_id = c.id
+     WHERE s.discount_code = $1 AND s.status = 'active'
+     GROUP BY s.id`,
     [discountCode]
   );
 
@@ -366,8 +399,9 @@ router.get('/code/:discountCode', asyncHandler(async (req, res) => {
     valid: !isExpired && !isFull,
     sponsorship: {
       id: sponsorship.id,
-      courseName: sponsorship.course_title,
-      coursePrice: sponsorship.course_price,
+      courseNames: sponsorship.course_titles,
+      coursePrices: sponsorship.course_prices,
+      courseIds: sponsorship.course_ids,
       discountType: sponsorship.discount_type,
       discountValue: sponsorship.discount_value,
       maxStudents: sponsorship.max_students,
@@ -387,10 +421,13 @@ router.get('/:id/stats', authenticateToken, authorizeOwnerOrAdmin('sponsorships'
 
   // Get sponsorship details
   const sponsorship = await getRow(
-    `SELECT s.*, c.title as course_title
+    `SELECT s.*, 
+            array_agg(c.title) as course_titles
      FROM sponsorships s
-     JOIN courses c ON s.course_id = c.id
-     WHERE s.id = $1`,
+     JOIN sponsorship_courses sc ON s.id = sc.sponsorship_id
+     JOIN courses c ON sc.course_id = c.id
+     WHERE s.id = $1
+     GROUP BY s.id`,
     [id]
   );
 
@@ -425,7 +462,7 @@ router.get('/:id/stats', authenticateToken, authorizeOwnerOrAdmin('sponsorships'
   res.json({
     sponsorship: {
       id: sponsorship.id,
-      courseTitle: sponsorship.course_title,
+      courseTitle: sponsorship.course_titles.join(', '), // Display all course titles
       discountCode: sponsorship.discount_code,
       discountType: sponsorship.discount_type,
       discountValue: sponsorship.discount_value,
@@ -459,10 +496,15 @@ router.post('/:id/email', authenticateToken, authorizeOwnerOrAdmin('sponsorships
 
   // Get sponsorship details
   const sponsorship = await getRow(
-    `SELECT s.*, c.title as course_title, c.description as course_description, c.price as course_price
+    `SELECT s.*, 
+            array_agg(c.title) as course_titles,
+            array_agg(c.description) as course_descriptions,
+            array_agg(c.price) as course_prices
      FROM sponsorships s
-     JOIN courses c ON s.course_id = c.id
-     WHERE s.id = $1`,
+     JOIN sponsorship_courses sc ON s.id = sc.sponsorship_id
+     JOIN courses c ON sc.course_id = c.id
+     WHERE s.id = $1
+     GROUP BY s.id`,
     [id]
   );
 
@@ -475,23 +517,30 @@ router.post('/:id/email', authenticateToken, authorizeOwnerOrAdmin('sponsorships
   const supportEmail = await getSystemSetting('support_email', 'support@themobileprof.com');
 
   // Compose email
+  const courseTitles = sponsorship.course_titles.join(', ');
   const subject = isForRecipient
-    ? `You've received a sponsorship for ${sponsorship.course_title}!`
-    : `Sponsorship details for ${sponsorship.course_title}`;
+    ? `You've received a sponsorship for ${courseTitles}!`
+    : `Sponsorship details for ${courseTitles}`;
+
+  // Build course details HTML
+  const courseDetailsHtml = sponsorship.course_titles.map((title, index) => `
+    <li><strong>Course ${index + 1}:</strong> ${title}</li>
+    <li><strong>Description:</strong> ${sponsorship.course_descriptions[index]}</li>
+    <li><strong>Price:</strong> $${sponsorship.course_prices[index]}</li>
+  `).join('');
 
   const message = `
     <h2>${subject}</h2>
     <p>${customMessage || ''}</p>
     <ul>
-      <li><strong>Course:</strong> ${sponsorship.course_title}</li>
-      <li><strong>Description:</strong> ${sponsorship.course_description}</li>
+      ${courseDetailsHtml}
       <li><strong>Discount Code:</strong> ${sponsorship.discount_code}</li>
       <li><strong>Discount Type:</strong> ${sponsorship.discount_type}</li>
       <li><strong>Discount Value:</strong> ${sponsorship.discount_value}</li>
       <li><strong>Max Students:</strong> ${sponsorship.max_students}</li>
       <li><strong>Valid Until:</strong> ${new Date(sponsorship.end_date).toLocaleDateString()}</li>
     </ul>
-    <p>To use this sponsorship, enroll in the course and enter the discount code above.</p>
+    <p>To use this sponsorship, enroll in any of the courses above and enter the discount code above.</p>
     <p>If you have any questions, please contact us at ${supportEmail}.</p>
   `;
 

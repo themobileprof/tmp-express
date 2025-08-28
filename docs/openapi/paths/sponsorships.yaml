@@ -404,12 +404,25 @@ post:
     tags:
       - Sponsorships
     summary: Validate a sponsorship discount code
-    description: Public endpoint to validate a sponsorship discount code
+    description: |
+      Public endpoint to validate a sponsorship discount code.
+      
+      **Frontend Usage:**
+      1. **Validate Code**: Call this endpoint when user enters a discount code
+      2. **Check Validity**: Use the `valid` field to determine if code is usable
+      3. **Extract Sponsorship ID**: Use `sponsorship.id` for enrollment requests
+      4. **Show User Info**: Display discount details and course information
+      
+      **Important Notes:**
+      - This endpoint is public (no authentication required)
+      - Always validate before attempting enrollment
+      - The `sponsorship.id` from the response is required for enrollment
+      - Check `isExpired` and `isFull` before allowing enrollment
     parameters:
       - name: discountCode
         in: path
         required: true
-        description: Discount code to validate
+        description: Discount code to validate (e.g., "SPONSOR123")
         schema:
           type: string
     responses:
@@ -422,45 +435,91 @@ post:
               properties:
                 valid:
                   type: boolean
-                  description: Whether the code is valid
+                  description: Whether the code is valid and can be used
                 sponsorship:
                   type: object
                   properties:
                     id:
                       type: string
                       format: uuid
+                      description: |
+                        **IMPORTANT**: Use this UUID as `sponsorshipId` when enrolling.
+                        This is NOT the discount code - it's the internal sponsorship ID.
                     courseName:
                       type: string
                       description: Name of the sponsored course
                     coursePrice:
                       type: number
-                      description: Original course price
+                      description: Original course price before discount
                     discountType:
                       type: string
                       enum: [percentage, fixed]
+                      description: Type of discount (percentage or fixed amount)
                     discountValue:
                       type: number
-                      description: Value of the discount
+                      description: Value of the discount (percentage as decimal or fixed amount)
                     maxStudents:
                       type: integer
-                      description: Maximum number of students
+                      description: Maximum number of students who can use this sponsorship
                     studentsUsed:
                       type: integer
-                      description: Number of students who used the code
+                      description: Number of students who have already used this sponsorship
                     remainingSpots:
                       type: integer
-                      description: Remaining available spots
+                      description: Number of remaining available spots
                     startDate:
                       type: string
                       format: date
+                      description: When the sponsorship becomes active
                     endDate:
                       type: string
                       format: date
+                      description: When the sponsorship expires
                     isExpired:
                       type: boolean
-                      description: Whether the sponsorship has expired
+                      description: Whether the sponsorship has expired (check this before enrollment)
                     isFull:
                       type: boolean
-                      description: Whether the sponsorship is full
+                      description: Whether the sponsorship is full (check this before enrollment)
+                message:
+                  type: string
+                  description: Human-readable message about the validation result
+            examples:
+              valid_sponsorship:
+                summary: Valid sponsorship code response
+                value:
+                  valid: true
+                  sponsorship:
+                    id: "550e8400-e29b-41d4-a716-446655440000"
+                    courseName: "JavaScript Fundamentals"
+                    coursePrice: 99.99
+                    discountType: "percentage"
+                    discountValue: 20
+                    maxStudents: 50
+                    studentsUsed: 25
+                    remainingSpots: 25
+                    startDate: "2024-01-01"
+                    endDate: "2024-12-31"
+                    isExpired: false
+                    isFull: false
+                  message: "Valid sponsorship code for JavaScript Fundamentals course"
+              expired_sponsorship:
+                summary: Expired sponsorship code response
+                value:
+                  valid: false
+                  sponsorship:
+                    id: "550e8400-e29b-41d4-a716-446655440001"
+                    courseName: "Python Basics"
+                    coursePrice: 79.99
+                    discountType: "percentage"
+                    discountValue: 15
+                    maxStudents: 30
+                    studentsUsed: 30
+                    remainingSpots: 0
+                    startDate: "2024-01-01"
+                    endDate: "2024-06-30"
+                    isExpired: true
+                    isFull: true
+                  message: "This sponsorship code has expired and is no longer valid"
       '400':
         $ref: '../responses/BadRequest.yaml' 

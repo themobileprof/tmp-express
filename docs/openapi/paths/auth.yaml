@@ -1,5 +1,6 @@
 # Authentication Endpoints
-post:
+
+register:
   tags:
     - Authentication
   summary: Register User
@@ -49,11 +50,47 @@ post:
                 $ref: '../schemas/User.yaml'
               token:
                 type: string
-                description: JWT token
     '400':
       $ref: '../responses/BadRequest.yaml'
     '409':
       $ref: '../responses/Conflict.yaml'
+
+login:
+  tags:
+    - Authentication
+  summary: Login User
+  description: Authenticate user with email and password
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          type: object
+          required:
+            - email
+            - password
+          properties:
+            email:
+              type: string
+              format: email
+            password:
+              type: string
+  responses:
+    '200':
+      description: Login successful
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              user:
+                $ref: '../schemas/User.yaml'
+              token:
+                type: string
+    '400':
+      $ref: '../responses/BadRequest.yaml'
+    '401':
+      $ref: '../responses/Unauthorized.yaml'
 
 adminLogin:
   tags:
@@ -119,14 +156,9 @@ googleOAuth:
             lastName:
               type: string
               description: Optional, will use Google data if not provided
-            role:
-              type: string
-              enum: [student, instructor, admin, sponsor]
-              default: student
-              description: Optional, defaults to "student"
   responses:
     '200':
-      description: Login successful (existing user)
+      description: Google authentication successful
       content:
         application/json:
           schema:
@@ -136,17 +168,10 @@ googleOAuth:
                 $ref: '../schemas/User.yaml'
               token:
                 type: string
-    '201':
-      description: User created successfully (new user)
-      content:
-        application/json:
-          schema:
-            type: object
-            properties:
-              user:
-                $ref: '../schemas/User.yaml'
-              token:
-                type: string
+    '400':
+      $ref: '../responses/BadRequest.yaml'
+    '401':
+      $ref: '../responses/Unauthorized.yaml'
 
 getMe:
   tags:
@@ -257,17 +282,4 @@ changePassword:
             type: object
             properties:
               message:
-                type: string
-    '400':
-      description: Password change not available for Google OAuth accounts
-      content:
-        application/json:
-          schema:
-            type: object
-            properties:
-              error:
-                type: string
-                example: "Password change not available for Google OAuth accounts"
-              message:
-                type: string
-                example: "Invalid Operation" 
+                type: string 

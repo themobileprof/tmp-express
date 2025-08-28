@@ -20,6 +20,21 @@ info:
     1. **Regular Payments**: User provides payment details → Flutterwave payment → Verification → Enrollment
     2. **Free Enrollments**: Sponsorship code with 100% discount → Immediate enrollment → No payment processing
     
+    **Sponsorship Code Flow (Important for Frontend):**
+    ```
+    1. User enters discount code "SPONSOR123"
+    2. Frontend validates: GET /api/sponsorships/code/SPONSOR123
+    3. Response includes: sponsorship.id = "uuid-here"
+    4. Frontend enrolls: POST /api/courses/{courseId}/enroll
+        Body: { "sponsorshipId": "uuid-here" }
+    ```
+    
+    **Key Points:**
+    - **NEVER send discount codes directly** to enrollment endpoints
+    - **ALWAYS validate first** to get the sponsorship UUID
+    - **Use sponsorship.id** (UUID), not the discount code string
+    - **Check isExpired and isFull** before allowing enrollment
+    
     **Implementation Status**: All documented endpoints are fully implemented and tested, including the complete file upload system with persistent storage support and comprehensive sponsorship discount handling.
   version: 1.0.0
   contact:
@@ -31,9 +46,9 @@ info:
     url: https://themobileprof.com/license
 
 servers:
-  - url: https://api.themobileprof.com
+  - url: https://api.themobileprof.com/api
     description: Production server
-  - url: http://localhost:3000
+  - url: http://localhost:3000/api
     description: Development server
 
 security:
@@ -60,11 +75,11 @@ tags:
   - name: Authentication
     description: User authentication and authorization endpoints
   - name: Payments
-    description: Payment processing and enrollment management with automatic 100% discount handling
+    description: 'Payment processing and enrollment management with automatic 100% discount handling. **Note**: For sponsorship codes, always validate first to get the sponsorship UUID before enrolling.'
   - name: Admin Payments
     description: Admin payment management and analytics
   - name: Sponsorships
-    description: Sponsorship management and discount code system
+    description: 'Sponsorship management and discount code system. **Important**: Use validation endpoint first to get sponsorship UUID for enrollment.'
   - name: Sponsorship Opportunities
     description: Sponsorship opportunity creation and management
   - name: Discussions
@@ -76,7 +91,7 @@ tags:
   - name: Lessons
     description: Course lesson management and progress tracking
   - name: Courses
-    description: Course management and enrollment system
+    description: 'Course management and enrollment system. **Note**: For sponsorship enrollment, use the sponsorship UUID from validation, not the discount code.'
   - name: Classes
     description: Live class scheduling and enrollment management
   - name: File Uploads

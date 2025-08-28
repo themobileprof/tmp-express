@@ -487,17 +487,21 @@ router.post('/:id/enroll', authenticateToken, validateClassEnrollment, asyncHand
 	let sponsorshipIdToSave = null;
 	if (sponsorshipId) {
 		const sponsorship = await getRow(
-			'SELECT * FROM sponsorships WHERE id = $1 AND status = $2',
+			`SELECT s.* FROM sponsorships s
+			 JOIN sponsorship_courses sc ON s.id = sc.sponsorship_id
+			 WHERE s.id = $1 AND s.status = $2`,
 			[sponsorshipId, 'active']
 		);
 		if (!sponsorship) {
 			throw new AppError('Invalid or inactive sponsorship', 400, 'Invalid Sponsorship');
 		}
 
-		// Verify the sponsorship course is part of this class (via class_courses)
+		// Verify the sponsorship applies to at least one course in this class (via class_courses)
 		const mapping = await getRow(
-			'SELECT 1 FROM class_courses WHERE class_id = $1 AND course_id = $2 LIMIT 1',
-			[id, sponsorship.course_id]
+			`SELECT 1 FROM class_courses cc
+			 JOIN sponsorship_courses sc ON cc.course_id = sc.course_id
+			 WHERE cc.class_id = $1 AND sc.sponsorship_id = $2 LIMIT 1`,
+			[id, sponsorshipId]
 		);
 		if (!mapping) {
 			throw new AppError('Sponsorship is not applicable to this class', 400, 'Invalid Sponsorship Mapping');

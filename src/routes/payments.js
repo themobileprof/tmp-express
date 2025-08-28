@@ -74,15 +74,16 @@ router.post('/initialize', authenticateToken, asyncHandler(async (req, res) => {
     const sponsorship = await getRow(
       `SELECT s.*, c.title as course_title, c.price as course_price
        FROM sponsorships s
-       JOIN courses c ON s.course_id = c.id
-       WHERE s.discount_code = $1 AND s.status = 'active'`,
-      [sponsorshipCode]
+       JOIN sponsorship_courses sc ON s.id = sc.sponsorship_id
+       JOIN courses c ON sc.course_id = c.id
+       WHERE s.discount_code = $1 AND s.status = 'active' AND c.id = $2`,
+      [sponsorshipCode, itemId]
     );
 
-    if (!sponsorship || sponsorship.course_id !== itemId) {
+    if (!sponsorship) {
       return res.status(400).json({ 
         error: 'Invalid sponsorship code',
-        message: 'Sponsorship code is invalid or not applicable'
+        message: 'Sponsorship code (' + sponsorshipCode + ') is invalid or not applicable for this course'
       });
     }
 
