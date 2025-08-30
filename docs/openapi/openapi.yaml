@@ -1,4 +1,4 @@
-openapi: 3.0.3
+openapi: 3.1.0
 info:
   title: TheMobileProf API
   description: |
@@ -55,7 +55,450 @@ security:
   - BearerAuth: []
 
 paths:
-  $ref: './paths/index.yaml'
+  # Paths Index - References all endpoint path files
+
+  # Authentication Endpoints
+  /auth/register:
+    post:
+      $ref: './paths/auth.yaml#/register'
+  /auth/login:
+    post:
+      $ref: './paths/auth.yaml#/login'
+  /auth/google:
+    post:
+      $ref: './paths/auth.yaml#/google'
+  /auth/me:
+    get:
+      $ref: './paths/auth.yaml#/me'
+  /auth/profile:
+    get:
+      $ref: './paths/auth.yaml#/profile'
+  /auth/refresh:
+    post:
+      $ref: './paths/auth.yaml#/refresh'
+  /auth/logout:
+    post:
+      $ref: './paths/auth.yaml#/logout'
+  /auth/change-password:
+    post:
+      $ref: './paths/auth.yaml#/change-password'
+  /auth/admin/login:
+    post:
+      $ref: './paths/auth.yaml#/admin/login'
+  /auth/admin/google:
+    post:
+      $ref: './paths/auth.yaml#/admin/google'
+
+  # Payment Endpoints
+  /payments/initialize:
+    post:
+      $ref: './paths/payments.yaml#/initialize'
+  /payments/verify/{reference}:
+    get:
+      $ref: './paths/payments.yaml#/verify'
+
+  /payments/user:
+    get:
+      $ref: './paths/payments.yaml#/getUserPayments'
+  /payments/{id}:
+    get:
+      $ref: './paths/payments.yaml#/getPaymentById'
+
+  # Admin Payment Endpoints
+  /admin/payments:
+    get:
+      $ref: './paths/payments.yaml#/admin-payments'
+  /admin/payments/stats:
+    get:
+      $ref: './paths/payments.yaml#/admin-payments-stats'
+
+  # Sponsorship Endpoints
+  /sponsorships:
+    get:
+      $ref: './paths/sponsorships.yaml#/paths/~1/get'
+    post:
+      $ref: './paths/sponsorships.yaml#/paths/~1/post'
+  /sponsorships/{id}:
+    get:
+      $ref: './paths/sponsorships.yaml#/paths/~1{id}/get'
+    put:
+      $ref: './paths/sponsorships.yaml#/paths/~1{id}/put'
+    delete:
+      $ref: './paths/sponsorships.yaml#/paths/~1{id}/delete'
+  /sponsorships/{id}/use:
+    post:
+      $ref: './paths/sponsorships.yaml#/paths/~1{id}~1use/post'
+  /sponsorships/{id}/stats:
+    get:
+      $ref: './paths/sponsorships.yaml#/paths/~1{id}~1stats/get'
+  /sponsorships/{id}/email:
+    post:
+      $ref: './paths/sponsorships.yaml#/paths/~1{id}~1email/post'
+  /sponsorships/code/{discountCode}:
+    get:
+      $ref: './paths/sponsorships.yaml#/paths/~1code~1{discountCode}/get'
+
+  # Sponsorship Opportunities Endpoints
+  /sponsorship-opportunities:
+    get:
+      $ref: './paths/sponsorship-opportunities.yaml#/paths/~1/get'
+    post:
+      $ref: './paths/sponsorship-opportunities.yaml#/paths/~1/post'
+  /sponsorship-opportunities/{id}:
+    get:
+      $ref: './paths/sponsorship-opportunities.yaml#/paths/~1{id}/get'
+    put:
+      $ref: './paths/sponsorship-opportunities.yaml#/paths/~1{id}/put'
+    delete:
+      $ref: './paths/sponsorship-opportunities.yaml#/paths/~1{id}/delete'
+  /sponsorship-opportunities/{id}/contribute:
+    post:
+      $ref: './paths/sponsorship-opportunities.yaml#/paths/~1{id}~1contribute/post'
+
+  # Discussion Endpoints
+  /discussions/recent:
+    get:
+      $ref: './paths/discussions.yaml#/~1discussions~1recent/get'
+  /discussions:
+    get:
+      $ref: './paths/discussions.yaml#/~1discussions/get'
+    post:
+      $ref: './paths/discussions.yaml#/~1discussions/post'
+  /discussions/categories:
+    get:
+      $ref: './paths/discussions.yaml#/~1discussions~1categories/get'
+    post:
+      $ref: './paths/discussions.yaml#/~1discussions~1categories/post'
+  /discussions/categories/{id}:
+    put:
+      $ref: './paths/discussions.yaml#/~1discussions~1categories~1{id}/put'
+    delete:
+      $ref: './paths/discussions.yaml#/~1discussions~1categories~1{id}/delete'
+  /discussions/categories/{id}/stats:
+    get:
+      $ref: './paths/discussions.yaml#/~1discussions~1categories~1{id}~1stats/get'
+  /discussions/tags:
+    get:
+      $ref: './paths/discussions.yaml#/~1discussions~1tags/get'
+  /discussions/{id}:
+    get:
+      $ref: './paths/discussions.yaml#/~1{id}/get'
+    put:
+      $ref: './paths/discussions.yaml#/~1{id}/put/put'
+    delete:
+      $ref: './paths/discussions.yaml#/~1{id}/delete/delete'
+  /discussions/{id}/replies:
+    get:
+      $ref: './paths/discussions.yaml#/~1{id}~1replies/get'
+    post:
+      $ref: './paths/discussions.yaml#/~1{id}~1replies/post'
+  /discussions/{id}/like:
+    post:
+      $ref: './paths/discussions.yaml#/~1{id}~1like/post'
+    delete:
+      $ref: './paths/discussions.yaml#/~1{id}~1like/delete'
+
+  # Certifications Endpoints
+  /certifications:
+    get:
+      $ref: './paths/certifications.yaml#/get/get'
+    post:
+      $ref: './paths/certifications.yaml#/post/post'
+  /certifications/{id}:
+    get:
+      $ref: './paths/certifications.yaml#/~1{id}/get'
+    put:
+      $ref: './paths/certifications.yaml#/~1{id}~1put/put'
+    delete:
+      $ref: './paths/certifications.yaml#/~1{id}~1delete/delete'
+  /certifications/verify/{code}:
+    get:
+      $ref: './paths/certifications.yaml#/~1verify~1{code}/get'
+  /certifications/my:
+    get:
+      $ref: './paths/certifications.yaml#/~1my/get'
+  /certifications/{id}/download:
+    get:
+      $ref: './paths/certifications.yaml#/~1{id}~1download/get'
+  /certifications/progress:
+    get:
+      $ref: './paths/certifications.yaml#/~1progress/get'
+
+  # Certification Programs
+  /certification-programs:
+    get:
+      $ref: './paths/certification-programs.yaml#/get/get'
+  /certification-programs/{id}/enroll:
+    post:
+      $ref: './paths/certification-programs.yaml#/~1{id}~1enroll/post'
+
+  # Lessons (path-level refs)
+  /lessons/{id}:
+    get:
+      $ref: './paths/lessons.yaml#/~1{id}/get'
+    put:
+      $ref: './paths/lessons.yaml#/~1{id}/put'
+    delete:
+      $ref: './paths/lessons.yaml#/~1{id}/delete'
+  /lessons/{id}/complete:
+    post:
+      $ref: './paths/lessons.yaml#/~1{id}~1complete/post'
+  /lessons/{id}/progress:
+    get:
+      $ref: './paths/lessons.yaml#/~1{id}~1progress/get'
+  /lessons/admin/courses/{courseId}/lessons:
+    get:
+      $ref: './paths/lessons.yaml#/~1admin~1courses~1{courseId}~1lessons/get'
+    post:
+      $ref: './paths/lessons.yaml#/~1admin~1courses~1{courseId}~1lessons/post'
+  /lessons/courses/{id}/lessons:
+    get:
+      $ref: './paths/lessons.yaml#/courses~1{id}~1lessons/get'
+
+  # Courses (use correct file per path)
+  /courses/browse:
+    get:
+      $ref: './paths/courses.yaml#/~1courses~1browse/get'
+  /courses:
+    get:
+      $ref: './paths/courses.yaml#/~1courses/get'
+    post:
+      $ref: './paths/courses.yaml#/~1courses/post'
+  /courses/{id}:
+    get:
+      $ref: './paths/courses.yaml#/~1{id}/get'
+    put:
+      $ref: './paths/courses.yaml#/~1{id}/put/put'
+    delete:
+      $ref: './paths/courses.yaml#/~1{id}/delete/delete'
+  /courses/{id}/tests:
+    get:
+      $ref: './paths/courses.yaml#/~1{id}~1tests/get'
+  /courses/{id}/enrollments:
+    get:
+      $ref: './paths/courses.yaml#/~1{id}~1enrollments/get'
+  /courses/{id}/enroll:
+    post:
+      $ref: './paths/courses.yaml#/~1{id}~1enroll/post'
+  /courses/{id}/enrollments/{enrollmentId}:
+    put:
+      $ref: './paths/courses.yaml#/~1{id}~1enrollments~1{enrollmentId}/put'
+  /courses/{id}/lessons:
+    get:
+      $ref: './paths/lessons.yaml#/courses~1{id}~1lessons/get'
+  /courses/{id}/progression:
+    get:
+      $ref: './paths/courses.yaml#/~1{id}~1progression/get'
+  /courses/{id}/test-stats:
+    get:
+      $ref: './paths/courses.yaml#/~1{id}~1test-stats/get'
+  /courses/{id}/analytics:
+    get:
+      $ref: './paths/courses.yaml#/~1{id}~1analytics/get'
+  /courses/{id}/discussions:
+    get:
+      $ref: './paths/courses.yaml#/~1{id}~1discussions/get'
+
+  # Classes
+  /classes/upcoming:
+    get:
+      $ref: './paths/classes.yaml#/~1upcoming/get'
+  /classes/topics:
+    get:
+      $ref: './paths/classes.yaml#/~1topics/get'
+  /classes:
+    get:
+      $ref: './paths/classes.yaml#/get/get'
+    post:
+      $ref: './paths/classes.yaml#/post/post'
+  /classes/{id}:
+    get:
+      $ref: './paths/classes.yaml#/~1{id}/get'
+    put:
+      $ref: './paths/classes.yaml#/~1{id}/put/put'
+    delete:
+      $ref: './paths/classes.yaml#/~1{id}/delete/delete'
+  /classes/{id}/enrollments:
+    get:
+      $ref: './paths/classes.yaml#/~1{id}~1enrollments/get'
+  /classes/{id}/enroll:
+    post:
+      $ref: './paths/classes.yaml#/~1{id}~1enroll/post'
+
+  # Uploads
+  /uploads:
+    post:
+      $ref: './paths/uploads.yaml#/paths/~1/post'
+  /uploads/course-image:
+    post:
+      $ref: './paths/uploads.yaml#/paths/~1course-image/post'
+  /uploads/lesson-material:
+    post:
+      $ref: './paths/uploads.yaml#/paths/~1lesson-material/post'
+  /uploads/avatar:
+    post:
+      $ref: './paths/uploads.yaml#/paths/~1avatar/post'
+  /uploads/certificate:
+    post:
+      $ref: './paths/uploads.yaml#/paths/~1certificate/post'
+  /uploads/{filename}:
+    delete:
+      $ref: './paths/uploads.yaml#/paths/~1{filename}/delete'
+  /uploads/files:
+    get:
+      $ref: './paths/uploads.yaml#/paths/~1files/get'
+  /uploads/debug:
+    get:
+      $ref: './paths/uploads.yaml#/paths/~1debug/get'
+
+  # Users
+  /users/{id}:
+    get:
+      $ref: './paths/users.yaml#/paths/~1{id}/get'
+    put:
+      $ref: './paths/users.yaml#/paths/~1{id}/put'
+    delete:
+      $ref: './paths/users.yaml#/paths/~1{id}/delete'
+  /users/{id}/enrollments:
+    get:
+      $ref: './paths/users.yaml#/paths/~1{id}~1enrollments/get'
+  /users/{id}/enrolled-courses:
+    get:
+      $ref: './paths/users.yaml#/paths/~1{id}~1enrolled-courses/get'
+  /users/{id}/enrolled-classes:
+    get:
+      $ref: './paths/users.yaml#/paths/~1{id}~1enrolled-classes/get'
+  /users/{id}/dashboard-stats:
+    get:
+      $ref: './paths/users.yaml#/paths/~1{id}~1dashboard-stats/get'
+  /users/{id}/certifications:
+    get:
+      $ref: './paths/users.yaml#/paths/~1{id}~1certifications/get'
+  /users/{id}/test-attempts:
+    get:
+      $ref: './paths/users.yaml#/paths/~1{id}~1test-attempts/get'
+  /users/{id}/discussions:
+    get:
+      $ref: './paths/users.yaml#/paths/~1{id}~1discussions/get'
+  /users/enrollments/courses:
+    get:
+      $ref: './paths/users.yaml#/paths/~1enrollments~1courses/get'
+  /users/enrollments/classes:
+    get:
+      $ref: './paths/users.yaml#/paths/~1enrollments~1classes/get'
+  /users/dashboard-stats:
+    get:
+      $ref: './paths/users.yaml#/paths/~1dashboard-stats/get'
+  /users/me/settings:
+    get:
+      $ref: './paths/users.yaml#/paths/~1me~1settings/get'
+    put:
+      $ref: './paths/users.yaml#/paths/~1me~1settings/put'
+  /users/me/profile:
+    put:
+      $ref: './paths/users.yaml#/paths/~1me~1profile/put'
+
+  # Notifications
+  /notifications:
+    get:
+      $ref: './paths/notifications.yaml#/getNotifications'
+  /notifications/types:
+    get:
+      $ref: './paths/notifications.yaml#/getTypes'
+  /notifications/count:
+    get:
+      $ref: './paths/notifications.yaml#/getCount'
+  /notifications/preferences:
+    get:
+      $ref: './paths/notifications.yaml#/getPreferences'
+    put:
+      $ref: './paths/notifications.yaml#/updatePreferences'
+  /notifications/{id}/read:
+    post:
+      $ref: './paths/notifications.yaml#/markAsRead'
+  /notifications/read-all:
+    post:
+      $ref: './paths/notifications.yaml#/markAllAsRead'
+  /notifications/read-by-type:
+    post:
+      $ref: './paths/notifications.yaml#/markByTypeAsRead'
+  /notifications/{id}:
+    delete:
+      $ref: './paths/notifications.yaml#/deleteNotification'
+  /notifications/bulk:
+    delete:
+      $ref: './paths/notifications.yaml#/bulkDelete'
+  /notifications/system:
+    post:
+      $ref: './paths/notifications.yaml#/sendSystemNotification'
+  /notifications/cleanup:
+    post:
+      $ref: './paths/notifications.yaml#/cleanup'
+
+  # Search and Meta
+  /search/suggestions:
+    get:
+      $ref: './paths/search.yaml#/paths/~1suggestions/get'
+  /meta/classes-facets:
+    get:
+      $ref: './paths/meta.yaml#/getClassesFacets'
+
+  # Debug
+  /debug/uploads:
+    get:
+      $ref: './paths/debug.yaml#/debugUploads'
+  /test-upload/{filename}:
+    get:
+      $ref: './paths/debug.yaml#/testFileAccess'
+
+  # Tests
+  /tests/{id}:
+    get:
+      $ref: './paths/tests.yaml#/paths/~1{id}/get'
+    put:
+      $ref: './paths/tests.yaml#/paths/~1{id}/put'
+    delete:
+      $ref: './paths/tests.yaml#/paths/~1{id}/delete'
+  /tests/{id}/questions:
+    get:
+      $ref: './paths/tests.yaml#/paths/~1{id}~1questions/get'
+    post:
+      $ref: './paths/tests.yaml#/paths/~1{id}~1questions/post'
+  /tests/{id}/questions/{questionId}:
+    put:
+      $ref: './paths/tests.yaml#/paths/~1{id}~1questions~1{questionId}/put'
+    delete:
+      $ref: './paths/tests.yaml#/paths/~1{id}~1questions~1{questionId}/delete'
+  /tests/{id}/start:
+    post:
+      $ref: './paths/tests.yaml#/paths/~1{id}~1start/post'
+  /tests/{id}/proceed:
+    post:
+      $ref: './paths/tests.yaml#/paths/~1{id}~1proceed/post'
+  /tests/{id}/attempts/{attemptId}/answer:
+    put:
+      $ref: './paths/tests.yaml#/paths/~1{id}~1attempts~1{attemptId}~1answer/put'
+  /tests/{id}/attempts/{attemptId}/submit:
+    post:
+      $ref: './paths/tests.yaml#/paths/~1{id}~1attempts~1{attemptId}~1submit/post'
+  /tests/{id}/attempts/{attemptId}/results:
+    get:
+      $ref: './paths/tests.yaml#/paths/~1{id}~1attempts~1{attemptId}~1results/get'
+  /tests/{id}/questions/{questionId}/image/upload:
+    post:
+      $ref: './paths/tests.yaml#/paths/~1{id}~1questions~1{questionId}~1image~1upload/post'
+  /tests/{id}/analytics:
+    get:
+      $ref: './paths/tests.yaml#/paths/~1{id}~1analytics/get'
+  /tests/{id}/attempts:
+    get:
+      $ref: './paths/tests.yaml#/paths/~1{id}~1attempts/get'
+  /tests/{id}/my-attempts:
+    get:
+      $ref: './paths/tests.yaml#/paths/~1{id}~1my-attempts/get'
+  /tests/{id}/attempts/{attemptId}/details:
+    get:
+      $ref: './paths/tests.yaml#/paths/~1{id}~1attempts~1{attemptId}~1details/get'
 
 components:
   securitySchemes:
@@ -69,7 +512,16 @@ components:
     $ref: './schemas/index.yaml'
   
   responses:
-    $ref: './responses/index.yaml'
+    NotFound:
+      $ref: './responses/index.yaml#/NotFound'
+    Unauthorized:
+      $ref: './responses/index.yaml#/Unauthorized'
+    Forbidden:
+      $ref: './responses/index.yaml#/Forbidden'
+    BadRequest:
+      $ref: './responses/index.yaml#/BadRequest'
+    Conflict:
+      $ref: './responses/index.yaml#/Conflict'
 
 tags:
   - name: Authentication

@@ -168,7 +168,7 @@ swagger-cli validate openapi.yaml
 
 ### **Adding a New Endpoint**
 1. Create/modify the appropriate path file in `paths/`
-2. Add the endpoint reference to `paths/index.yaml`
+2. Add the endpoint definition directly to `openapi.yaml` in the appropriate section
 3. Create any new schemas in `schemas/`
 4. Update the main `openapi.yaml` if needed
 

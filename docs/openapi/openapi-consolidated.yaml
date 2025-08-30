@@ -1,0 +1,5076 @@
+openapi: 3.0.3
+info:
+  title: TheMobileProf API
+  description: |
+    RESTful API for TheMobileProf Learning Management System (LMS) that supports course management, 
+    user authentication, sponsorship programs, testing systems, file uploads, and more.
+    
+    **Test Type Rule**: 
+    - Only `lesson_id` is nullable in the tests table.
+    - If a test has both `course_id` and `lesson_id`, it is a **lesson test** (attached to a specific lesson).
+    - If a test has a `course_id` but no `lesson_id`, it is a **course test** (attached to the course as a whole).
+    
+    **100% Discount Logic (Free Enrollments):**
+    - **Automatic Handling**: When sponsorship codes provide 100% discount, the system automatically handles free enrollments
+    - **Payment Flow**: Free enrollments skip Flutterwave payment processing and create enrollments immediately
+    - **Response Format**: Free enrollments return `is_free_enrollment: true` flag with immediate enrollment data
+    - **No Verification Required**: Free enrollments don't require payment verification since they're already successful
+    
+    **Payment Flow Types:**
+    1. **Regular Payments**: User provides payment details → Flutterwave payment → Verification → Enrollment
+    2. **Free Enrollments**: Sponsorship code with 100% discount → Immediate enrollment → No payment processing
+    
+    **Sponsorship Code Flow (Important for Frontend):**
+    ```
+    1. User enters discount code "SPONSOR123"
+    2. Frontend validates: GET /api/sponsorships/code/SPONSOR123
+    3. Response includes: sponsorship.id = "uuid-here"
+    4. Frontend enrolls: POST /api/courses/{courseId}/enroll
+        Body: { "sponsorshipId": "uuid-here" }
+    ```
+    
+    **Key Points:**
+    - **NEVER send discount codes directly** to enrollment endpoints
+    - **ALWAYS validate first** to get the sponsorship UUID
+    - **Use sponsorship.id** (UUID), not the discount code string
+    - **Check isExpired and isFull** before allowing enrollment
+    
+    **Implementation Status**: All documented endpoints are fully implemented and tested, including the complete file upload system with persistent storage support and comprehensive sponsorship discount handling.
+  version: 1.0.0
+  contact:
+    name: TheMobileProf API Support
+    email: api-support@themobileprof.com
+    url: https://docs.themobileprof.com
+  license:
+    name: Proprietary
+    url: https://themobileprof.com/license
+
+servers:
+  - url: https://api.themobileprof.com/api
+    description: Production server
+  - url: http://localhost:3000/api
+    description: Development server
+
+security:
+  - bearerAuth: []
+
+paths:
+  # Authentication Endpoints
+  /auth/register:
+    post:
+      tags:
+        - Authentication
+      summary: Register a new user
+      description: Create a new user account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - firstName
+                - lastName
+                - email
+                - password
+                - userType
+              properties:
+                firstName:
+                  type: string
+                  description: User's first name
+                lastName:
+                  type: string
+                  description: User's last name
+                email:
+                  type: string
+                  format: email
+                  description: User's email address
+                password:
+                  type: string
+                  minLength: 8
+                  description: User's password
+                userType:
+                  type: string
+                  enum: [student, instructor, admin]
+                  description: Type of user account
+      responses:
+        '201':
+          description: User registered successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      email:
+                        type: string
+                      firstName:
+                        type: string
+                      lastName:
+                        type: string
+                      role:
+                        type: string
+                      createdAt:
+                        type: string
+                        format: date-time
+                  token:
+                    type: string
+        '400':
+          description: Bad request
+        '409':
+          description: User already exists
+
+  /auth/login:
+    post:
+      tags:
+        - Authentication
+      summary: Login user
+      description: Authenticate user with email and password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - password
+              properties:
+                email:
+                  type: string
+                  format: email
+                  description: User's email address
+                password:
+                  type: string
+                  description: User's password
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      user:
+                        type: object
+                        properties:
+                          id:
+                            type: integer
+                          email:
+                            type: string
+                          name:
+                            type: string
+                          role:
+                            type: string
+                      tokens:
+                        type: object
+                        properties:
+                          access:
+                            type: string
+                          refresh:
+                            type: string
+        '401':
+          description: Invalid credentials
+
+  /auth/google:
+    post:
+      tags:
+        - Authentication
+      summary: Google OAuth login/signup
+      description: Authenticate or register user with Google OAuth
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - token
+              properties:
+                token:
+                  type: string
+                  description: Google ID token
+                firstName:
+                  type: string
+                  description: First name (optional, will use Google data if not provided)
+                lastName:
+                  type: string
+                  description: Last name (optional, will use Google data if not provided)
+                role:
+                  type: string
+                  enum: [student, instructor, admin, sponsor]
+                  description: User role (optional, defaults to student)
+      responses:
+        '200':
+          description: Authentication successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      email:
+                        type: string
+                      firstName:
+                        type: string
+                      lastName:
+                        type: string
+                      role:
+                        type: string
+                      createdAt:
+                        type: string
+                        format: date-time
+                  token:
+                    type: string
+        '201':
+          description: New user created
+        '401':
+          description: Invalid Google token
+
+  /auth/profile:
+    get:
+      tags:
+        - Authentication
+      summary: Get current user profile
+      description: Get current user profile in frontend-compatible format
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: User profile retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  email:
+                    type: string
+                  firstName:
+                    type: string
+                  lastName:
+                    type: string
+                  role:
+                    type: string
+                  profilePicture:
+                    type: string
+                  bio:
+                    type: string
+                  createdAt:
+                    type: string
+                    format: date-time
+                  authProvider:
+                    type: string
+                  emailVerified:
+                    type: boolean
+                  settings:
+                    type: object
+                    properties:
+                      theme:
+                        type: string
+                      language:
+                        type: string
+                      timezone:
+                        type: string
+        '401':
+          description: Unauthorized
+
+  /auth/refresh:
+    post:
+      tags:
+        - Authentication
+      summary: Refresh JWT token
+      description: Refresh JWT token using refresh token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - token
+              properties:
+                token:
+                  type: string
+                  description: JWT refresh token
+      responses:
+        '200':
+          description: Token refreshed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+                  user:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      email:
+                        type: string
+                      role:
+                        type: string
+        '401':
+          description: Invalid refresh token
+
+  /auth/change-password:
+    post:
+      tags:
+        - Authentication
+      summary: Change user password
+      description: Change user password (only for local authentication users)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - currentPassword
+                - newPassword
+              properties:
+                currentPassword:
+                  type: string
+                  description: Current password
+                newPassword:
+                  type: string
+                  minLength: 8
+                  description: New password
+      responses:
+        '200':
+          description: Password changed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '400':
+          description: Password change not available for Google OAuth accounts
+        '401':
+          description: Unauthorized
+
+  /auth/admin/login:
+    post:
+      tags:
+        - Authentication
+      summary: Admin login
+      description: Authenticate admin user with email and password (admin only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - password
+              properties:
+                email:
+                  type: string
+                  format: email
+                  description: Admin email address
+                password:
+                  type: string
+                  description: Admin password
+      responses:
+        '200':
+          description: Admin login successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      email:
+                        type: string
+                      firstName:
+                        type: string
+                      lastName:
+                        type: string
+                      role:
+                        type: string
+                  token:
+                    type: string
+        '401':
+          description: Invalid credentials
+
+  /auth/admin/google:
+    post:
+      tags:
+        - Authentication
+      summary: Admin Google OAuth login
+      description: Authenticate admin user with Google OAuth (admin only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - token
+              properties:
+                token:
+                  type: string
+                  description: Google ID token
+                firstName:
+                  type: string
+                  description: First name (optional)
+                lastName:
+                  type: string
+                  description: Last name (optional)
+      responses:
+        '200':
+          description: Admin authentication successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      email:
+                        type: string
+                      firstName:
+                        type: string
+                      lastName:
+                        type: string
+                      role:
+                        type: string
+                  token:
+                    type: string
+        '401':
+          description: Invalid Google token
+
+  /auth/logout:
+    post:
+      tags:
+        - Authentication
+      summary: Logout user
+      description: Logout user and invalidate token
+      responses:
+        '200':
+          description: Logout successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+
+  # User Endpoints
+  /users/enrollments/courses:
+    get:
+      tags:
+        - Users
+      summary: Get current user's enrolled courses
+      description: Get current user's enrolled courses (frontend compatible)
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Enrolled courses retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                      format: uuid
+                    courseId:
+                      type: string
+                      format: uuid
+                    courseTitle:
+                      type: string
+                    progress:
+                      type: integer
+                    status:
+                      type: string
+                    enrolledAt:
+                      type: string
+                      format: date-time
+                    lastAccessedAt:
+                      type: string
+                      format: date-time
+                    instructorName:
+                      type: string
+                    topic:
+                      type: string
+                    duration:
+                      type: string
+                    imageUrl:
+                      type: string
+                    sponsorship:
+                      type: object
+                      properties:
+                        discountCode:
+                          type: string
+                        discountType:
+                          type: string
+                        discountValue:
+                          type: number
+        '401':
+          description: Unauthorized
+
+  /users/enrollments/classes:
+    get:
+      tags:
+        - Users
+      summary: Get current user's enrolled classes
+      description: Get current user's enrolled classes (frontend compatible)
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Enrolled classes retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                      format: uuid
+                    classId:
+                      type: string
+                      format: uuid
+                    classTitle:
+                      type: string
+                    instructorName:
+                      type: string
+                    startDate:
+                      type: string
+                      format: date-time
+                    endDate:
+                      type: string
+                      format: date-time
+                    type:
+                      type: string
+                    status:
+                      type: string
+                    enrolledAt:
+                      type: string
+                      format: date-time
+                    topic:
+                      type: string
+                    duration:
+                      type: string
+                    location:
+                      type: string
+        '401':
+          description: Unauthorized
+
+  /users/dashboard-stats:
+    get:
+      tags:
+        - Users
+      summary: Get current user's dashboard stats
+      description: Get current user's dashboard statistics (frontend compatible)
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Dashboard stats retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  totalEnrolledCourses:
+                    type: integer
+                  totalEnrolledClasses:
+                    type: integer
+                  completedLessons:
+                    type: integer
+                  totalLessons:
+                    type: integer
+        '401':
+          description: Unauthorized
+
+  /users/me/settings:
+    get:
+      tags:
+        - Users
+      summary: Get current user's settings
+      description: Get current user's preferences (notifications, privacy, appearance)
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: User settings retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  emailNotifications:
+                    type: boolean
+                  pushNotifications:
+                    type: boolean
+                  courseNotifications:
+                    type: boolean
+                  classNotifications:
+                    type: boolean
+                  discussionNotifications:
+                    type: boolean
+                  testNotifications:
+                    type: boolean
+                  certificationNotifications:
+                    type: boolean
+                  paymentNotifications:
+                    type: boolean
+                  systemNotifications:
+                    type: boolean
+                  marketingEmails:
+                    type: boolean
+                  theme:
+                    type: string
+                  language:
+                    type: string
+                  timezone:
+                    type: string
+        '401':
+          description: Unauthorized
+
+    put:
+      tags:
+        - Users
+      summary: Update current user's settings
+      description: Update current user's preferences
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                emailNotifications:
+                  type: boolean
+                pushNotifications:
+                  type: boolean
+                courseNotifications:
+                  type: boolean
+                classNotifications:
+                  type: boolean
+                discussionNotifications:
+                  type: boolean
+                testNotifications:
+                  type: boolean
+                certificationNotifications:
+                  type: boolean
+                paymentNotifications:
+                  type: boolean
+                systemNotifications:
+                  type: boolean
+                marketingEmails:
+                  type: boolean
+                theme:
+                  type: string
+                language:
+                  type: string
+                timezone:
+                  type: string
+      responses:
+        '200':
+          description: Settings updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '401':
+          description: Unauthorized
+
+  /users/me/profile:
+    put:
+      tags:
+        - Users
+      summary: Update current user's profile
+      description: Update current user's profile information
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                firstName:
+                  type: string
+                lastName:
+                  type: string
+                phone:
+                  type: string
+                location:
+                  type: string
+                bio:
+                  type: string
+      responses:
+        '200':
+          description: Profile updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '401':
+          description: Unauthorized
+
+  /users/{id}:
+    get:
+      tags:
+        - Users
+      summary: Get user profile
+      description: Get user profile by ID
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: User ID
+      responses:
+        '200':
+          description: User profile retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  email:
+                    type: string
+                  firstName:
+                    type: string
+                  lastName:
+                    type: string
+                  role:
+                    type: string
+                  avatarUrl:
+                    type: string
+                  bio:
+                    type: string
+                  isActive:
+                    type: boolean
+                  enrolledAt:
+                    type: string
+                    format: date-time
+                  status:
+                    type: string
+                  progress:
+                    type: integer
+        '401':
+          description: Unauthorized
+        '404':
+          description: User not found
+
+    put:
+      tags:
+        - Users
+      summary: Update user
+      description: Update user information (admin only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: User ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                firstName:
+                  type: string
+                lastName:
+                  type: string
+                role:
+                  type: string
+                isActive:
+                  type: boolean
+      responses:
+        '200':
+          description: User updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+
+    delete:
+      tags:
+        - Users
+      summary: Delete user
+      description: Delete user (admin only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: User ID
+      responses:
+        '200':
+          description: User deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+
+  /users/{id}/enrollments:
+    get:
+      tags:
+        - Users
+      summary: Get user enrollments
+      description: Get user's course and class enrollments
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: User ID
+      responses:
+        '200':
+          description: User enrollments retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  enrollments:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                        enrollmentType:
+                          type: string
+                        progress:
+                          type: integer
+                        status:
+                          type: string
+                        enrolledAt:
+                          type: string
+                          format: date-time
+                        completedAt:
+                          type: string
+                          format: date-time
+                        course:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                              format: uuid
+                            title:
+                              type: string
+                            topic:
+                              type: string
+                            imageUrl:
+                              type: string
+                        sponsorship:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                              format: uuid
+                            discountCode:
+                              type: string
+                            discountType:
+                              type: string
+                            discountValue:
+                              type: number
+        '401':
+          description: Unauthorized
+        '404':
+          description: User not found
+
+  /users/{id}/certifications:
+    get:
+      tags:
+        - Users
+      summary: Get user certifications
+      description: Get user's earned certificates
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: User ID
+      responses:
+        '200':
+          description: User certifications retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  certifications:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                        title:
+                          type: string
+                        description:
+                          type: string
+                        issuerName:
+                          type: string
+                        issuedAt:
+                          type: string
+                          format: date
+                        expiryDate:
+                          type: string
+                          format: date
+                        certificateUrl:
+                          type: string
+                        verificationCode:
+                          type: string
+                        status:
+                          type: string
+        '401':
+          description: Unauthorized
+        '404':
+          description: User not found
+
+  /users/{id}/test-attempts:
+    get:
+      tags:
+        - Users
+      summary: Get user test attempts
+      description: Get user's test attempt history
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: User ID
+      responses:
+        '200':
+          description: User test attempts retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  testAttempts:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                        testId:
+                          type: string
+                          format: uuid
+                        testTitle:
+                          type: string
+                        score:
+                          type: integer
+                        totalQuestions:
+                          type: integer
+                        correctAnswers:
+                          type: integer
+                        status:
+                          type: string
+                        startedAt:
+                          type: string
+                          format: date-time
+                        completedAt:
+                          type: string
+                          format: date-time
+                        passed:
+                          type: boolean
+        '401':
+          description: Unauthorized
+        '404':
+          description: User not found
+
+  /users/{id}/discussions:
+    get:
+      tags:
+        - Users
+      summary: Get user discussions
+      description: Get user's discussion posts
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: User ID
+      responses:
+        '200':
+          description: User discussions retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  discussions:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                        title:
+                          type: string
+                        content:
+                          type: string
+                        category:
+                          type: string
+                        courseId:
+                          type: string
+                          format: uuid
+                        courseTitle:
+                          type: string
+                        lessonId:
+                          type: string
+                          format: uuid
+                        lessonTitle:
+                          type: string
+                        replyCount:
+                          type: integer
+                        likesCount:
+                          type: integer
+                        createdAt:
+                          type: string
+                          format: date-time
+        '401':
+          description: Unauthorized
+        '404':
+          description: User not found
+
+  /users/{id}/dashboard-stats:
+    get:
+      tags:
+        - Users
+      summary: Get user dashboard stats
+      description: Get user's dashboard statistics
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: User ID
+      responses:
+        '200':
+          description: User dashboard stats retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  totalEnrolledCourses:
+                    type: integer
+                  totalEnrolledClasses:
+                    type: integer
+                  completedLessons:
+                    type: integer
+                  totalLessons:
+                    type: integer
+        '401':
+          description: Unauthorized
+        '404':
+          description: User not found
+
+  /users/{id}/enrolled-courses:
+    get:
+      tags:
+        - Users
+      summary: Get user enrolled courses
+      description: Get user's enrolled courses with detailed information
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: User ID
+      responses:
+        '200':
+          description: User enrolled courses retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                      format: uuid
+                    courseId:
+                      type: string
+                      format: uuid
+                    courseTitle:
+                      type: string
+                    progress:
+                      type: integer
+                    status:
+                      type: string
+                    enrolledAt:
+                      type: string
+                      format: date-time
+                    lastAccessedAt:
+                      type: string
+                      format: date-time
+                    instructorName:
+                      type: string
+                    topic:
+                      type: string
+                    duration:
+                      type: string
+                    imageUrl:
+                      type: string
+                    sponsorship:
+                      type: object
+                      properties:
+                        discountCode:
+                          type: string
+                        discountType:
+                          type: string
+                        discountValue:
+                          type: number
+        '401':
+          description: Unauthorized
+        '404':
+          description: User not found
+
+  /users/{id}/enrolled-classes:
+    get:
+      tags:
+        - Users
+      summary: Get user enrolled classes
+      description: Get user's enrolled classes with detailed information
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: User ID
+      responses:
+        '200':
+          description: User enrolled classes retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                      format: uuid
+                    classId:
+                      type: string
+                      format: uuid
+                    classTitle:
+                      type: string
+                    instructorName:
+                      type: string
+                    startDate:
+                      type: string
+                      format: date-time
+                    endDate:
+                      type: string
+                      format: date-time
+                    type:
+                      type: string
+                    status:
+                      type: string
+                    enrolledAt:
+                      type: string
+                      format: date-time
+                    topic:
+                      type: string
+                    duration:
+                      type: string
+                    location:
+                      type: string
+        '401':
+          description: Unauthorized
+        '404':
+          description: User not found
+
+  # Payment Endpoints
+  /payments/initialize:
+    post:
+      tags:
+        - Payments
+      summary: Initialize Payment
+      description: |
+        Initialize a payment for course or class enrollment using Flutterwave Standard v3.0.0.
+        
+        **Special Handling for 100% Discounts:**
+        - If a sponsorship code provides 100% discount, the payment is automatically marked as successful
+        - No Flutterwave payment is required for free enrollments
+        - Enrollment is created immediately
+        - Response includes `is_free_enrollment: true` flag
+        
+        **Payment Flow Logic:**
+        1. **Regular Payments**: User provides payment details → Flutterwave payment → Verification → Enrollment
+        2. **Free Enrollments**: Sponsorship code with 100% discount → Immediate enrollment → No payment processing
+        
+        **Response Format:**
+        - Free enrollments return `is_free_enrollment: true` with immediate enrollment data
+        - Regular payments return `is_free_enrollment: false` with Flutterwave checkout URL
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - paymentType
+                - itemId
+              properties:
+                paymentType:
+                  type: string
+                  enum: [course, class]
+                  description: Type of item being purchased
+                itemId:
+                  type: string
+                  format: uuid
+                  description: ID of the course or class
+                paymentMethod:
+                  type: string
+                  enum: [card, bank_transfer, ussd, mobile_money, qr_code, barter, mpesa, gh_mobile_money, ug_mobile_money, franc_mobile_money, emalipay]
+                  description: Payment method to use (ignored for free enrollments)
+                sponsorshipCode:
+                  type: string
+                  description: Optional sponsorship discount code (can result in free enrollment)
+                callbackUrl:
+                  type: string
+                  description: URL where user will be redirected after payment completion
+      responses:
+        '200':
+          description: Payment initialized successfully
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - type: object
+                    properties:
+                      success:
+                        type: boolean
+                        example: true
+                      message:
+                        type: string
+                        example: "Free enrollment successful"
+                      data:
+                        type: object
+                        properties:
+                          is_free_enrollment:
+                            type: boolean
+                            example: true
+                            description: Indicates this is a free enrollment (100% discount)
+                          enrollment:
+                            type: object
+                            description: Immediately created enrollment for free course/class
+                          sponsorship:
+                            type: object
+                            description: Sponsorship details that provided the free enrollment
+                          originalPrice:
+                            type: number
+                            description: Original price before discount
+                          discountAmount:
+                            type: number
+                            description: Full discount amount (100% of original price)
+                          finalPrice:
+                            type: number
+                            example: 0
+                            description: Final price after discount (0 for free enrollments)
+                  - type: object
+                    properties:
+                      success:
+                        type: boolean
+                        example: true
+                      message:
+                        type: string
+                        example: "Payment initialized successfully"
+                      data:
+                        type: object
+                        properties:
+                          payment_id:
+                            type: string
+                            format: uuid
+                            description: Internal payment identifier
+                          reference:
+                            type: string
+                            description: Payment reference for tracking
+                          flutterwave_reference:
+                            type: string
+                            description: Flutterwave payment reference
+                          checkout_url:
+                            type: string
+                            description: Flutterwave checkout URL for payment completion
+                          original_amount:
+                            type: number
+                            description: Original price before any discounts
+                          final_amount:
+                            type: number
+                            description: Final amount to pay after discounts
+                          discount_amount:
+                            type: number
+                            description: Amount of discount applied
+                          payment_type:
+                            type: string
+                            enum: [course, class]
+                            description: Type of item being purchased
+                          sponsorship:
+                            type: object
+                            properties:
+                              id:
+                                type: string
+                                format: uuid
+                              discountCode:
+                                type: string
+                              discountType:
+                                type: string
+                                enum: [percentage, fixed]
+                              discountValue:
+                                type: number
+                              discountAmount:
+                                type: number
+                              originalPrice:
+                                type: number
+                              finalPrice:
+                                type: number
+                            description: Sponsorship details if discount code was used
+                          is_free_enrollment:
+                            type: boolean
+                            example: false
+                            description: Always false for regular payments
+        '400':
+          description: Bad request
+        '401':
+          description: Unauthorized
+        '404':
+          description: Not found
+
+  /payments/verify/{reference}:
+    get:
+      tags:
+        - Payments
+      summary: Verify Payment
+      description: |
+        Payment verification method. Called by frontend when user returns from Flutterwave.
+        
+        **Handles Both Payment Types:**
+        - **Regular payments**: Verifies with Flutterwave and creates enrollment
+        - **Free enrollments (100% discount)**: Already marked as successful, proceeds with enrollment
+        
+        **Verification Flow:**
+        1. **Free Enrollments**: No verification needed, enrollment already exists
+        2. **Regular Payments**: Verify with Flutterwave → Confirm payment → Create enrollment
+        
+        **Note**: This endpoint is primarily for regular payments. Free enrollments are handled
+        immediately during initialization and don't require verification.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: reference
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Payment reference from our system (TMP_...)
+      responses:
+        '200':
+          description: Payment verified and enrollment completed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    description: Whether verification was successful
+                  message:
+                    type: string
+                    description: Success or error message
+                  payment:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      amount:
+                        type: number
+                      status:
+                        type: string
+                      transactionId:
+                        type: string
+                    description: Payment details (null for free enrollments)
+                  enrollment:
+                    type: object
+                    description: Created enrollment details
+        '400':
+          description: Bad request
+        '401':
+          description: Unauthorized
+        '404':
+          description: Not found
+
+  # Course Endpoints
+  /courses/{id}:
+    get:
+      tags:
+        - Courses
+      summary: Get course by ID
+      description: Get details of a course by its ID
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Course ID
+      responses:
+        '200':
+          description: Course details retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  title:
+                    type: string
+                  description:
+                    type: string
+                  topic:
+                    type: string
+                  type:
+                    type: string
+                  price:
+                    type: number
+                  duration:
+                    type: string
+                  certification:
+                    type: string
+                  difficulty:
+                    type: string
+                  objectives:
+                    type: string
+                  prerequisites:
+                    type: string
+                  syllabus:
+                    type: string
+                  tags:
+                    type: array
+                    items:
+                      type: string
+                  imageUrl:
+                    type: string
+                  instructorId:
+                    type: string
+                    format: uuid
+                  instructorName:
+                    type: string
+                  isPublished:
+                    type: boolean
+                  enrollmentCount:
+                    type: integer
+                  lessonCount:
+                    type: integer
+                  testCount:
+                    type: integer
+                  createdAt:
+                    type: string
+                    format: date-time
+                  updatedAt:
+                    type: string
+                    format: date-time
+        '401':
+          description: Unauthorized
+        '404':
+          description: Course not found
+
+    post:
+      tags:
+        - Courses
+      summary: Enroll in course
+      description: Enroll in a course. Supports sponsorship codes for discounted enrollment.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Course ID
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                sponsorshipId:
+                  type: string
+                  format: uuid
+                  description: Sponsorship ID for discounted enrollment
+      responses:
+        '201':
+          description: Successfully enrolled in course
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  userId:
+                    type: string
+                    format: uuid
+                  courseId:
+                    type: string
+                    format: uuid
+                  enrollmentType:
+                    type: string
+                  progress:
+                    type: integer
+                  status:
+                    type: string
+                  sponsorshipId:
+                    type: string
+                    format: uuid
+                  enrolledAt:
+                    type: string
+                    format: date-time
+        '400':
+          description: User is already enrolled or invalid sponsorship
+        '401':
+          description: Unauthorized
+        '404':
+          description: Course not found
+
+    put:
+      tags:
+        - Courses
+      summary: Update course
+      description: Update an existing course (owner/admin only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Course ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                  description: Course title
+                description:
+                  type: string
+                  description: Course description
+                topic:
+                  type: string
+                  description: Course topic
+                type:
+                  type: string
+                  enum: [online, offline]
+                  description: Course type
+                price:
+                  type: number
+                  minimum: 0
+                  description: Course price
+                duration:
+                  type: string
+                  description: Course duration
+                certification:
+                  type: string
+                  description: Certification type
+                difficulty:
+                  type: string
+                  enum: [beginner, intermediate, advanced]
+                  description: Difficulty level
+                objectives:
+                  type: string
+                  description: Learning objectives
+                prerequisites:
+                  type: string
+                  description: Prerequisites
+                syllabus:
+                  type: string
+                  description: Course syllabus
+                tags:
+                  type: array
+                  items:
+                    type: string
+                  description: Course tags
+                isPublished:
+                  type: boolean
+                  description: Publication status
+                imageUrl:
+                  type: string
+                  description: Course image URL
+      responses:
+        '200':
+          description: Course updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  course:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      title:
+                        type: string
+                      description:
+                        type: string
+                      difficulty:
+                        type: string
+                      objectives:
+                        type: string
+                      prerequisites:
+                        type: string
+                      syllabus:
+                        type: string
+                      tags:
+                        type: array
+                        items:
+                          type: string
+                      isPublished:
+                        type: boolean
+                      updatedAt:
+                        type: string
+                        format: date-time
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Course not found
+
+    delete:
+      tags:
+        - Courses
+      summary: Delete course
+      description: Delete a course (owner/admin only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Course ID
+      responses:
+        '200':
+          description: Course deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Course not found
+
+  /courses/{id}/tests:
+    get:
+      tags:
+        - Courses
+      summary: Get course tests
+      description: Get all tests for a course
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Course ID
+      responses:
+        '200':
+          description: Course tests retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tests:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                        title:
+                          type: string
+                        description:
+                          type: string
+                        durationMinutes:
+                          type: integer
+                        passingScore:
+                          type: integer
+                        maxAttempts:
+                          type: integer
+                        orderIndex:
+                          type: integer
+                        isPublished:
+                          type: boolean
+                        createdAt:
+                          type: string
+                          format: date-time
+        '401':
+          description: Unauthorized
+        '404':
+          description: Course not found
+
+  /courses/{id}/enrollments:
+    get:
+      tags:
+        - Courses
+      summary: Get course enrollments
+      description: Get all enrollments for a course (owner/admin only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Course ID
+      responses:
+        '200':
+          description: Course enrollments retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  enrollments:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                        userId:
+                          type: string
+                          format: uuid
+                        userName:
+                          type: string
+                        userEmail:
+                          type: string
+                        progress:
+                          type: integer
+                        status:
+                          type: string
+                        enrolledAt:
+                          type: string
+                          format: date-time
+                        completedAt:
+                          type: string
+                          format: date-time
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Course not found
+
+  /courses/{id}/lessons:
+    get:
+      tags:
+        - Courses
+      summary: Get course lessons
+      description: Get all lessons for a course with their unlock and completion status
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Course ID
+      responses:
+        '200':
+          description: Course lessons retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  courseId:
+                    type: string
+                    format: uuid
+                  lessons:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                        title:
+                          type: string
+                        description:
+                          type: string
+                        orderIndex:
+                          type: integer
+                        durationMinutes:
+                          type: integer
+                        isUnlocked:
+                          type: boolean
+                        isCompleted:
+                          type: boolean
+                        testPassed:
+                          type: boolean
+                        progress:
+                          type: integer
+                        timeSpentMinutes:
+                          type: integer
+                        completedAt:
+                          type: string
+                          format: date-time
+                        test:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                              format: uuid
+                            title:
+                              type: string
+                            passingScore:
+                              type: integer
+                            maxAttempts:
+                              type: integer
+                        canAccess:
+                          type: boolean
+                        nextUnlocked:
+                          type: boolean
+                  courseStats:
+                    type: object
+                    properties:
+                      totalLessons:
+                        type: integer
+                      unlockedLessons:
+                        type: integer
+                      completedLessons:
+                        type: integer
+                      passedTests:
+                        type: integer
+                      totalProgress:
+                        type: integer
+        '401':
+          description: Unauthorized
+        '404':
+          description: Course not found
+
+  /courses/{id}/progression:
+    get:
+      tags:
+        - Courses
+      summary: Get course progression
+      description: Get detailed progression status for a course
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Course ID
+      responses:
+        '200':
+          description: Course progression retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  courseId:
+                    type: string
+                    format: uuid
+                  progression:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                        title:
+                          type: string
+                        orderIndex:
+                          type: integer
+                        isUnlocked:
+                          type: boolean
+                        isCompleted:
+                          type: boolean
+                        testPassed:
+                          type: boolean
+                        progress:
+                          type: integer
+                        timeSpentMinutes:
+                          type: integer
+                        completedAt:
+                          type: string
+                          format: date-time
+                        test:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                              format: uuid
+                            title:
+                              type: string
+                            passingScore:
+                              type: integer
+                            maxAttempts:
+                              type: integer
+                        nextUnlocked:
+                          type: boolean
+                  courseStats:
+                    type: object
+                    properties:
+                      totalLessons:
+                        type: integer
+                      unlockedLessons:
+                        type: integer
+                      completedLessons:
+                        type: integer
+                      passedTests:
+                        type: integer
+                      totalProgress:
+                        type: integer
+                  currentLesson:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      title:
+                        type: string
+                  nextUnlockedLesson:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      title:
+                        type: string
+        '401':
+          description: Unauthorized
+        '404':
+          description: Course not found
+
+  /courses/{id}/test-stats:
+    get:
+      tags:
+        - Courses
+      summary: Get course test stats
+      description: Get test statistics for a course
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Course ID
+      responses:
+        '200':
+          description: Course test stats retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  testStats:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        testId:
+                          type: string
+                          format: uuid
+                        testTitle:
+                          type: string
+                        totalAttempts:
+                          type: integer
+                        averageScore:
+                          type: number
+                        passRate:
+                          type: number
+                        averageTimeMinutes:
+                          type: number
+        '401':
+          description: Unauthorized
+        '404':
+          description: Course not found
+
+  /courses/{id}/analytics:
+    get:
+      tags:
+        - Courses
+      summary: Get course analytics
+      description: Get comprehensive analytics for all tests in a course
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Course ID
+      responses:
+        '200':
+          description: Course analytics retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  totalTests:
+                    type: integer
+                  totalAttempts:
+                    type: integer
+                  averageScore:
+                    type: number
+                  passRate:
+                    type: number
+                  averageTimeMinutes:
+                    type: number
+                  questionAnalytics:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        questionId:
+                          type: string
+                          format: uuid
+                        question:
+                          type: string
+                        questionType:
+                          type: string
+                        points:
+                          type: integer
+                        totalAnswers:
+                          type: integer
+                        correctAnswers:
+                          type: integer
+                        correctRate:
+                          type: number
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Course not found
+
+  /courses/{id}/discussions:
+    get:
+      tags:
+        - Courses
+      summary: Get course discussions
+      description: Get all discussions for a specific course
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Course ID
+        - name: category
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Filter by category
+        - name: lessonId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+          description: Filter by specific lesson
+        - name: search
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Search in title/content
+        - name: sort
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [created_at, title, last_activity, reply_count, likes_count]
+          description: Sort field
+        - name: order
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [asc, desc]
+          description: Sort order
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 20
+          description: Items per page
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 0
+          description: Number to skip
+      responses:
+        '200':
+          description: Course discussions retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  course:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      title:
+                        type: string
+                      topic:
+                        type: string
+                  discussions:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                        title:
+                          type: string
+                        content:
+                          type: string
+                        category:
+                          type: string
+                        lessonId:
+                          type: string
+                          format: uuid
+                        lessonTitle:
+                          type: string
+                        authorName:
+                          type: string
+                        replyCount:
+                          type: integer
+                        likesCount:
+                          type: integer
+                        lastActivityAt:
+                          type: string
+                          format: date-time
+                        createdAt:
+                          type: string
+                          format: date-time
+                  pagination:
+                    type: object
+                    properties:
+                      page:
+                        type: integer
+                      limit:
+                        type: integer
+                      total:
+                        type: integer
+                      pages:
+                        type: integer
+        '401':
+          description: Unauthorized
+        '404':
+          description: Course not found
+
+  /courses/browse:
+    get:
+      tags:
+        - Courses
+      summary: Browse courses
+      description: Browse available courses with filters
+      responses:
+        '200':
+          description: Courses retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  courses:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                        title:
+                          type: string
+                        description:
+                          type: string
+                        topic:
+                          type: string
+                        type:
+                          type: string
+                        price:
+                          type: number
+                        duration:
+                          type: string
+                        difficulty:
+                          type: string
+                        imageUrl:
+                          type: string
+                        instructorName:
+                          type: string
+                        enrollmentCount:
+                          type: integer
+                        lessonCount:
+                          type: integer
+                        isPublished:
+                          type: boolean
+                  pagination:
+                    type: object
+                    properties:
+                      page:
+                        type: integer
+                      limit:
+                        type: integer
+                      total:
+                        type: integer
+                      pages:
+                        type: integer
+
+  /courses:
+    get:
+      tags:
+        - Courses
+      summary: List courses
+      description: Get list of courses with filters and pagination
+      responses:
+        '200':
+          description: Courses retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  courses:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                        title:
+                          type: string
+                        description:
+                          type: string
+                        topic:
+                          type: string
+                        type:
+                          type: string
+                        price:
+                          type: number
+                        duration:
+                          type: string
+                        difficulty:
+                          type: string
+                        imageUrl:
+                          type: string
+                        instructorName:
+                          type: string
+                        enrollmentCount:
+                          type: integer
+                        lessonCount:
+                          type: integer
+                        isPublished:
+                          type: boolean
+                  pagination:
+                    type: object
+                    properties:
+                      page:
+                        type: integer
+                      limit:
+                        type: integer
+                      total:
+                        type: integer
+                      pages:
+                        type: integer
+
+    post:
+      tags:
+        - Courses
+      summary: Create course
+      description: Create a new course (instructor/admin only)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - title
+                - description
+                - topic
+                - type
+                - price
+                - duration
+                - certification
+                - difficulty
+                - objectives
+                - prerequisites
+                - syllabus
+                - tags
+              properties:
+                title:
+                  type: string
+                  description: Course title
+                description:
+                  type: string
+                  description: Course description
+                topic:
+                  type: string
+                  description: Course topic
+                type:
+                  type: string
+                  enum: [online, offline]
+                  description: Course type
+                price:
+                  type: number
+                  minimum: 0
+                  description: Course price
+                duration:
+                  type: string
+                  description: Course duration
+                certification:
+                  type: string
+                  description: Certification type
+                difficulty:
+                  type: string
+                  enum: [beginner, intermediate, advanced]
+                  description: Difficulty level
+                objectives:
+                  type: string
+                  description: Learning objectives
+                prerequisites:
+                  type: string
+                  description: Prerequisites
+                syllabus:
+                  type: string
+                  description: Course syllabus
+                tags:
+                  type: array
+                  items:
+                    type: string
+                  description: Course tags
+                instructorId:
+                  type: string
+                  format: uuid
+                  description: Instructor ID (optional)
+                imageUrl:
+                  type: string
+                  description: Course image URL (optional)
+      responses:
+        '201':
+          description: Course created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  course:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      title:
+                        type: string
+                      description:
+                        type: string
+                      difficulty:
+                        type: string
+                      objectives:
+                        type: string
+                      prerequisites:
+                        type: string
+                      syllabus:
+                        type: string
+                      tags:
+                        type: array
+                        items:
+                          type: string
+                      instructorId:
+                        type: string
+                        format: uuid
+                      imageUrl:
+                        type: string
+                      isPublished:
+                        type: boolean
+                      createdAt:
+                        type: string
+                        format: date-time
+                      updatedAt:
+                        type: string
+                        format: date-time
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+
+  # Lesson Endpoints
+  /lessons/{id}:
+    get:
+      tags:
+        - Lessons
+      summary: Get lesson details
+      description: Get details of a lesson by its ID
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Lesson ID
+      responses:
+        '200':
+          description: Lesson details retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  courseId:
+                    type: string
+                    format: uuid
+                  courseTitle:
+                    type: string
+                  title:
+                    type: string
+                  description:
+                    type: string
+                  content:
+                    type: string
+                  videoUrl:
+                    type: string
+                  durationMinutes:
+                    type: integer
+                  orderIndex:
+                    type: integer
+                  isPublished:
+                    type: boolean
+                  createdAt:
+                    type: string
+                    format: date-time
+                  updatedAt:
+                    type: string
+                    format: date-time
+        '401':
+          description: Unauthorized
+        '404':
+          description: Lesson not found
+
+    put:
+      tags:
+        - Lessons
+      summary: Update lesson
+      description: Update a lesson by its ID. Requires authentication and owner/admin authorization.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Lesson ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                  description: Lesson title
+                description:
+                  type: string
+                  description: Lesson description
+                content:
+                  type: string
+                  description: Lesson content
+                videoUrl:
+                  type: string
+                  description: Lesson video URL
+                durationMinutes:
+                  type: integer
+                  description: Lesson duration in minutes
+                orderIndex:
+                  type: integer
+                  description: Lesson order index
+                isPublished:
+                  type: boolean
+                  description: Publication status
+      responses:
+        '200':
+          description: Lesson updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  title:
+                    type: string
+                  description:
+                    type: string
+                  content:
+                    type: string
+                  videoUrl:
+                    type: string
+                  durationMinutes:
+                    type: integer
+                  orderIndex:
+                    type: integer
+                  isPublished:
+                    type: boolean
+                  updatedAt:
+                    type: string
+                    format: date-time
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Lesson not found
+
+    delete:
+      tags:
+        - Lessons
+      summary: Delete lesson
+      description: Delete a lesson by its ID. Requires authentication and owner/admin authorization.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Lesson ID
+      responses:
+        '200':
+          description: Lesson deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Lesson not found
+
+  /lessons/{id}/tests:
+    get:
+      tags:
+        - Lessons
+      summary: Get lesson tests
+      description: Get all tests for a lesson
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Lesson ID
+      responses:
+        '200':
+          description: Lesson tests retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  lesson:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      title:
+                        type: string
+                      courseId:
+                        type: string
+                        format: uuid
+                      courseTitle:
+                        type: string
+                  tests:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                        title:
+                          type: string
+                        description:
+                          type: string
+                        durationMinutes:
+                          type: integer
+                        passingScore:
+                          type: integer
+                        maxAttempts:
+                          type: integer
+                        orderIndex:
+                          type: integer
+                        isPublished:
+                          type: boolean
+                        questionCount:
+                          type: integer
+                        attemptCount:
+                          type: integer
+                        createdAt:
+                          type: string
+                          format: date-time
+                        updatedAt:
+                          type: string
+                          format: date-time
+        '401':
+          description: Unauthorized
+        '404':
+          description: Lesson not found
+
+  /lessons/{id}/complete:
+    post:
+      tags:
+        - Lessons
+      summary: Mark lesson as completed
+      description: Mark a lesson as completed for the authenticated user. This will automatically update course progress.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Lesson ID
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                timeSpentMinutes:
+                  type: integer
+                  description: "Time spent on the lesson in minutes (default: 0)"
+      responses:
+        '200':
+          description: Lesson marked as completed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  lessonId:
+                    type: string
+                    format: uuid
+                  completedAt:
+                    type: string
+                    format: date-time
+        '401':
+          description: Unauthorized
+        '404':
+          description: Lesson not found
+
+  /lessons/{id}/progress:
+    get:
+      tags:
+        - Lessons
+      summary: Get lesson progress
+      description: Get the current progress for a lesson for the authenticated user
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Lesson ID
+      responses:
+        '200':
+          description: Lesson progress retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  lessonId:
+                    type: string
+                    format: uuid
+                  isCompleted:
+                    type: boolean
+                  progressPercentage:
+                    type: integer
+                  timeSpentMinutes:
+                    type: integer
+                  completedAt:
+                    type: string
+                    format: date-time
+        '401':
+          description: Unauthorized
+        '404':
+          description: Lesson not found
+
+  /lessons/{id}/discussions:
+    get:
+      tags:
+        - Lessons
+      summary: Get lesson discussions
+      description: Get all discussions for a specific lesson
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Lesson ID
+        - name: category
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Filter by category
+        - name: search
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Search in title/content
+        - name: sort
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [created_at, title, last_activity, reply_count, likes_count]
+          description: Sort field
+        - name: order
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [asc, desc]
+          description: Sort order
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 20
+          description: Items per page
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 0
+          description: Number to skip
+      responses:
+        '200':
+          description: Lesson discussions retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  lesson:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      title:
+                        type: string
+                      courseId:
+                        type: string
+                        format: uuid
+                      courseTitle:
+                        type: string
+                  discussions:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                        title:
+                          type: string
+                        content:
+                          type: string
+                        category:
+                          type: string
+                        authorName:
+                          type: string
+                        replyCount:
+                          type: integer
+                        likesCount:
+                          type: integer
+                        lastActivityAt:
+                          type: string
+                          format: date-time
+                        createdAt:
+                          type: string
+                          format: date-time
+                  pagination:
+                    type: object
+                    properties:
+                      page:
+                        type: integer
+                      limit:
+                        type: integer
+                      total:
+                        type: integer
+                      pages:
+                        type: integer
+        '401':
+          description: Unauthorized
+        '404':
+          description: Lesson not found
+
+  # Test Endpoints
+  /tests/{id}:
+    get:
+      tags:
+        - Tests
+      summary: Get test details
+      description: Get test details by ID
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Test ID
+      responses:
+        '200':
+          description: Test details retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  courseId:
+                    type: string
+                    format: uuid
+                  courseTitle:
+                    type: string
+                  title:
+                    type: string
+                  description:
+                    type: string
+                  durationMinutes:
+                    type: integer
+                  passingScore:
+                    type: integer
+                  maxAttempts:
+                    type: integer
+                  orderIndex:
+                    type: integer
+                  isPublished:
+                    type: boolean
+                  createdAt:
+                    type: string
+                    format: date-time
+                  updatedAt:
+                    type: string
+                    format: date-time
+        '401':
+          description: Unauthorized
+        '404':
+          description: Test not found
+
+    put:
+      tags:
+        - Tests
+      summary: Update test
+      description: Update test details (instructor/admin only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Test ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                  description: Test title
+                description:
+                  type: string
+                  description: Test description
+                durationMinutes:
+                  type: integer
+                  description: Test duration in minutes
+                passingScore:
+                  type: integer
+                  description: Minimum score to pass
+                maxAttempts:
+                  type: integer
+                  description: Maximum number of attempts
+                orderIndex:
+                  type: integer
+                  description: Test order index
+                isPublished:
+                  type: boolean
+                  description: Publication status
+      responses:
+        '200':
+          description: Test updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  title:
+                    type: string
+                  description:
+                    type: string
+                  durationMinutes:
+                    type: integer
+                  passingScore:
+                    type: integer
+                  maxAttempts:
+                    type: integer
+                  orderIndex:
+                    type: integer
+                  isPublished:
+                    type: boolean
+                  updatedAt:
+                    type: string
+                    format: date-time
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Test not found
+
+    delete:
+      tags:
+        - Tests
+      summary: Delete test
+      description: Delete a test (instructor/admin only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Test ID
+      responses:
+        '200':
+          description: Test deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Test not found
+
+  /tests/{id}/questions:
+    get:
+      tags:
+        - Tests
+      summary: Get test questions
+      description: Get all questions for a test
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Test ID
+      responses:
+        '200':
+          description: Test questions retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  questions:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                        question:
+                          type: string
+                        questionType:
+                          type: string
+                          enum: [multiple_choice, true_false, short_answer]
+                        options:
+                          type: array
+                          items:
+                            type: string
+                        correctAnswer:
+                          type: integer
+                        correctAnswerText:
+                          type: string
+                        points:
+                          type: integer
+                        orderIndex:
+                          type: integer
+                        imageUrl:
+                          type: string
+        '401':
+          description: Unauthorized
+        '404':
+          description: Test not found
+
+    post:
+      tags:
+        - Tests
+      summary: Add question to test
+      description: Add a new question to a test (instructor/admin only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Test ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - question
+                - questionType
+                - points
+              properties:
+                question:
+                  type: string
+                  description: Question text
+                questionType:
+                  type: string
+                  enum: [multiple_choice, true_false, short_answer]
+                  description: Type of question
+                options:
+                  type: array
+                  items:
+                    type: string
+                  description: Answer options (required for multiple choice)
+                correctAnswer:
+                  type: integer
+                  description: Index of correct answer (required for multiple choice/true_false)
+                correctAnswerText:
+                  type: string
+                  description: Correct answer text (required for short answer)
+                points:
+                  type: integer
+                  description: Points for this question
+                orderIndex:
+                  type: integer
+                  description: Question order index
+                imageUrl:
+                  type: string
+                  description: Question image URL
+      responses:
+        '201':
+          description: Question added successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  question:
+                    type: string
+                  questionType:
+                    type: string
+                  options:
+                    type: array
+                    items:
+                      type: string
+                  correctAnswer:
+                    type: integer
+                  correctAnswerText:
+                    type: string
+                  points:
+                    type: integer
+                  orderIndex:
+                    type: integer
+                  imageUrl:
+                    type: string
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Test not found
+
+  /tests/{id}/questions/{questionId}:
+    put:
+      tags:
+        - Tests
+      summary: Update question
+      description: Update a question in a test (instructor/admin only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Test ID
+        - name: questionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Question ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                question:
+                  type: string
+                  description: Question text
+                questionType:
+                  type: string
+                  enum: [multiple_choice, true_false, short_answer]
+                  description: Type of question
+                options:
+                  type: array
+                  items:
+                    type: string
+                  description: Answer options
+                correctAnswer:
+                  type: integer
+                  description: Index of correct answer
+                correctAnswerText:
+                  type: string
+                  description: Correct answer text
+                points:
+                  type: integer
+                  description: Points for this question
+                imageUrl:
+                  type: string
+                  description: Question image URL
+      responses:
+        '200':
+          description: Question updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Test or question not found
+
+    delete:
+      tags:
+        - Tests
+      summary: Delete question
+      description: Delete a question from a test (instructor/admin only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Test ID
+        - name: questionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Question ID
+      responses:
+        '200':
+          description: Question deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Test or question not found
+
+  /tests/{id}/start:
+    post:
+      tags:
+        - Tests
+      summary: Start test attempt
+      description: Start a new test attempt
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Test ID
+      responses:
+        '200':
+          description: Test attempt started successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  attempt:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      testId:
+                        type: string
+                        format: uuid
+                      userId:
+                        type: string
+                        format: uuid
+                      attemptNumber:
+                        type: integer
+                      status:
+                        type: string
+                      startedAt:
+                        type: string
+                        format: date-time
+                  questions:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                        question:
+                          type: string
+                        questionType:
+                          type: string
+                        options:
+                          type: array
+                          items:
+                            type: string
+                        points:
+                          type: integer
+                        orderIndex:
+                          type: integer
+        '400':
+          description: Max attempts reached or test not available
+        '401':
+          description: Unauthorized
+        '404':
+          description: Test not found
+
+  /tests/{id}/proceed:
+    post:
+      tags:
+        - Tests
+      summary: Force proceed after max attempts
+      description: Force progression after reaching maximum attempts
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Test ID
+      responses:
+        '200':
+          description: Proceeding with last attempt score
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  details:
+                    type: object
+                    properties:
+                      lastAttemptId:
+                        type: string
+                        format: uuid
+                      score:
+                        type: integer
+                      totalQuestions:
+                        type: integer
+                      correctAnswers:
+                        type: integer
+                      timeTakenMinutes:
+                        type: integer
+                      completedAt:
+                        type: string
+                        format: date-time
+                      passed:
+                        type: boolean
+                      forcedProceed:
+                        type: boolean
+        '400':
+          description: No previous attempts found
+        '401':
+          description: Unauthorized
+        '404':
+          description: Test not found
+
+  /tests/{id}/attempts/{attemptId}/answer:
+    put:
+      tags:
+        - Tests
+      summary: Submit answer
+      description: Submit an answer for a test question
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Test ID
+        - name: attemptId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Attempt ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - questionId
+              properties:
+                questionId:
+                  type: string
+                  format: uuid
+                  description: Question ID
+                selectedAnswer:
+                  type: integer
+                  description: Selected answer index (for multiple choice/true_false)
+                answerText:
+                  type: string
+                  description: Answer text (for short answer)
+      responses:
+        '200':
+          description: Answer saved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  isCorrect:
+                    type: boolean
+                  pointsEarned:
+                    type: integer
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '404':
+          description: Test, attempt, or question not found
+
+  /tests/{id}/attempts/{attemptId}/submit:
+    post:
+      tags:
+        - Tests
+      summary: Submit test
+      description: Submit completed test
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Test ID
+        - name: attemptId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Attempt ID
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                forceProceed:
+                  type: boolean
+                  description: "Allow progression even if test is not passed (default: false)"
+      responses:
+        '200':
+          description: Test submitted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  results:
+                    type: object
+                    properties:
+                      attemptId:
+                        type: string
+                        format: uuid
+                      score:
+                        type: integer
+                      totalQuestions:
+                        type: integer
+                      correctAnswers:
+                        type: integer
+                      timeTakenMinutes:
+                        type: integer
+                      completedAt:
+                        type: string
+                        format: date-time
+                      passed:
+                        type: boolean
+                      forceProceed:
+                        type: boolean
+                      message:
+                        type: string
+        '400':
+          description: Validation error
+        '401':
+          description: Unauthorized
+        '404':
+          description: Test or attempt not found
+
+  /tests/{id}/attempts/{attemptId}/results:
+    get:
+      tags:
+        - Tests
+      summary: Get test results
+      description: Get detailed test results
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Test ID
+        - name: attemptId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Attempt ID
+      responses:
+        '200':
+          description: Test results retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  attempt:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      score:
+                        type: integer
+                      totalQuestions:
+                        type: integer
+                      correctAnswers:
+                        type: integer
+                      timeTakenMinutes:
+                        type: integer
+                      status:
+                        type: string
+                      startedAt:
+                        type: string
+                        format: date-time
+                      completedAt:
+                        type: string
+                        format: date-time
+                  questions:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                        question:
+                          type: string
+                        questionType:
+                          type: string
+                        options:
+                          type: array
+                          items:
+                            type: string
+                        correctAnswer:
+                          type: integer
+                        userAnswer:
+                          type: integer
+                        isCorrect:
+                          type: boolean
+                        pointsEarned:
+                          type: integer
+                        points:
+                          type: integer
+        '401':
+          description: Unauthorized
+        '404':
+          description: Test, attempt, or results not found
+
+  /tests/{id}/questions/{questionId}/image/upload:
+    post:
+      tags:
+        - Tests
+      summary: Upload question image
+      description: Upload an image for a test question (instructor/admin only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Test ID
+        - name: questionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Question ID
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                image:
+                  type: string
+                  format: binary
+                  description: Image file (PNG, JPG, JPEG, GIF, SVG, max 5MB)
+      responses:
+        '200':
+          description: Image uploaded successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  imageUrl:
+                    type: string
+                  message:
+                    type: string
+        '400':
+          description: Invalid file or validation error
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Test or question not found
+
+  /tests/{id}/analytics:
+    get:
+      tags:
+        - Tests
+      summary: Get test analytics
+      description: Get comprehensive analytics for a test including overall statistics and question-level analytics
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Test ID
+      responses:
+        '200':
+          description: Test analytics retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  totalAttempts:
+                    type: integer
+                  averageScore:
+                    type: number
+                  passRate:
+                    type: number
+                  averageTimeMinutes:
+                    type: number
+                  questionAnalytics:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        questionId:
+                          type: string
+                          format: uuid
+                        question:
+                          type: string
+                        questionType:
+                          type: string
+                        points:
+                          type: integer
+                        totalAnswers:
+                          type: integer
+                        correctAnswers:
+                          type: integer
+                        correctRate:
+                          type: number
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Test not found
+
+  /tests/{id}/attempts:
+    get:
+      tags:
+        - Tests
+      summary: List all attempts for a test
+      description: Get all attempts for a test (admin/instructor only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Test ID
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 20
+          description: Number of results to return
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 0
+          description: Number of results to skip
+      responses:
+        '200':
+          description: Test attempts retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  test:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      title:
+                        type: string
+                      passingScore:
+                        type: integer
+                  attempts:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                        userId:
+                          type: string
+                          format: uuid
+                        userName:
+                          type: string
+                        userEmail:
+                          type: string
+                        attemptNumber:
+                          type: integer
+                        score:
+                          type: integer
+                        totalQuestions:
+                          type: integer
+                        correctAnswers:
+                          type: integer
+                        status:
+                          type: string
+                        startedAt:
+                          type: string
+                          format: date-time
+                        completedAt:
+                          type: string
+                          format: date-time
+                        timeTakenMinutes:
+                          type: integer
+                        passed:
+                          type: boolean
+                  pagination:
+                    type: object
+                    properties:
+                      total:
+                        type: integer
+                      limit:
+                        type: integer
+                      offset:
+                        type: integer
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Test not found
+
+  /tests/{id}/my-attempts:
+    get:
+      tags:
+        - Tests
+      summary: Get user's own test attempts
+      description: Get user's own test attempts (student view)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Test ID
+      responses:
+        '200':
+          description: User's test attempts retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  test:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      title:
+                        type: string
+                      passingScore:
+                        type: integer
+                      maxAttempts:
+                        type: integer
+                  attempts:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                        attemptNumber:
+                          type: integer
+                        score:
+                          type: integer
+                        totalQuestions:
+                          type: integer
+                        correctAnswers:
+                          type: integer
+                        status:
+                          type: string
+                        startedAt:
+                          type: string
+                          format: date-time
+                        completedAt:
+                          type: string
+                          format: date-time
+                        timeTakenMinutes:
+                          type: integer
+                        passed:
+                          type: boolean
+                  currentAttempts:
+                    type: integer
+                  canStartNew:
+                    type: boolean
+        '401':
+          description: Unauthorized
+        '404':
+          description: Test not found
+
+  /tests/{id}/attempts/{attemptId}/details:
+    get:
+      tags:
+        - Tests
+      summary: Get detailed answers for a student's attempt
+      description: Get detailed answers for a student's attempt (admin/instructor)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Test ID
+        - name: attemptId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Attempt ID
+      responses:
+        '200':
+          description: Detailed answers retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  attempt:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      studentName:
+                        type: string
+                      studentEmail:
+                        type: string
+                      score:
+                        type: integer
+                      timeSpent:
+                        type: integer
+                      attemptNumber:
+                        type: integer
+                      completedAt:
+                        type: string
+                        format: date-time
+                      status:
+                        type: string
+                  answers:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        questionId:
+                          type: string
+                          format: uuid
+                        question:
+                          type: string
+                        questionType:
+                          type: string
+                        options:
+                          type: array
+                          items:
+                            type: string
+                        correctAnswer:
+                          type: integer
+                        correctAnswerText:
+                          type: string
+                        userAnswer:
+                          type: integer
+                        userAnswerText:
+                          type: string
+                        isCorrect:
+                          type: boolean
+                        pointsEarned:
+                          type: integer
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Test, attempt, or details not found
+
+  # Sponsorship Endpoints
+  /sponsorships/code/{discountCode}:
+    get:
+      tags:
+        - Sponsorships
+      summary: Validate Sponsorship Code
+      description: |
+        Public endpoint to validate a sponsorship discount code.
+        
+        **Frontend Usage:**
+        1. **Validate Code**: Call this endpoint when user enters a discount code
+        2. **Check Validity**: Use the `valid` field to determine if code is usable
+        3. **Extract Sponsorship ID**: Use `sponsorship.id` for enrollment requests
+        4. **Show User Info**: Display discount details and course information
+        
+        **Important Notes:**
+        - This endpoint is public (no authentication required)
+        - Always validate before attempting enrollment
+        - The `sponsorship.id` from the response is required for enrollment
+        - Check `isExpired` and `isFull` before allowing enrollment
+      parameters:
+        - name: discountCode
+          in: path
+          required: true
+          description: Discount code to validate (e.g., "SPONSOR123")
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Sponsorship code validation result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  valid:
+                    type: boolean
+                    description: Whether the code is valid and can be used
+                  sponsorship:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                        description: |
+                          **IMPORTANT**: Use this UUID as `sponsorshipId` when enrolling.
+                          This is NOT the discount code - it's the internal sponsorship ID.
+                      courseName:
+                        type: string
+                        description: Name of the sponsored course
+                      coursePrice:
+                        type: number
+                        description: Original course price before discount
+                      discountType:
+                        type: string
+                        enum: [percentage, fixed]
+                        description: Type of discount (percentage or fixed amount)
+                      discountValue:
+                        type: number
+                        description: Value of the discount (percentage as decimal or fixed amount)
+                      maxStudents:
+                        type: integer
+                        description: Maximum number of students who can use this sponsorship
+                      studentsUsed:
+                        type: integer
+                        description: Number of students who have already used this sponsorship
+                      remainingSpots:
+                        type: integer
+                        description: Number of remaining available spots
+                      startDate:
+                        type: string
+                        format: date
+                        description: When the sponsorship becomes active
+                      endDate:
+                        type: string
+                        format: date
+                        description: When the sponsorship expires
+                      isExpired:
+                        type: boolean
+                        description: Whether the sponsorship has expired (check this before enrollment)
+                      isFull:
+                        type: boolean
+                        description: Whether the sponsorship is full (check this before enrollment)
+                  message:
+                    type: string
+                    description: Human-readable message about the validation result
+
+  /sponsorships:
+    get:
+      tags:
+        - Sponsorships
+      summary: Get All Sponsorships
+      description: Retrieve a list of sponsorships created by the authenticated sponsor with optional filtering
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          description: Page number for pagination
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          description: Number of items per page
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
+        - name: status
+          in: query
+          description: Filter by sponsorship status
+          required: false
+          schema:
+            type: string
+            enum: [active, inactive, expired]
+        - name: courseId
+          in: query
+          description: Filter by specific course ID
+          required: false
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: List of sponsorships retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  sponsorships:
+                    type: array
+                    items:
+                      $ref: '#/schemas/Sponsorship'
+                  pagination:
+                    $ref: '#/schemas/Pagination'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden - User is not a sponsor
+        '500':
+          description: Internal server error
+
+    post:
+      tags:
+        - Sponsorships
+      summary: Create New Sponsorship
+      description: Create a new sponsorship for a course
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - courseId
+                - discountType
+                - discountValue
+                - maxStudents
+                - duration
+              properties:
+                courseId:
+                  type: string
+                  format: uuid
+                  description: ID of the course to sponsor
+                discountType:
+                  type: string
+                  enum: [percentage, fixed]
+                  description: Type of discount to apply
+                discountValue:
+                  type: number
+                  minimum: 0
+                  description: Value of the discount (percentage or fixed amount)
+                maxStudents:
+                  type: integer
+                  minimum: 1
+                  description: Maximum number of students that can use this sponsorship
+                duration:
+                  type: integer
+                  minimum: 1
+                  description: Duration in days for which the sponsorship is valid
+                notes:
+                  type: string
+                  description: Additional notes about the sponsorship
+      responses:
+        '201':
+          description: Sponsorship created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/schemas/Sponsorship'
+        '400':
+          description: Bad request - Invalid input data
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden - User is not a sponsor
+        '404':
+          description: Course not found
+        '500':
+          description: Internal server error
+
+  /sponsorships/{id}:
+    get:
+      tags:
+        - Sponsorships
+      summary: Get Sponsorship by ID
+      description: Retrieve a specific sponsorship by its ID
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Sponsorship ID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Sponsorship retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/schemas/Sponsorship'
+        '401':
+          description: Unauthorized
+        '404':
+          description: Sponsorship not found
+        '500':
+          description: Internal server error
+
+    put:
+      tags:
+        - Sponsorships
+      summary: Update Sponsorship
+      description: Update an existing sponsorship
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Sponsorship ID
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                discountType:
+                  type: string
+                  enum: [percentage, fixed]
+                  description: Type of discount to apply
+                discountValue:
+                  type: number
+                  minimum: 0
+                  description: Value of the discount (percentage or fixed amount)
+                maxStudents:
+                  type: integer
+                  minimum: 1
+                  description: Maximum number of students that can use this sponsorship
+                duration:
+                  type: integer
+                  minimum: 1
+                  description: Duration in days for which the sponsorship is valid
+                notes:
+                  type: string
+                  description: Additional notes about the sponsorship
+      responses:
+        '200':
+          description: Sponsorship updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/schemas/Sponsorship'
+        '400':
+          description: Bad request - Invalid input data
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden - User is not the owner of the sponsorship
+        '404':
+          description: Sponsorship not found
+        '500':
+          description: Internal server error
+
+    delete:
+      tags:
+        - Sponsorships
+      summary: Delete Sponsorship
+      description: Delete a sponsorship
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Sponsorship ID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Sponsorship deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    description: Success message
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden - User is not the owner of the sponsorship
+        '404':
+          description: Sponsorship not found
+        '500':
+          description: Internal server error
+
+  /sponsorships/{id}/enrollments:
+    get:
+      tags:
+        - Sponsorships
+      summary: Get Sponsorship Enrollments
+      description: Get list of students enrolled using a specific sponsorship
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Sponsorship ID
+          schema:
+            type: string
+            format: uuid
+        - name: page
+          in: query
+          description: Page number for pagination
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          description: Number of items per page
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
+      responses:
+        '200':
+          description: Enrollments retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  enrollments:
+                    type: array
+                    items:
+                      $ref: '#/schemas/Enrollment'
+                  pagination:
+                    $ref: '#/schemas/Pagination'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden - User is not the owner of the sponsorship
+        '404':
+          description: Sponsorship not found
+        '500':
+          description: Internal server error
+
+  /sponsorships/{id}/analytics:
+    get:
+      tags:
+        - Sponsorships
+      summary: Get Sponsorship Analytics
+      description: Get analytics data for a specific sponsorship
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Sponsorship ID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Analytics retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  totalEnrollments:
+                    type: integer
+                    description: Total number of enrollments using this sponsorship
+                  activeEnrollments:
+                    type: integer
+                    description: Number of currently active enrollments
+                  totalDiscount:
+                    type: number
+                    description: Total discount amount provided
+                  averageRating:
+                    type: number
+                    description: Average rating from sponsored students
+                  completionRate:
+                    type: number
+                    description: Course completion rate for sponsored students
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden - User is not the owner of the sponsorship
+        '404':
+          description: Sponsorship not found
+        '500':
+          description: Internal server error
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        firstName:
+          type: string
+        lastName:
+          type: string
+        role:
+          type: string
+          enum: [student, instructor, admin, sponsor]
+        profile:
+          $ref: '#/schemas/UserProfile'
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    UserProfile:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        bio:
+          type: string
+        avatar:
+          type: string
+        phone:
+          type: string
+        location:
+          type: string
+        website:
+          type: string
+        socialLinks:
+          type: object
+          properties:
+            twitter:
+              type: string
+            linkedin:
+              type: string
+            github:
+              type: string
+
+    Course:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        description:
+          type: string
+        instructorId:
+          type: string
+          format: uuid
+        price:
+          type: number
+        duration:
+          type: integer
+        level:
+          type: string
+          enum: [beginner, intermediate, advanced]
+        status:
+          type: string
+          enum: [draft, published, archived]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    Lesson:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        content:
+          type: string
+        courseId:
+          type: string
+          format: uuid
+        order:
+          type: integer
+        duration:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    Test:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        description:
+          type: string
+        courseId:
+          type: string
+          format: uuid
+        lessonId:
+          type: string
+          format: uuid
+        timeLimit:
+          type: integer
+        passingScore:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    Enrollment:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+        courseId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [active, completed, dropped]
+        enrolledAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
+
+    Discussion:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        content:
+          type: string
+        authorId:
+          type: string
+          format: uuid
+        courseId:
+          type: string
+          format: uuid
+        lessonId:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    DiscussionCategory:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+
+    DiscussionReply:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        content:
+          type: string
+        authorId:
+          type: string
+          format: uuid
+        discussionId:
+          type: string
+          format: uuid
+        parentReplyId:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    Notification:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+        title:
+          type: string
+        message:
+          type: string
+        type:
+          type: string
+          enum: [info, success, warning, error]
+        read:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+
+    NotificationPreferences:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+        emailNotifications:
+          type: boolean
+        pushNotifications:
+          type: boolean
+        courseUpdates:
+          type: boolean
+        discussionReplies:
+          type: boolean
+        testResults:
+          type: boolean
+
+    Payment:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+        courseId:
+          type: string
+          format: uuid
+        amount:
+          type: number
+        currency:
+          type: string
+        status:
+          type: string
+          enum: [pending, completed, failed, refunded]
+        paymentMethod:
+          type: string
+        transactionId:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    Sponsorship:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        sponsorId:
+          type: string
+          format: uuid
+        courseId:
+          type: string
+          format: uuid
+        discountType:
+          type: string
+          enum: [percentage, fixed]
+        discountValue:
+          type: number
+        maxStudents:
+          type: integer
+        currentStudents:
+          type: integer
+        duration:
+          type: integer
+        status:
+          type: string
+          enum: [active, inactive, expired]
+        notes:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    SponsorshipOpportunity:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        description:
+          type: string
+        requirements:
+          type: string
+        benefits:
+          type: string
+        deadline:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum: [open, closed, expired]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    Certification:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+        programId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [in_progress, completed, expired]
+        issuedAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+
+    CertificationProgram:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+        requirements:
+          type: string
+        validityPeriod:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+
+    Class:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        description:
+          type: string
+        courseId:
+          type: string
+          format: uuid
+        instructorId:
+          type: string
+          format: uuid
+        startTime:
+          type: string
+          format: date-time
+        endTime:
+          type: string
+          format: date-time
+        maxStudents:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    Pagination:
+      type: object
+      properties:
+        page:
+          type: integer
+          description: Current page number
+        limit:
+          type: integer
+          description: Number of items per page
+        total:
+          type: integer
+          description: Total number of items
+        pages:
+          type: integer
+          description: Total number of pages
+        hasNext:
+          type: boolean
+          description: Whether there is a next page
+        hasPrev:
+          type: boolean
+          description: Whether there is a previous page

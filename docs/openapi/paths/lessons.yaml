@@ -1,7 +1,7 @@
 # Lessons Endpoints
 
 # Get Lesson Details
-/{id}:
+/lessons/{id}:
   get:
     tags:
       - Lessons
@@ -23,13 +23,103 @@
         content:
           application/json:
             schema:
-              $ref: '../schemas/Lesson.yaml'
+              type: object
+              properties:
+                id:
+                  type: string
+                  format: uuid
+                courseId:
+                  type: string
+                  format: uuid
+                courseTitle:
+                  type: string
+                title:
+                  type: string
+                description:
+                  type: string
+                  nullable: true
+                content:
+                  type: string
+                  nullable: true
+                videoUrl:
+                  type: string
+                  nullable: true
+                durationMinutes:
+                  type: integer
+                orderIndex:
+                  type: integer
+                isPublished:
+                  type: boolean
+                isUnlocked:
+                  type: boolean
+                createdAt:
+                  type: string
+                  format: date-time
+                updatedAt:
+                  type: string
+                  format: date-time
+                progress:
+                  type: object
+                  nullable: true
+                  properties:
+                    isCompleted:
+                      type: boolean
+                    progressPercentage:
+                      type: integer
+                      minimum: 0
+                      maximum: 100
+                    timeSpentMinutes:
+                      type: integer
+                      minimum: 0
+                    completedAt:
+                      type: string
+                      format: date-time
+                      nullable: true
+                test:
+                  type: object
+                  nullable: true
+                  properties:
+                    id:
+                      type: string
+                      format: uuid
+                    title:
+                      type: string
+                    description:
+                      type: string
+                      nullable: true
+                    durationMinutes:
+                      type: integer
+                    passingScore:
+                      type: integer
+                    maxAttempts:
+                      type: integer
       '401':
         $ref: '../responses/Unauthorized.yaml'
+      '403':
+        description: |
+          Access denied. Common causes:
+          - Enrollment required to access lessons
+          - Lesson is locked (complete previous lesson's test first)
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                error:
+                  type: string
+                  enum: [ENROLLMENT_REQUIRED, Lesson Locked]
+                message:
+                  type: string
+                  example: "Complete the test for 'Previous Lesson' to unlock this lesson"
+                details:
+                  type: object
+                  properties:
+                    courseId:
+                      type: string
+                      format: uuid
       '404':
         $ref: '../responses/NotFound.yaml'
 
-  # Update Lesson
   put:
     tags:
       - Lessons
@@ -54,6 +144,7 @@
             properties:
               title:
                 type: string
+                minLength: 1
                 description: Updated lesson title
               description:
                 type: string
@@ -63,6 +154,7 @@
                 description: Updated lesson content
               videoUrl:
                 type: string
+                format: uri
                 description: Updated video URL
               durationMinutes:
                 type: integer
@@ -81,7 +173,31 @@
         content:
           application/json:
             schema:
-              $ref: '../schemas/Lesson.yaml'
+              type: object
+              properties:
+                id:
+                  type: string
+                  format: uuid
+                title:
+                  type: string
+                description:
+                  type: string
+                  nullable: true
+                content:
+                  type: string
+                  nullable: true
+                videoUrl:
+                  type: string
+                  nullable: true
+                durationMinutes:
+                  type: integer
+                orderIndex:
+                  type: integer
+                isPublished:
+                  type: boolean
+                updatedAt:
+                  type: string
+                  format: date-time
       '400':
         $ref: '../responses/BadRequest.yaml'
       '401':
@@ -91,7 +207,6 @@
       '404':
         $ref: '../responses/NotFound.yaml'
 
-  # Delete Lesson
   delete:
     tags:
       - Lessons
@@ -125,7 +240,84 @@
       '404':
         $ref: '../responses/NotFound.yaml'
 
-  # Mark Lesson as Completed
+# Get Lesson Tests
+/lessons/{id}/tests:
+  get:
+    tags:
+      - Lessons
+    summary: Get all tests for a lesson
+    description: Retrieve all tests associated with a specific lesson
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Lesson ID
+        schema:
+          type: string
+          format: uuid
+    responses:
+      '200':
+        description: Lesson tests retrieved successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                lesson:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                      format: uuid
+                    title:
+                      type: string
+                    courseId:
+                      type: string
+                      format: uuid
+                tests:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      title:
+                        type: string
+                      description:
+                        type: string
+                        nullable: true
+                      durationMinutes:
+                        type: integer
+                      passingScore:
+                        type: integer
+                      maxAttempts:
+                        type: integer
+                      orderIndex:
+                        type: integer
+                      isPublished:
+                        type: boolean
+                      questionCount:
+                        type: integer
+                        description: Number of questions in the test
+                      attemptCount:
+                        type: integer
+                        description: Number of attempts made on the test
+                      createdAt:
+                        type: string
+                        format: date-time
+                      updatedAt:
+                        type: string
+                        format: date-time
+      '401':
+        $ref: '../responses/Unauthorized.yaml'
+      '404':
+        $ref: '../responses/NotFound.yaml'
+
+# Mark Lesson as Completed
+/lessons/{id}/complete:
   post:
     tags:
       - Lessons
@@ -176,7 +368,8 @@
       '404':
         $ref: '../responses/NotFound.yaml'
 
-  # Get Lesson Progress
+# Get Lesson Progress
+/lessons/{id}/progress:
   get:
     tags:
       - Lessons
@@ -225,12 +418,128 @@
       '404':
         $ref: '../responses/NotFound.yaml'
 
-# Get All Lessons for a Course (Admin)
-/admin/courses/{courseId}/lessons:
+# Get Lesson Discussions
+/lessons/{id}/discussions:
   get:
     tags:
       - Lessons
-    summary: Get all lessons for a course (admin access)
+    summary: Get all discussions for a specific lesson
+    description: Retrieve all discussions related to a specific lesson
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Lesson ID
+        schema:
+          type: string
+          format: uuid
+      - name: category
+        in: query
+        description: Filter by category
+        schema:
+          type: string
+          enum: [general, course, lesson, class, question, help, feedback]
+      - name: search
+        in: query
+        description: Search in title and content
+        schema:
+          type: string
+      - name: sort
+        in: query
+        description: Sort field
+        schema:
+          type: string
+          enum: [created_at, title, last_activity_at, reply_count, likes_count]
+          default: last_activity_at
+      - name: order
+        in: query
+        description: Sort order
+        schema:
+          type: string
+          enum: [asc, desc]
+          default: desc
+      - name: limit
+        in: query
+        description: Items per page
+        schema:
+          type: integer
+          default: 20
+          minimum: 1
+          maximum: 100
+      - name: offset
+        in: query
+        description: Number to skip
+        schema:
+          type: integer
+          default: 0
+          minimum: 0
+    responses:
+      '200':
+        description: Lesson discussions retrieved successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                lesson:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                      format: uuid
+                    title:
+                      type: string
+                    courseId:
+                      type: string
+                      format: uuid
+                    courseTitle:
+                      type: string
+                discussions:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      title:
+                        type: string
+                      content:
+                        type: string
+                      category:
+                        type: string
+                      authorName:
+                        type: string
+                      replyCount:
+                        type: integer
+                      likesCount:
+                        type: integer
+                      lastActivityAt:
+                        type: string
+                        format: date-time
+                      createdAt:
+                        type: string
+                        format: date-time
+                pagination:
+                  type: object
+                  properties:
+                    page:
+                      type: integer
+                    limit:
+                      type: integer
+                    total:
+                      type: integer
+                    pages:
+                      type: integer
+      '404':
+        $ref: '../responses/NotFound.yaml'
+
+# Admin: Get Lessons for a Course
+/lessons/admin/courses/{courseId}/lessons:
+  get:
+    tags:
+      - Lessons
+    summary: Get all lessons for a course (admin only)
     description: Retrieve all lessons for a specific course with admin access
     security:
       - BearerAuth: []
@@ -250,25 +559,39 @@
             schema:
               type: object
               properties:
+                courseId:
+                  type: string
+                  format: uuid
                 lessons:
                   type: array
                   items:
-                    $ref: '../schemas/Lesson.yaml'
-                pagination:
-                  $ref: '../schemas/Pagination.yaml'
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      title:
+                        type: string
+                      description:
+                        type: string
+                        nullable: true
+                      orderIndex:
+                        type: integer
+                      isPublished:
+                        type: boolean
+                      createdAt:
+                        type: string
+                        format: date-time
       '401':
         $ref: '../responses/Unauthorized.yaml'
       '403':
         $ref: '../responses/Forbidden.yaml'
-      '404':
-        $ref: '../responses/NotFound.yaml'
 
-  # Create Lesson for a Course (Admin)
   post:
     tags:
       - Lessons
-    summary: Create a new lesson for a course (admin access)
-    description: Create a new lesson for a specific course with admin access
+    summary: Create a new lesson for a course (admin only)
+    description: Create a new lesson in a specific course
     security:
       - BearerAuth: []
     parameters:
@@ -287,15 +610,12 @@
             type: object
             required:
               - title
-              - description
-              - content
-              - videoUrl
               - durationMinutes
               - orderIndex
-              - isPublished
             properties:
               title:
                 type: string
+                minLength: 1
                 description: Lesson title
               description:
                 type: string
@@ -305,7 +625,8 @@
                 description: Lesson content
               videoUrl:
                 type: string
-                description: Video URL for the lesson
+                format: uri
+                description: Video URL
               durationMinutes:
                 type: integer
                 minimum: 0
@@ -313,9 +634,10 @@
               orderIndex:
                 type: integer
                 minimum: 0
-                description: Order index within the course
+                description: Order index
               isPublished:
                 type: boolean
+                default: false
                 description: Whether the lesson is published
     responses:
       '201':
@@ -325,8 +647,32 @@
             schema:
               type: object
               properties:
-                lesson:
-                  $ref: '../schemas/Lesson.yaml'
+                id:
+                  type: string
+                  format: uuid
+                title:
+                  type: string
+                description:
+                  type: string
+                  nullable: true
+                content:
+                  type: string
+                  nullable: true
+                videoUrl:
+                  type: string
+                  nullable: true
+                durationMinutes:
+                  type: integer
+                orderIndex:
+                  type: integer
+                isPublished:
+                  type: boolean
+                courseId:
+                  type: string
+                  format: uuid
+                createdAt:
+                  type: string
+                  format: date-time
       '400':
         $ref: '../responses/BadRequest.yaml'
       '401':
@@ -336,13 +682,13 @@
       '404':
         $ref: '../responses/NotFound.yaml'
 
-# Get All Lessons for a Course
-/courses/{id}/lessons:
+# Get Course Lessons (for enrolled users)
+/lessons/courses/{id}/lessons:
   get:
     tags:
       - Lessons
-    summary: Get all lessons for a course by course ID
-    description: Retrieve all lessons for a specific course
+    summary: Get all lessons for a course
+    description: Retrieve all lessons for a specific course (for enrolled users)
     security:
       - BearerAuth: []
     parameters:
@@ -361,11 +707,61 @@
             schema:
               type: object
               properties:
+                courseId:
+                  type: string
+                  format: uuid
                 lessons:
                   type: array
                   items:
-                    $ref: '../schemas/Lesson.yaml'
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      title:
+                        type: string
+                      description:
+                        type: string
+                        nullable: true
+                      orderIndex:
+                        type: integer
+                      isPublished:
+                        type: boolean
+                      isUnlocked:
+                        type: boolean
+                      isCompleted:
+                        type: boolean
+                      progressPercentage:
+                        type: integer
+                        minimum: 0
+                        maximum: 100
+                      test:
+                        type: object
+                        nullable: true
+                        properties:
+                          id:
+                            type: string
+                            format: uuid
+                          title:
+                            type: string
+                          passingScore:
+                            type: integer
+                          maxAttempts:
+                            type: integer
       '401':
         $ref: '../responses/Unauthorized.yaml'
+      '403':
+        description: Enrollment required to view course lessons
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                error:
+                  type: string
+                  example: "ENROLLMENT_REQUIRED"
+                message:
+                  type: string
+                  example: "Enrollment required to view course lessons"
       '404':
         $ref: '../responses/NotFound.yaml' 

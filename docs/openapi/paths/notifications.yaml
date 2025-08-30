@@ -1,384 +1,594 @@
 # Notification Endpoints
-getNotifications:
-  tags:
-    - Notifications
-  summary: Get Notifications
-  description: List notifications with filters and pagination
-  security:
-    - BearerAuth: []
-  parameters:
-    - name: type
-      in: query
-      required: false
-      schema:
-        type: string
-      description: Filter by notification type
-    - name: read
-      in: query
-      required: false
-      schema:
-        type: boolean
-      description: Filter by read status
-    - name: priority
-      in: query
-      required: false
-      schema:
-        type: string
-        enum: [low, normal, high, urgent]
-      description: Filter by priority level
-    - name: sort
-      in: query
-      required: false
-      schema:
-        type: string
-        enum: [created_at, type, priority, is_read]
-      description: Sort field
-    - name: order
-      in: query
-      required: false
-      schema:
-        type: string
-        enum: [asc, desc]
-      description: Sort order
-    - name: page
-      in: query
-      required: false
-      schema:
-        type: integer
-        default: 1
-      description: Page number
-    - name: limit
-      in: query
-      required: false
-      schema:
-        type: integer
-        default: 20
-      description: Items per page
-  responses:
-    '200':
-      description: Notifications retrieved successfully
-      content:
-        application/json:
-          schema:
-            type: object
-            properties:
-              notifications:
-                type: array
-                items:
-                  $ref: '../schemas/Notification.yaml'
-              pagination:
-                $ref: '../schemas/Pagination.yaml'
 
-getTypes:
-  tags:
-    - Notifications
-  summary: Get Notification Types
-  description: Get available notification types and priorities
-  security:
-    - BearerAuth: []
-  responses:
-    '200':
-      description: Notification types retrieved successfully
-      content:
-        application/json:
-          schema:
-            type: object
-            properties:
-              types:
-                type: array
-                items:
-                  type: string
-              priorities:
-                type: array
-                items:
-                  type: string
-                  enum: [low, normal, high, urgent]
-
-getCount:
-  tags:
-    - Notifications
-  summary: Get Unread Count
-  description: Get unread notification count
-  security:
-    - BearerAuth: []
-  parameters:
-    - name: type
-      in: query
-      required: false
-      schema:
-        type: string
-      description: Filter by notification type
-  responses:
-    '200':
-      description: Unread count retrieved successfully
-      content:
-        application/json:
-          schema:
-            type: object
-            properties:
-              unreadCount:
-                type: integer
-
-getPreferences:
-  tags:
-    - Notifications
-  summary: Get Notification Preferences
-  description: Get user notification preferences
-  security:
-    - BearerAuth: []
-  responses:
-    '200':
-      description: Preferences retrieved successfully
-      content:
-        application/json:
-          schema:
-            $ref: '../schemas/NotificationPreferences.yaml'
-
-updatePreferences:
-  tags:
-    - Notifications
-  summary: Update Notification Preferences
-  description: Update user notification preferences
-  security:
-    - BearerAuth: []
-  requestBody:
-    required: true
-    content:
-      application/json:
+# Get Notifications
+/notifications:
+  get:
+    tags:
+      - Notifications
+    summary: Get Notifications
+    description: List notifications with filters and pagination
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: type
+        in: query
+        required: false
         schema:
-          $ref: '../schemas/NotificationPreferences.yaml'
-  responses:
-    '200':
-      description: Preferences updated successfully
-      content:
-        application/json:
-          schema:
-            type: object
-            properties:
-              message:
-                type: string
-
-markAsRead:
-  tags:
-    - Notifications
-  summary: Mark Notification as Read
-  description: Mark a specific notification as read
-  security:
-    - BearerAuth: []
-  parameters:
-    - name: id
-      in: path
-      required: true
-      schema:
-        type: string
-        format: uuid
-      description: Notification ID
-  responses:
-    '200':
-      description: Notification marked as read
-      content:
-        application/json:
-          schema:
-            type: object
-            properties:
-              message:
-                type: string
-
-markAllAsRead:
-  tags:
-    - Notifications
-  summary: Mark All Notifications as Read
-  description: Mark all notifications as read
-  security:
-    - BearerAuth: []
-  responses:
-    '200':
-      description: All notifications marked as read
-      content:
-        application/json:
-          schema:
-            type: object
-            properties:
-              message:
-                type: string
-              updatedCount:
-                type: integer
-
-markByTypeAsRead:
-  tags:
-    - Notifications
-  summary: Mark Notifications by Type as Read
-  description: Mark all notifications of a specific type as read
-  security:
-    - BearerAuth: []
-  requestBody:
-    required: true
-    content:
-      application/json:
+          type: string
+        description: Filter by notification type
+      - name: read
+        in: query
+        required: false
         schema:
-          type: object
-          required:
-            - type
-          properties:
-            type:
-              type: string
-              description: Notification type to mark as read
-  responses:
-    '200':
-      description: Notifications marked as read
-      content:
-        application/json:
-          schema:
-            type: object
-            properties:
-              message:
-                type: string
-              updatedCount:
-                type: integer
-
-deleteNotification:
-  tags:
-    - Notifications
-  summary: Delete Notification
-  description: Delete a specific notification
-  security:
-    - BearerAuth: []
-  parameters:
-    - name: id
-      in: path
-      required: true
-      schema:
-        type: string
-        format: uuid
-      description: Notification ID
-  responses:
-    '200':
-      description: Notification deleted successfully
-      content:
-        application/json:
-          schema:
-            type: object
-            properties:
-              message:
-                type: string
-
-bulkDelete:
-  tags:
-    - Notifications
-  summary: Delete Multiple Notifications
-  description: Bulk delete notifications
-  security:
-    - BearerAuth: []
-  requestBody:
-    required: true
-    content:
-      application/json:
+          type: boolean
+        description: Filter by read status
+      - name: priority
+        in: query
+        required: false
         schema:
-          type: object
-          properties:
-            ids:
-              type: array
-              items:
-                type: string
-                format: uuid
-              description: Array of notification IDs to delete
-            type:
-              type: string
-              description: Filter by notification type
-            read:
-              type: boolean
-              description: Filter by read status
-  responses:
-    '200':
-      description: Notifications deleted successfully
-      content:
-        application/json:
-          schema:
-            type: object
-            properties:
-              message:
-                type: string
-              deletedCount:
-                type: integer
-
-sendSystemNotification:
-  tags:
-    - Notifications
-  summary: Send System Notification (Admin Only)
-  description: Send system notification to all users (admin only)
-  security:
-    - BearerAuth: []
-  requestBody:
-    required: true
-    content:
-      application/json:
+          type: string
+          enum: [low, normal, high, urgent]
+        description: Filter by priority level
+      - name: sort
+        in: query
+        required: false
         schema:
-          type: object
-          required:
-            - title
-            - message
-            - type
-          properties:
-            title:
-              type: string
-              description: Notification title
-            message:
-              type: string
-              description: Notification message
-            type:
-              type: string
-              description: Notification type
-            priority:
-              type: string
-              enum: [low, normal, high, urgent]
-              default: normal
-              description: Notification priority
-            data:
+          type: string
+          enum: [created_at, type, priority, is_read]
+          default: created_at
+        description: Sort field
+      - name: order
+        in: query
+        required: false
+        schema:
+          type: string
+          enum: [asc, desc]
+          default: desc
+        description: Sort order
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 1
+          minimum: 1
+        description: Page number
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 20
+          minimum: 1
+          maximum: 100
+        description: Items per page
+    responses:
+      '200':
+        description: Notifications retrieved successfully
+        content:
+          application/json:
+            schema:
               type: object
-              description: Additional data for the notification
-  responses:
-    '200':
-      description: System notification sent successfully
+              properties:
+                notifications:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      type:
+                        type: string
+                      title:
+                        type: string
+                      message:
+                        type: string
+                      data:
+                        type: object
+                        nullable: true
+                      isRead:
+                        type: boolean
+                      priority:
+                        type: string
+                        enum: [low, normal, high, urgent]
+                      createdAt:
+                        type: string
+                        format: date-time
+                      readAt:
+                        type: string
+                        format: date-time
+                        nullable: true
+                pagination:
+                  type: object
+                  properties:
+                    page:
+                      type: integer
+                    limit:
+                      type: integer
+                    total:
+                      type: integer
+                    totalPages:
+                      type: integer
+      '401':
+        $ref: '../responses/Unauthorized.yaml'
+
+# Get Notification Types
+/notifications/types:
+  get:
+    tags:
+      - Notifications
+    summary: Get Notification Types
+    description: Get available notification types and priorities
+    security:
+      - BearerAuth: []
+    responses:
+      '200':
+        description: Notification types retrieved successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                types:
+                  type: array
+                  items:
+                    type: string
+                priorities:
+                  type: array
+                  items:
+                    type: string
+                    enum: [low, normal, high, urgent]
+      '401':
+        $ref: '../responses/Unauthorized.yaml'
+
+# Get Unread Count
+/notifications/count:
+  get:
+    tags:
+      - Notifications
+    summary: Get Unread Count
+    description: Get unread notification count
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: type
+        in: query
+        required: false
+        schema:
+          type: string
+        description: Filter by notification type
+    responses:
+      '200':
+        description: Unread count retrieved successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                unreadCount:
+                  type: integer
+      '401':
+        $ref: '../responses/Unauthorized.yaml'
+
+# Get Notification Statistics
+/notifications/stats:
+  get:
+    tags:
+      - Notifications
+    summary: Get Notification Statistics
+    description: Get comprehensive notification statistics for the user
+    security:
+      - BearerAuth: []
+    responses:
+      '200':
+        description: Statistics retrieved successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                total:
+                  type: integer
+                unread:
+                  type: integer
+                read:
+                  type: integer
+                byPriority:
+                  type: object
+                  properties:
+                    urgent:
+                      type: integer
+                    high:
+                      type: integer
+                    normal:
+                      type: integer
+                    low:
+                      type: integer
+                byType:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      type:
+                        type: string
+                      count:
+                        type: integer
+      '401':
+        $ref: '../responses/Unauthorized.yaml'
+
+# Get Notification Preferences
+/notifications/preferences:
+  get:
+    tags:
+      - Notifications
+    summary: Get Notification Preferences
+    description: Get user notification preferences
+    security:
+      - BearerAuth: []
+    responses:
+      '200':
+        description: Preferences retrieved successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                emailNotifications:
+                  type: boolean
+                pushNotifications:
+                  type: boolean
+                courseNotifications:
+                  type: boolean
+                classNotifications:
+                  type: boolean
+                discussionNotifications:
+                  type: boolean
+                testNotifications:
+                  type: boolean
+                certificationNotifications:
+                  type: boolean
+                paymentNotifications:
+                  type: boolean
+                systemNotifications:
+                  type: boolean
+      '401':
+        $ref: '../responses/Unauthorized.yaml'
+
+  put:
+    tags:
+      - Notifications
+    summary: Update Notification Preferences
+    description: Update user notification preferences
+    security:
+      - BearerAuth: []
+    requestBody:
+      required: true
       content:
         application/json:
           schema:
             type: object
             properties:
-              message:
-                type: string
-              notificationCount:
-                type: integer
+              emailNotifications:
+                type: boolean
+                description: Enable/disable email notifications
+              pushNotifications:
+                type: boolean
+                description: Enable/disable push notifications
+              courseNotifications:
+                type: boolean
+                description: Enable/disable course notifications
+              classNotifications:
+                type: boolean
+                description: Enable/disable class notifications
+              discussionNotifications:
+                type: boolean
+                description: Enable/disable discussion notifications
+              testNotifications:
+                type: boolean
+                description: Enable/disable test notifications
+              certificationNotifications:
+                type: boolean
+                description: Enable/disable certification notifications
+              paymentNotifications:
+                type: boolean
+                description: Enable/disable payment notifications
+              systemNotifications:
+                type: boolean
+                description: Enable/disable system notifications
+    responses:
+      '200':
+        description: Preferences updated successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+                  example: "Notification preferences updated successfully"
+      '400':
+        $ref: '../responses/BadRequest.yaml'
+      '401':
+        $ref: '../responses/Unauthorized.yaml'
+
+# Mark Notification as Read
+/notifications/{id}/read:
+  patch:
+    tags:
+      - Notifications
+    summary: Mark Notification as Read
+    description: Mark a specific notification as read
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: Notification ID
+    responses:
+      '200':
+        description: Notification marked as read
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+                  example: "Notification marked as read"
+      '401':
+        $ref: '../responses/Unauthorized.yaml'
+      '403':
+        $ref: '../responses/Forbidden.yaml'
+      '404':
+        $ref: '../responses/NotFound.yaml'
+
+# Mark All Notifications as Read
+/notifications/read-all:
+  patch:
+    tags:
+      - Notifications
+    summary: Mark All Notifications as Read
+    description: Mark all notifications as read
+    security:
+      - BearerAuth: []
+    responses:
+      '200':
+        description: All notifications marked as read
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+                  example: "All notifications marked as read"
+                updatedCount:
+                  type: integer
+      '401':
+        $ref: '../responses/Unauthorized.yaml'
+
+# Mark Notifications by Type as Read
+/notifications/read-by-type:
+  patch:
+    tags:
+      - Notifications
+    summary: Mark Notifications by Type as Read
+    description: Mark all notifications of a specific type as read
+    security:
+      - BearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - type
+            properties:
               type:
                 type: string
-              title:
-                type: string
+                description: Notification type to mark as read
+    responses:
+      '200':
+        description: Notifications marked as read
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+                  example: "All course notifications marked as read"
+                updatedCount:
+                  type: integer
+      '400':
+        $ref: '../responses/BadRequest.yaml'
+      '401':
+        $ref: '../responses/Unauthorized.yaml'
 
-cleanup:
-  tags:
-    - Notifications
-  summary: Cleanup Old Notifications (Admin Only)
-  description: Clean up old notifications (admin only)
-  security:
-    - BearerAuth: []
-  parameters:
-    - name: daysOld
-      in: query
-      required: false
-      schema:
-        type: integer
-        default: 90
-      description: Days old to clean up
-  responses:
-    '200':
-      description: Cleanup completed successfully
+# Delete Notification
+/notifications/{id}:
+  delete:
+    tags:
+      - Notifications
+    summary: Delete Notification
+    description: Delete a specific notification
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: Notification ID
+    responses:
+      '200':
+        description: Notification deleted successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+                  example: "Notification deleted"
+      '401':
+        $ref: '../responses/Unauthorized.yaml'
+      '403':
+        $ref: '../responses/Forbidden.yaml'
+      '404':
+        $ref: '../responses/NotFound.yaml'
+
+# Delete Multiple Notifications
+/notifications/bulk:
+  delete:
+    tags:
+      - Notifications
+    summary: Delete Multiple Notifications
+    description: Bulk delete notifications
+    security:
+      - BearerAuth: []
+    requestBody:
+      required: true
       content:
         application/json:
           schema:
             type: object
             properties:
+              ids:
+                type: array
+                items:
+                  type: string
+                  format: uuid
+                description: Array of notification IDs to delete
+              type:
+                type: string
+                description: Filter by notification type
+              read:
+                type: boolean
+                description: Filter by read status
+    responses:
+      '200':
+        description: Notifications deleted successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+                  example: "Notifications deleted successfully"
+                deletedCount:
+                  type: integer
+      '400':
+        $ref: '../responses/BadRequest.yaml'
+      '401':
+        $ref: '../responses/Unauthorized.yaml'
+
+# Send System Notification (Admin Only)
+/notifications/system:
+  post:
+    tags:
+      - Notifications
+    summary: Send System Notification (Admin Only)
+    description: Send system notification to all users (admin only)
+    security:
+      - BearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - title
+              - message
+              - type
+            properties:
+              title:
+                type: string
+                description: Notification title
               message:
                 type: string
-              deletedCount:
-                type: integer
-              daysOld:
-                type: integer 
+                description: Notification message
+              type:
+                type: string
+                description: Notification type
+              priority:
+                type: string
+                enum: [low, normal, high, urgent]
+                default: normal
+                description: Notification priority
+              data:
+                type: object
+                description: Additional data for the notification
+    responses:
+      '200':
+        description: System notification sent successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+                  example: "System notification sent to 150 users"
+                notificationCount:
+                  type: integer
+                type:
+                  type: string
+                title:
+                  type: string
+      '400':
+        $ref: '../responses/BadRequest.yaml'
+      '401':
+        $ref: '../responses/Unauthorized.yaml'
+      '403':
+        $ref: '../responses/Forbidden.yaml'
+      '404':
+        $ref: '../responses/NotFound.yaml'
+
+# Cleanup Old Notifications (Admin Only)
+/notifications/cleanup:
+  delete:
+    tags:
+      - Notifications
+    summary: Cleanup Old Notifications (Admin Only)
+    description: Clean up old notifications (admin only)
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: daysOld
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 90
+          minimum: 1
+        description: Days old to clean up
+    responses:
+      '200':
+        description: Cleanup completed successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+                  example: "Cleaned up 45 old notifications"
+                deletedCount:
+                  type: integer
+                daysOld:
+                  type: integer
+      '401':
+        $ref: '../responses/Unauthorized.yaml'
+      '403':
+        $ref: '../responses/Forbidden.yaml' 

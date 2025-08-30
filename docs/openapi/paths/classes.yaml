@@ -6,9 +6,64 @@
     tags:
       - Classes
     summary: Get upcoming classes with filters and pagination
-    description: Retrieve a list of upcoming classes
-    security:
-      - BearerAuth: []
+    description: Retrieve a list of upcoming classes (public endpoint)
+    parameters:
+      - name: topic
+        in: query
+        description: Filter by topic
+        schema:
+          type: string
+      - name: instructor
+        in: query
+        description: Filter by instructor name
+        schema:
+          type: string
+      - name: type
+        in: query
+        description: Filter by type
+        schema:
+          type: string
+          enum: [online, hybrid]
+      - name: start_date
+        in: query
+        description: Filter by start date
+        schema:
+          type: string
+          format: date
+      - name: end_date
+        in: query
+        description: Filter by end date
+        schema:
+          type: string
+          format: date
+      - name: sort
+        in: query
+        description: Sort field
+        schema:
+          type: string
+          enum: [start_date, title, price, available_slots]
+          default: start_date
+      - name: order
+        in: query
+        description: Sort order
+        schema:
+          type: string
+          enum: [asc, desc]
+          default: asc
+      - name: page
+        in: query
+        description: Page number
+        schema:
+          type: integer
+          default: 1
+          minimum: 1
+      - name: limit
+        in: query
+        description: Items per page
+        schema:
+          type: integer
+          default: 12
+          minimum: 1
     responses:
       '200':
         description: Upcoming classes retrieved successfully
@@ -20,114 +75,331 @@
                 classes:
                   type: array
                   items:
-                    $ref: '../schemas/Class.yaml'
-      '401':
-        $ref: '../responses/Unauthorized.yaml'
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      title:
+                        type: string
+                      description:
+                        type: string
+                      topic:
+                        type: string
+                      type:
+                        type: string
+                      price:
+                        type: number
+                      startDate:
+                        type: string
+                        format: date-time
+                      endDate:
+                        type: string
+                        format: date-time
+                      duration:
+                        type: string
+                      location:
+                        type: string
+                      availableSlots:
+                        type: integer
+                      totalSlots:
+                        type: integer
+                      createdAt:
+                        type: string
+                        format: date-time
+                      instructor:
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                            format: uuid
+                          firstName:
+                            type: string
+                          lastName:
+                            type: string
+                          avatarUrl:
+                            type: string
+                pagination:
+                  type: object
+                  properties:
+                    page:
+                      type: integer
+                    limit:
+                      type: integer
+                    total:
+                      type: integer
+                    totalPages:
+                      type: integer
+
+# Get Class Topics
+/topics:
+  get:
+    tags:
+      - Classes
+    summary: Get distinct topics for filters
+    description: Retrieve all distinct topics available for class filtering (public endpoint)
+    responses:
+      '200':
+        description: Class topics retrieved successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                topics:
+                  type: array
+                  items:
+                    type: string
+                    description: Topic name
 
 # Get Classes
 get:
-  tags:
-    - Classes
-  summary: List classes with filters and pagination
-  description: Retrieve a list of classes with optional filtering and sorting
-  security:
-    - BearerAuth: []
-  parameters:
-    - name: topic
-      in: query
-      description: Filter by topic
-      schema:
-        type: string
-    - name: type
-      in: query
-      description: Filter by type
-      schema:
-        type: string
-        enum: [online, offline]
-    - name: instructorId
-      in: query
-      description: Filter by instructor ID
-      schema:
-        type: string
-        format: uuid
-    - name: priceMin
-      in: query
-      description: Minimum price filter
-      schema:
-        type: number
-        minimum: 0
-    - name: priceMax
-      in: query
-      description: Maximum price filter
-      schema:
-        type: number
-        minimum: 0
-    - name: isPublished
-      in: query
-      description: Filter by publication status
-      schema:
-        type: boolean
-    - name: search
-      in: query
-      description: Search in title and description
-      schema:
-        type: string
-    - name: sort
-      in: query
-      description: Sort field
-      schema:
-        type: string
-        enum: [start_date, title, price, available_slots, created_at]
-        default: start_date
-    - name: order
-      in: query
-      description: Sort order
-      schema:
-        type: string
-        enum: [asc, desc]
-        default: asc
-    - name: limit
-      in: query
-      description: Items per page
-      schema:
-        type: integer
-        default: 20
-        minimum: 1
-        maximum: 100
-    - name: offset
-      in: query
-      description: Number to skip
-      schema:
-        type: integer
-        default: 0
-        minimum: 0
-  responses:
-    '200':
-      description: List of classes retrieved successfully
+  get:
+    tags:
+      - Classes
+    summary: List classes with filters and pagination
+    description: Retrieve a list of classes with optional filtering and sorting
+    parameters:
+      - name: topic
+        in: query
+        description: Filter by topic
+        schema:
+          type: string
+      - name: type
+        in: query
+        description: Filter by type
+        schema:
+          type: string
+          enum: [online, hybrid]
+      - name: instructorId
+        in: query
+        description: Filter by instructor ID
+        schema:
+          type: string
+          format: uuid
+      - name: priceMin
+        in: query
+        description: Minimum price filter
+        schema:
+          type: number
+          minimum: 0
+      - name: priceMax
+        in: query
+        description: Maximum price filter
+        schema:
+          type: number
+          minimum: 0
+      - name: isPublished
+        in: query
+        description: Filter by publication status
+        schema:
+          type: boolean
+      - name: search
+        in: query
+        description: Search in title and description
+        schema:
+          type: string
+      - name: sort
+        in: query
+        description: Sort field
+        schema:
+          type: string
+          enum: [start_date, title, price, available_slots, created_at]
+          default: start_date
+      - name: order
+        in: query
+        description: Sort order
+        schema:
+          type: string
+          enum: [asc, desc]
+          default: asc
+      - name: limit
+        in: query
+        description: Items per page
+        schema:
+          type: integer
+          default: 20
+          minimum: 1
+          maximum: 100
+      - name: offset
+        in: query
+        description: Number to skip
+        schema:
+          type: integer
+          default: 0
+          minimum: 0
+    responses:
+      '200':
+        description: List of classes retrieved successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                classes:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      title:
+                        type: string
+                      description:
+                        type: string
+                      topic:
+                        type: string
+                      type:
+                        type: string
+                      startDate:
+                        type: string
+                        format: date-time
+                      endDate:
+                        type: string
+                        format: date-time
+                      duration:
+                        type: string
+                      price:
+                        type: number
+                      instructorId:
+                        type: string
+                        format: uuid
+                      instructorName:
+                        type: string
+                      availableSlots:
+                        type: integer
+                      totalSlots:
+                        type: integer
+                      location:
+                        type: string
+                      isPublished:
+                        type: boolean
+                      createdAt:
+                        type: string
+                        format: date-time
+                      updatedAt:
+                        type: string
+                        format: date-time
+
+# Create New Class
+post:
+  post:
+    tags:
+      - Classes
+    summary: Create new class
+    description: Create a new class (instructor only)
+    security:
+      - BearerAuth: []
+    requestBody:
+      required: true
       content:
         application/json:
           schema:
             type: object
+            required:
+              - title
+              - description
+              - topic
+              - type
+              - startDate
+              - duration
+              - price
+              - availableSlots
+              - totalSlots
             properties:
-              classes:
-                type: array
-                items:
-                  $ref: '../schemas/Class.yaml'
-              pagination:
-                type: object
-                properties:
-                  page:
-                    type: integer
-                  limit:
-                    type: integer
-                  total:
-                    type: integer
-                  totalPages:
-                    type: integer
+              title:
+                type: string
+                minLength: 1
+                description: Class title
+              description:
+                type: string
+                minLength: 10
+                description: Class description
+              topic:
+                type: string
+                minLength: 1
+                description: Class topic
+              type:
+                type: string
+                enum: [online, hybrid]
+                description: Class type
+              startDate:
+                type: string
+                format: date-time
+                description: Class start date
+              endDate:
+                type: string
+                format: date-time
+                description: Optional end date
+              duration:
+                type: string
+                minLength: 1
+                description: Class duration
+              price:
+                type: number
+                minimum: 0
+                description: Class price
+              availableSlots:
+                type: integer
+                minimum: 1
+                description: Available slots
+              totalSlots:
+                type: integer
+                minimum: 1
+                description: Total slots
+              location:
+                type: string
+                description: Class location
+    responses:
+      '201':
+        description: Class created successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                id:
+                  type: string
+                  format: uuid
+                title:
+                  type: string
+                description:
+                  type: string
+                topic:
+                  type: string
+                type:
+                  type: string
+                startDate:
+                  type: string
+                  format: date-time
+                endDate:
+                  type: string
+                  format: date-time
+                duration:
+                  type: string
+                price:
+                  type: number
+                instructorId:
+                  type: string
+                  format: uuid
+                availableSlots:
+                  type: integer
+                totalSlots:
+                  type: integer
+                location:
+                  type: string
+                isPublished:
+                  type: boolean
+                createdAt:
+                  type: string
+                  format: date-time
       '400':
         $ref: '../responses/BadRequest.yaml'
       '401':
         $ref: '../responses/Unauthorized.yaml'
+      '403':
+        $ref: '../responses/Forbidden.yaml'
 
 # Get Class by ID
 /{id}:
@@ -136,8 +408,6 @@ get:
       - Classes
     summary: Get class details including schedule, duration, location, instructor, availableSlots/totalSlots, courses
     description: Retrieve detailed information about a specific class
-    security:
-      - BearerAuth: []
     parameters:
       - name: id
         in: path
@@ -152,18 +422,77 @@ get:
         content:
           application/json:
             schema:
-              $ref: '../schemas/Class.yaml'
-      '401':
-        $ref: '../responses/Unauthorized.yaml'
+              type: object
+              properties:
+                id:
+                  type: string
+                  format: uuid
+                title:
+                  type: string
+                description:
+                  type: string
+                topic:
+                  type: string
+                type:
+                  type: string
+                startDate:
+                  type: string
+                  format: date-time
+                endDate:
+                  type: string
+                  format: date-time
+                duration:
+                  type: string
+                price:
+                  type: number
+                instructorId:
+                  type: string
+                  format: uuid
+                instructorName:
+                  type: string
+                instructorAvatar:
+                  type: string
+                instructorBio:
+                  type: string
+                availableSlots:
+                  type: integer
+                totalSlots:
+                  type: integer
+                location:
+                  type: string
+                isPublished:
+                  type: boolean
+                createdAt:
+                  type: string
+                  format: date-time
+                updatedAt:
+                  type: string
+                  format: date-time
+                courses:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      title:
+                        type: string
+                      topic:
+                        type: string
+                      duration:
+                        type: string
+                      orderIndex:
+                        type: integer
       '404':
         $ref: '../responses/NotFound.yaml'
 
-  # Enroll in Class
-  post:
+  # Update Class
+  put:
     tags:
       - Classes
-    summary: Enroll in a class
-    description: Enroll in a class with optional sponsorship code
+    summary: Update class
+    description: Update an existing class (owner or admin only)
     security:
       - BearerAuth: []
     parameters:
@@ -175,18 +504,126 @@ get:
           type: string
           format: uuid
     requestBody:
+      required: true
       content:
         application/json:
           schema:
             type: object
             properties:
-              sponsorshipId:
+              title:
                 type: string
-                format: uuid
-                description: Sponsorship ID for discounted enrollment
+                minLength: 1
+                description: Class title
+              description:
+                type: string
+                minLength: 10
+                description: Class description
+              topic:
+                type: string
+                minLength: 1
+                description: Class topic
+              type:
+                type: string
+                enum: [online, hybrid]
+                description: Class type
+              startDate:
+                type: string
+                format: date-time
+                description: Class start date
+              endDate:
+                type: string
+                format: date-time
+                description: Optional end date
+              duration:
+                type: string
+                minLength: 1
+                description: Class duration
+              price:
+                type: number
+                minimum: 0
+                description: Class price
+              availableSlots:
+                type: integer
+                minimum: 1
+                description: Available slots
+              totalSlots:
+                type: integer
+                minimum: 1
+                description: Total slots
+              location:
+                type: string
+                description: Class location
+              isPublished:
+                type: boolean
+                description: Publication status
     responses:
-      '201':
-        description: Successfully enrolled in class
+      '200':
+        description: Class updated successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                id:
+                  type: string
+                  format: uuid
+                title:
+                  type: string
+                description:
+                  type: string
+                topic:
+                  type: string
+                type:
+                  type: string
+                startDate:
+                  type: string
+                  format: date-time
+                endDate:
+                  type: string
+                  format: date-time
+                duration:
+                  type: string
+                price:
+                  type: number
+                availableSlots:
+                  type: integer
+                totalSlots:
+                  type: integer
+                location:
+                  type: string
+                isPublished:
+                  type: boolean
+                updatedAt:
+                  type: string
+                  format: date-time
+      '400':
+        $ref: '../responses/BadRequest.yaml'
+      '401':
+        $ref: '../responses/Unauthorized.yaml'
+      '403':
+        $ref: '../responses/Forbidden.yaml'
+      '404':
+        $ref: '../responses/NotFound.yaml'
+
+  # Delete Class
+  delete:
+    tags:
+      - Classes
+    summary: Delete class
+    description: Delete a class (owner or admin only)
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Class ID
+        schema:
+          type: string
+          format: uuid
+    responses:
+      '200':
+        description: Class deleted successfully
         content:
           application/json:
             schema:
@@ -194,63 +631,159 @@ get:
               properties:
                 message:
                   type: string
-                  example: "Successfully enrolled in class"
-                enrollment:
-                  type: object
-                  properties:
-                    id:
-                      type: string
-                      format: uuid
-                    classId:
-                      type: string
-                      format: uuid
-                    userId:
-                      type: string
-                      format: uuid
-                    enrolledAt:
-                      type: string
-                      format: date-time
-                    status:
-                      type: string
-                      example: "enrolled"
-                    sponsorshipId:
-                      type: string
-                      format: uuid
-                      nullable: true
+                  example: "Class deleted successfully"
       '400':
-        $ref: '../responses/BadRequest.yaml'
-      '401':
-        $ref: '../responses/Unauthorized.yaml'
-      '404':
-        $ref: '../responses/NotFound.yaml'
-
-# Get Class Topics
-/topics:
-  get:
-    tags:
-      - Classes
-    summary: Get distinct topics for filters
-    description: Retrieve all distinct topics available for class filtering
-    security:
-      - BearerAuth: []
-    responses:
-      '200':
-        description: Class topics retrieved successfully
+        description: Cannot delete class with enrollments
         content:
           application/json:
             schema:
               type: object
               properties:
-                topics:
-                  type: array
-                  items:
-                    type: object
-                    properties:
-                      topic:
-                        type: string
-                        description: Topic name
-                      count:
-                        type: integer
-                        description: Number of classes in this topic
+                error:
+                  type: string
+                  example: "Class Has Enrollments"
+                message:
+                  type: string
+                  example: "Cannot delete class that has enrollments"
       '401':
-        $ref: '../responses/Unauthorized.yaml' 
+        $ref: '../responses/Unauthorized.yaml'
+      '403':
+        $ref: '../responses/Forbidden.yaml'
+      '404':
+        $ref: '../responses/NotFound.yaml'
+
+  # Get Class Enrollments
+  /enrollments:
+    get:
+      tags:
+        - Classes
+      summary: Get class enrollments
+      description: Get all enrollments for a specific class (owner or admin only)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Class ID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Class enrollments retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  enrollments:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                        userId:
+                          type: string
+                          format: uuid
+                        userName:
+                          type: string
+                        userEmail:
+                          type: string
+                        userAvatar:
+                          type: string
+                        progress:
+                          type: integer
+                        status:
+                          type: string
+                        enrolledAt:
+                          type: string
+                          format: date-time
+                        completedAt:
+                          type: string
+                          format: date-time
+        '401':
+          $ref: '../responses/Unauthorized.yaml'
+        '403':
+          $ref: '../responses/Forbidden.yaml'
+        '404':
+          $ref: '../responses/NotFound.yaml'
+
+  # Enroll in Class
+  /enroll:
+    post:
+      tags:
+        - Classes
+      summary: Enroll in a class
+      description: Enroll in a class with optional sponsorship code
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Class ID
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                sponsorshipId:
+                  type: string
+                  format: uuid
+                  description: Sponsorship ID for discounted enrollment
+      responses:
+        '201':
+          description: Successfully enrolled in class
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  userId:
+                    type: string
+                    format: uuid
+                  classId:
+                    type: string
+                    format: uuid
+                  enrollmentType:
+                    type: string
+                    example: "class"
+                  progress:
+                    type: integer
+                    example: 0
+                  status:
+                    type: string
+                    example: "enrolled"
+                  sponsorshipId:
+                    type: string
+                    format: uuid
+                    nullable: true
+                  enrolledAt:
+                    type: string
+                    format: date-time
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    enum: [Class Full, Already Enrolled, Invalid Sponsorship, Invalid Sponsorship Mapping, Sponsorship Not Used]
+                  message:
+                    type: string
+        '401':
+          $ref: '../responses/Unauthorized.yaml'
+        '404':
+          $ref: '../responses/NotFound.yaml' 

@@ -1,199 +1,203 @@
 # Discussions Endpoints
 
-# Get Discussions
-get:
-  tags:
-    - Discussions
-  summary: List discussions with filters and pagination
-  description: Retrieve a list of discussions with optional filtering by category, course, lesson, class, and tags
-  security:
-    - BearerAuth: []
-  parameters:
-    - name: category
-      in: query
-      description: Filter by discussion category
-      schema:
-        type: string
-        enum: [general, course, lesson, class, question, help, feedback]
-    - name: courseId
-      in: query
-      description: Filter by course ID for course-specific discussions
-      schema:
-        type: string
-        format: uuid
-    - name: lessonId
-      in: query
-      description: Filter by lesson ID for lesson-specific discussions
-      schema:
-        type: string
-        format: uuid
-    - name: classId
-      in: query
-      description: Filter by class ID for class-specific discussions
-      schema:
-        type: string
-        format: uuid
-    - name: search
-      in: query
-      description: Search in title and content
-      schema:
-        type: string
-    - name: tags
-      in: query
-      description: Filter by tags (comma-separated)
-      schema:
-        type: string
-    - name: sort
-      in: query
-      description: Sort field
-      schema:
-        type: string
-        enum: [created_at, title, last_activity, reply_count, likes_count]
-        default: created_at
-    - name: order
-      in: query
-      description: Sort order
-      schema:
-        type: string
-        enum: [asc, desc]
-        default: desc
-    - name: limit
-      in: query
-      description: Items per page
-      schema:
-        type: integer
-        default: 20
-        minimum: 1
-        maximum: 100
-    - name: offset
-      in: query
-      description: Number to skip
-      schema:
-        type: integer
-        default: 0
-        minimum: 0
-  responses:
-    '200':
-      description: List of discussions retrieved successfully
-      content:
-        application/json:
-          schema:
-            type: object
-            properties:
-              discussions:
-                type: array
-                items:
-                  $ref: '../schemas/Discussion.yaml'
-              pagination:
-                $ref: '../schemas/Pagination.yaml'
-    '400':
-      $ref: '../responses/BadRequest.yaml'
-    '401':
-      $ref: '../responses/Unauthorized.yaml'
-
-# Create Discussion
-post:
-  tags:
-    - Discussions
-  summary: Create a new discussion
-  description: Create a new discussion with optional course, lesson, or class association
-  security:
-    - BearerAuth: []
-  requestBody:
-    required: true
-    content:
-      application/json:
-        schema:
-          type: object
-          required:
-            - title
-            - content
-            - category
-          properties:
-            title:
-              type: string
-              description: Discussion title
-            content:
-              type: string
-              description: Discussion content
-            category:
-              type: string
-              enum: [general, course, lesson, class, question, help, feedback]
-              description: Discussion category
-            courseId:
-              type: string
-              format: uuid
-              description: Course ID for course-specific discussions
-            lessonId:
-              type: string
-              format: uuid
-              description: Lesson ID for lesson-specific discussions
-            classId:
-              type: string
-              format: uuid
-              description: Class ID for class-specific discussions
-            tags:
-              type: array
-              items:
-                type: string
-              description: Array of tags for better organization
-  responses:
-    '201':
-      description: Discussion created successfully
-      content:
-        application/json:
-          schema:
-            $ref: '../schemas/Discussion.yaml'
-    '400':
-      $ref: '../responses/BadRequest.yaml'
-    '401':
-      $ref: '../responses/Unauthorized.yaml'
-
-# Get Discussion by ID
-/{id}:
+# Get Recent Discussions (Public)
+/discussions/recent:
   get:
     tags:
       - Discussions
-    summary: Get discussion details with replies and likes count
-    description: Retrieve detailed information about a specific discussion
-    security:
-      - BearerAuth: []
+    summary: Get recent discussions (public endpoint)
+    description: Retrieve recent discussions with optional filtering by course, class, author, and sorting
     parameters:
-      - name: id
-        in: path
-        required: true
-        description: Discussion ID
+      - name: course_id
+        in: query
+        description: Filter by course ID
         schema:
           type: string
           format: uuid
+      - name: class_id
+        in: query
+        description: Filter by class ID
+        schema:
+          type: string
+          format: uuid
+      - name: author
+        in: query
+        description: Filter by author name (partial match)
+        schema:
+          type: string
+      - name: sort
+        in: query
+        description: Sort field
+        schema:
+          type: string
+          enum: [created_at, title, reply_count, view_count]
+          default: created_at
+      - name: order
+        in: query
+        description: Sort order
+        schema:
+          type: string
+          enum: [asc, desc]
+          default: desc
+      - name: page
+        in: query
+        description: Page number
+        schema:
+          type: integer
+          default: 1
+          minimum: 1
+      - name: limit
+        in: query
+        description: Items per page
+        schema:
+          type: integer
+          default: 20
+          minimum: 1
+          maximum: 100
     responses:
       '200':
-        description: Discussion details retrieved successfully
+        description: Recent discussions retrieved successfully
         content:
           application/json:
             schema:
-              $ref: '../schemas/Discussion.yaml'
-      '401':
-        $ref: '../responses/Unauthorized.yaml'
-      '404':
-        $ref: '../responses/NotFound.yaml'
+              type: object
+              properties:
+                discussions:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      title:
+                        type: string
+                      content:
+                        type: string
+                      createdAt:
+                        type: string
+                        format: date-time
+                      updatedAt:
+                        type: string
+                        format: date-time
+                      replyCount:
+                        type: integer
+                      viewCount:
+                        type: integer
+                      isPinned:
+                        type: boolean
+                      isLocked:
+                        type: boolean
+                      author:
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                            format: uuid
+                          firstName:
+                            type: string
+                          lastName:
+                            type: string
+                          avatarUrl:
+                            type: string
+                      course:
+                        type: object
+                        nullable: true
+                        properties:
+                          id:
+                            type: string
+                            format: uuid
+                          title:
+                            type: string
+                      class:
+                        type: object
+                        nullable: true
+                        properties:
+                          id:
+                            type: string
+                            format: uuid
+                          title:
+                            type: string
+                pagination:
+                  type: object
+                  properties:
+                    page:
+                      type: integer
+                    limit:
+                      type: integer
+                    total:
+                      type: integer
+                    totalPages:
+                      type: integer
 
-  # Get Discussion Replies
+# Get Discussions with Filters
+/discussions:
   get:
     tags:
       - Discussions
-    summary: Get replies for a discussion
-    description: Retrieve all replies for a specific discussion
-    security:
-      - BearerAuth: []
+    summary: Get discussions with filters and pagination
+    description: Retrieve a list of discussions with optional filtering by category, course, class, and tags
     parameters:
-      - name: id
-        in: path
-        required: true
-        description: Discussion ID
+      - name: category
+        in: query
+        description: Filter by discussion category
+        schema:
+          type: string
+          enum: [general, course, lesson, class, question, help, feedback]
+      - name: type
+        in: query
+        description: Alias for category parameter
+        schema:
+          type: string
+          enum: [general, course, lesson, class, question, help, feedback]
+      - name: courseId
+        in: query
+        description: Filter by course ID for course-specific discussions
         schema:
           type: string
           format: uuid
+      - name: lessonId
+        in: query
+        description: Filter by lesson ID for lesson-specific discussions
+        schema:
+          type: string
+          format: uuid
+      - name: classId
+        in: query
+        description: Filter by class ID for class-specific discussions
+        schema:
+          type: string
+          format: uuid
+      - name: authorId
+        in: query
+        description: Filter by author ID
+        schema:
+          type: string
+          format: uuid
+      - name: search
+        in: query
+        description: Search in title and content
+        schema:
+          type: string
+      - name: tags
+        in: query
+        description: Filter by tags (comma-separated)
+        schema:
+          type: string
+      - name: sort
+        in: query
+        description: Sort field
+        schema:
+          type: string
+          enum: [created_at, title, reply_count, view_count, last_activity_at, likes_count]
+          default: last_activity_at
+      - name: order
+        in: query
+        description: Sort order
+        schema:
+          type: string
+          enum: [asc, desc]
+          default: desc
       - name: limit
         in: query
         description: Items per page
@@ -211,39 +215,78 @@ post:
           minimum: 0
     responses:
       '200':
-        description: Discussion replies retrieved successfully
+        description: List of discussions retrieved successfully
         content:
           application/json:
             schema:
               type: object
               properties:
-                replies:
+                discussions:
                   type: array
                   items:
-                    $ref: '../schemas/DiscussionReply.yaml'
-                pagination:
-                  $ref: '../schemas/Pagination.yaml'
-      '401':
-        $ref: '../responses/Unauthorized.yaml'
-      '404':
-        $ref: '../responses/NotFound.yaml'
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      title:
+                        type: string
+                      content:
+                        type: string
+                      category:
+                        type: string
+                      authorId:
+                        type: string
+                        format: uuid
+                      authorName:
+                        type: string
+                      authorAvatar:
+                        type: string
+                      courseId:
+                        type: string
+                        format: uuid
+                        nullable: true
+                      courseTitle:
+                        type: string
+                        nullable: true
+                      lessonId:
+                        type: string
+                        format: uuid
+                        nullable: true
+                      lessonTitle:
+                        type: string
+                        nullable: true
+                      classId:
+                        type: string
+                        format: uuid
+                        nullable: true
+                      classTitle:
+                        type: string
+                        nullable: true
+                      tags:
+                        type: array
+                        items:
+                          type: string
+                      isPinned:
+                        type: boolean
+                      replyCount:
+                        type: integer
+                      likesCount:
+                        type: integer
+                      lastActivityAt:
+                        type: string
+                        format: date-time
+                      createdAt:
+                        type: string
+                        format: date-time
 
-  # Add Reply
   post:
     tags:
       - Discussions
-    summary: Add a reply to a discussion
-    description: Add a new reply to an existing discussion
+    summary: Create a new discussion
+    description: Create a new discussion with optional course or class association
     security:
       - BearerAuth: []
-    parameters:
-      - name: id
-        in: path
-        required: true
-        description: Discussion ID
-        schema:
-          type: string
-          format: uuid
     requestBody:
       required: true
       content:
@@ -251,18 +294,82 @@ post:
           schema:
             type: object
             required:
+              - title
               - content
+              - category
             properties:
+              title:
+                type: string
+                minLength: 1
+                description: Discussion title
               content:
                 type: string
-                description: Reply content
+                minLength: 10
+                description: Discussion content
+              category:
+                type: string
+                enum: [general, course, lesson, class, question, help, feedback]
+                description: Discussion category
+              courseId:
+                type: string
+                format: uuid
+                description: Course ID for course-specific discussions
+              lessonId:
+                type: string
+                format: uuid
+                description: Lesson ID for lesson-specific discussions
+              classId:
+                type: string
+                format: uuid
+                description: Class ID for class-specific discussions
+              tags:
+                type: array
+                items:
+                  type: string
+                description: Array of tags for better organization
     responses:
       '201':
-        description: Reply added successfully
+        description: Discussion created successfully
         content:
           application/json:
             schema:
-              $ref: '../schemas/DiscussionReply.yaml'
+              type: object
+              properties:
+                id:
+                  type: string
+                  format: uuid
+                title:
+                  type: string
+                content:
+                  type: string
+                category:
+                  type: string
+                authorId:
+                  type: string
+                  format: uuid
+                courseId:
+                  type: string
+                  format: uuid
+                  nullable: true
+                lessonId:
+                  type: string
+                  format: uuid
+                  nullable: true
+                classId:
+                  type: string
+                  format: uuid
+                  nullable: true
+                tags:
+                  type: array
+                  items:
+                    type: string
+                isPinned:
+                  type: boolean
+                replyCount:
+                  type: integer
+                createdAt:
+                  type: string
+                  format: date-time
       '400':
         $ref: '../responses/BadRequest.yaml'
       '401':
@@ -270,260 +377,20 @@ post:
       '404':
         $ref: '../responses/NotFound.yaml'
 
-  # Like Discussion
-  post:
-    tags:
-      - Discussions
-    summary: Like a discussion
-    description: Like a discussion (toggle like status)
-    security:
-      - BearerAuth: []
-    parameters:
-      - name: id
-        in: path
-        required: true
-        description: Discussion ID
-        schema:
-          type: string
-          format: uuid
-    responses:
-      '200':
-        description: Discussion liked successfully
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                message:
-                  type: string
-                  example: "Discussion liked successfully"
-      '401':
-        $ref: '../responses/Unauthorized.yaml'
-      '404':
-        $ref: '../responses/NotFound.yaml'
-
-  # Unlike Discussion
-  delete:
-    tags:
-      - Discussions
-    summary: Unlike a discussion
-    description: Remove like from a discussion
-    security:
-      - BearerAuth: []
-    parameters:
-      - name: id
-        in: path
-        required: true
-        description: Discussion ID
-        schema:
-          type: string
-          format: uuid
-    responses:
-      '200':
-        description: Discussion unliked successfully
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                message:
-                  type: string
-                  example: "Discussion unliked successfully"
-      '401':
-        $ref: '../responses/Unauthorized.yaml'
-      '404':
-        $ref: '../responses/NotFound.yaml'
-
-# Get Course Discussions
-/courses/{courseId}/discussions:
-  get:
-    tags:
-      - Discussions
-    summary: Get all discussions for a specific course
-    description: Retrieve all discussions related to a specific course
-    security:
-      - BearerAuth: []
-    parameters:
-      - name: courseId
-        in: path
-        required: true
-        description: Course ID
-        schema:
-          type: string
-          format: uuid
-      - name: category
-        in: query
-        description: Filter by category
-        schema:
-          type: string
-          enum: [general, course, lesson, class, question, help, feedback]
-      - name: lessonId
-        in: query
-        description: Filter by specific lesson
-        schema:
-          type: string
-          format: uuid
-      - name: search
-        in: query
-        description: Search in title and content
-        schema:
-          type: string
-      - name: sort
-        in: query
-        description: Sort field
-        schema:
-          type: string
-          enum: [created_at, title, last_activity, reply_count, likes_count]
-          default: created_at
-      - name: order
-        in: query
-        description: Sort order
-        schema:
-          type: string
-          enum: [asc, desc]
-          default: desc
-      - name: limit
-        in: query
-        description: Items per page
-        schema:
-          type: integer
-          default: 20
-          minimum: 1
-          maximum: 100
-      - name: offset
-        in: query
-        description: Number to skip
-        schema:
-          type: integer
-          default: 0
-          minimum: 0
-    responses:
-      '200':
-        description: Course discussions retrieved successfully
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                course:
-                  type: object
-                  properties:
-                    id:
-                      type: string
-                      format: uuid
-                    title:
-                      type: string
-                    topic:
-                      type: string
-                discussions:
-                  type: array
-                  items:
-                    $ref: '../schemas/Discussion.yaml'
-                pagination:
-                  $ref: '../schemas/Pagination.yaml'
-      '401':
-        $ref: '../responses/Unauthorized.yaml'
-      '404':
-        $ref: '../responses/NotFound.yaml'
-
-# Get Lesson Discussions
-/lessons/{lessonId}/discussions:
-  get:
-    tags:
-      - Discussions
-    summary: Get all discussions for a specific lesson
-    description: Retrieve all discussions related to a specific lesson
-    security:
-      - BearerAuth: []
-    parameters:
-      - name: lessonId
-        in: path
-        required: true
-        description: Lesson ID
-        schema:
-          type: string
-          format: uuid
-      - name: category
-        in: query
-        description: Filter by category
-        schema:
-          type: string
-          enum: [general, course, lesson, class, question, help, feedback]
-      - name: search
-        in: query
-        description: Search in title and content
-        schema:
-          type: string
-      - name: sort
-        in: query
-        description: Sort field
-        schema:
-          type: string
-          enum: [created_at, title, last_activity, reply_count, likes_count]
-          default: created_at
-      - name: order
-        in: query
-        description: Sort order
-        schema:
-          type: string
-          enum: [asc, desc]
-          default: desc
-      - name: limit
-        in: query
-        description: Items per page
-        schema:
-          type: integer
-          default: 20
-          minimum: 1
-          maximum: 100
-      - name: offset
-        in: query
-        description: Number to skip
-        schema:
-          type: integer
-          default: 0
-          minimum: 0
-    responses:
-      '200':
-        description: Lesson discussions retrieved successfully
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                lesson:
-                  type: object
-                  properties:
-                    id:
-                      type: string
-                      format: uuid
-                    title:
-                      type: string
-                    courseId:
-                      type: string
-                      format: uuid
-                    courseTitle:
-                      type: string
-                discussions:
-                  type: array
-                  items:
-                    $ref: '../schemas/Discussion.yaml'
-                pagination:
-                  $ref: '../schemas/Pagination.yaml'
-      '401':
-        $ref: '../responses/Unauthorized.yaml'
-      '404':
-        $ref: '../responses/NotFound.yaml'
-
 # Get Discussion Categories
-/categories:
+/discussions/categories:
   get:
     tags:
       - Discussions
-    summary: Get available discussion categories and their descriptions
-    description: Retrieve all available discussion categories with their descriptions and icons
-    security:
-      - BearerAuth: []
+    summary: Get available discussion categories
+    description: Retrieve all available discussion categories
+    parameters:
+      - name: includeInactive
+        in: query
+        description: Include inactive categories
+        schema:
+          type: boolean
+          default: false
     responses:
       '200':
         description: Discussion categories retrieved successfully
@@ -535,19 +402,333 @@ post:
                 categories:
                   type: array
                   items:
-                    $ref: '../schemas/DiscussionCategory.yaml'
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      key:
+                        type: string
+                        description: Category key identifier
+                      name:
+                        type: string
+                        description: Category display name
+                      description:
+                        type: string
+                        nullable: true
+                        description: Category description
+                      icon:
+                        type: string
+                        nullable: true
+                        description: Category icon (emoji)
+                      color:
+                        type: string
+                        nullable: true
+                        description: Category color (hex)
+                      isActive:
+                        type: boolean
+                        description: Whether category is active
+                      sortOrder:
+                        type: integer
+                        description: Sort order for display
+                      createdAt:
+                        type: string
+                        format: date-time
+                      updatedAt:
+                        type: string
+                        format: date-time
+
+  post:
+    tags:
+      - Discussions
+    summary: Create a new discussion category (admin only)
+    description: Create a new discussion category for better organization
+    security:
+      - BearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - key
+              - name
+            properties:
+              key:
+                type: string
+                minLength: 1
+                maxLength: 100
+                description: Category key identifier
+              name:
+                type: string
+                minLength: 1
+                maxLength: 255
+                description: Category display name
+              description:
+                type: string
+                maxLength: 1000
+                description: Category description
+              icon:
+                type: string
+                maxLength: 10
+                description: Category icon (emoji)
+              color:
+                type: string
+                pattern: '^#[0-9A-Fa-f]{6}$'
+                description: Category color (hex format)
+              sortOrder:
+                type: integer
+                minimum: 0
+                description: Sort order for display
+              isActive:
+                type: boolean
+                description: Whether category is active
+    responses:
+      '201':
+        description: Category created successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                id:
+                  type: string
+                  format: uuid
+                key:
+                  type: string
+                name:
+                  type: string
+                description:
+                  type: string
+                  nullable: true
+                icon:
+                  type: string
+                  nullable: true
+                color:
+                  type: string
+                  nullable: true
+                isActive:
+                  type: boolean
+                sortOrder:
+                  type: integer
+                createdAt:
+                  type: string
+                  format: date-time
+                updatedAt:
+                  type: string
+                  format: date-time
+      '400':
+        $ref: '../responses/BadRequest.yaml'
       '401':
         $ref: '../responses/Unauthorized.yaml'
+      '403':
+        $ref: '../responses/Forbidden.yaml'
 
-# Get Popular Tags
-/tags:
+# Update Discussion Category
+/discussions/categories/{id}:
+  put:
+    tags:
+      - Discussions
+    summary: Update discussion category (admin only)
+    description: Update an existing discussion category
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Category ID
+        schema:
+          type: string
+          format: uuid
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              name:
+                type: string
+                minLength: 1
+                maxLength: 255
+                description: Updated category name
+              description:
+                type: string
+                maxLength: 1000
+                description: Updated category description
+              icon:
+                type: string
+                maxLength: 10
+                description: Updated category icon (emoji)
+              color:
+                type: string
+                pattern: '^#[0-9A-Fa-f]{6}$'
+                description: Updated category color (hex format)
+              sortOrder:
+                type: integer
+                minimum: 0
+                description: Updated sort order
+              isActive:
+                type: boolean
+                description: Updated active status
+    responses:
+      '200':
+        description: Category updated successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                id:
+                  type: string
+                  format: uuid
+                key:
+                  type: string
+                name:
+                  type: string
+                description:
+                  type: string
+                  nullable: true
+                icon:
+                  type: string
+                  nullable: true
+                color:
+                  type: string
+                  nullable: true
+                isActive:
+                  type: boolean
+                sortOrder:
+                  type: integer
+                createdAt:
+                  type: string
+                  format: date-time
+                updatedAt:
+                  type: string
+                  format: date-time
+      '400':
+        $ref: '../responses/BadRequest.yaml'
+      '401':
+        $ref: '../responses/Unauthorized.yaml'
+      '403':
+        $ref: '../responses/Forbidden.yaml'
+      '404':
+        $ref: '../responses/NotFound.yaml'
+
+  delete:
+    tags:
+      - Discussions
+    summary: Delete discussion category (admin only)
+    description: Delete a discussion category
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Category ID
+        schema:
+          type: string
+          format: uuid
+    responses:
+      '200':
+        description: Category deleted successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+                  example: "Category deleted successfully"
+      '400':
+        description: Category is in use
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                error:
+                  type: string
+                  example: "Category In Use"
+                message:
+                  type: string
+                  example: "Cannot delete category: X discussions are using it"
+      '401':
+        $ref: '../responses/Unauthorized.yaml'
+      '403':
+        $ref: '../responses/Forbidden.yaml'
+      '404':
+        $ref: '../responses/NotFound.yaml'
+
+# Get Category Statistics
+/discussions/categories/{id}/stats:
   get:
     tags:
       - Discussions
-    summary: Get popular discussion tags for better organization
-    description: Retrieve popular discussion tags with usage counts
+    summary: Get discussion category statistics (admin only)
+    description: Retrieve statistics for a specific discussion category
     security:
       - BearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Category ID
+        schema:
+          type: string
+          format: uuid
+    responses:
+      '200':
+        description: Category statistics retrieved successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                category:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                      format: uuid
+                    key:
+                      type: string
+                    name:
+                      type: string
+                statistics:
+                  type: object
+                  properties:
+                    totalDiscussions:
+                      type: integer
+                      description: Total number of discussions in this category
+                    discussionsLast30Days:
+                      type: integer
+                      description: Discussions created in last 30 days
+                    discussionsLast7Days:
+                      type: integer
+                      description: Discussions created in last 7 days
+                    averageReplies:
+                      type: number
+                      description: Average replies per discussion
+                    totalViews:
+                      type: integer
+                      description: Total view count
+      '401':
+        $ref: '../responses/Unauthorized.yaml'
+      '403':
+        $ref: '../responses/Forbidden.yaml'
+      '404':
+        $ref: '../responses/NotFound.yaml'
+
+# Get Popular Tags
+/discussions/tags:
+  get:
+    tags:
+      - Discussions
+    summary: Get popular discussion tags
+    description: Retrieve popular discussion tags with usage counts
     parameters:
       - name: limit
         in: query
@@ -576,8 +757,371 @@ post:
                       count:
                         type: integer
                         description: Number of times this tag is used
-                      category:
-                        type: string
-                        description: Category of the tag
+
+# Get Discussion by ID
+/discussions/{id}:
+  get:
+    tags:
+      - Discussions
+    summary: Get discussion details
+    description: Retrieve detailed information about a specific discussion
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Discussion ID
+        schema:
+          type: string
+          format: uuid
+    responses:
+      '200':
+        description: Discussion details retrieved successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                id:
+                  type: string
+                  format: uuid
+                title:
+                  type: string
+                content:
+                  type: string
+                category:
+                  type: string
+                authorId:
+                  type: string
+                  format: uuid
+                authorName:
+                  type: string
+                authorAvatar:
+                  type: string
+                courseId:
+                  type: string
+                  format: uuid
+                  nullable: true
+                courseTitle:
+                  type: string
+                  nullable: true
+                lessonId:
+                  type: string
+                  format: uuid
+                  nullable: true
+                lessonTitle:
+                  type: string
+                  nullable: true
+                classId:
+                  type: string
+                  format: uuid
+                  nullable: true
+                classTitle:
+                  type: string
+                  nullable: true
+                tags:
+                  type: array
+                  items:
+                    type: string
+                isPinned:
+                  type: boolean
+                replyCount:
+                  type: integer
+                likesCount:
+                  type: integer
+                lastActivityAt:
+                  type: string
+                  format: date-time
+                createdAt:
+                  type: string
+                  format: date-time
+      '404':
+        $ref: '../responses/NotFound.yaml'
+
+  put:
+    tags:
+      - Discussions
+    summary: Update discussion details
+    description: Update an existing discussion (owner only)
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Discussion ID
+        schema:
+          type: string
+          format: uuid
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              title:
+                type: string
+                minLength: 1
+                description: Updated discussion title
+              content:
+                type: string
+                minLength: 10
+                description: Updated discussion content
+              category:
+                type: string
+                enum: [general, course, lesson, class, question, help, feedback]
+                description: Updated discussion category
+              isPinned:
+                type: boolean
+                description: Whether discussion should be pinned
+    responses:
+      '200':
+        description: Discussion updated successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                id:
+                  type: string
+                  format: uuid
+                title:
+                  type: string
+                content:
+                  type: string
+                category:
+                  type: string
+                isPinned:
+                  type: boolean
+                lastActivityAt:
+                  type: string
+                  format: date-time
+      '400':
+        $ref: '../responses/BadRequest.yaml'
       '401':
-        $ref: '../responses/Unauthorized.yaml' 
+        $ref: '../responses/Unauthorized.yaml'
+      '403':
+        $ref: '../responses/Forbidden.yaml'
+      '404':
+        $ref: '../responses/NotFound.yaml'
+
+  delete:
+    tags:
+      - Discussions
+    summary: Delete a discussion
+    description: Delete a discussion (owner or admin only)
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Discussion ID
+        schema:
+          type: string
+          format: uuid
+    responses:
+      '200':
+        description: Discussion deleted successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+                  example: "Discussion deleted successfully"
+      '401':
+        $ref: '../responses/Unauthorized.yaml'
+      '403':
+        $ref: '../responses/Forbidden.yaml'
+      '404':
+        $ref: '../responses/NotFound.yaml'
+
+# Get Discussion Replies
+/discussions/{id}/replies:
+  get:
+    tags:
+      - Discussions
+    summary: Get replies for a discussion
+    description: Retrieve all replies for a specific discussion
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Discussion ID
+        schema:
+          type: string
+          format: uuid
+    responses:
+      '200':
+        description: Discussion replies retrieved successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                replies:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      discussionId:
+                        type: string
+                        format: uuid
+                      authorId:
+                        type: string
+                        format: uuid
+                      authorName:
+                        type: string
+                      authorAvatar:
+                        type: string
+                      content:
+                        type: string
+                      parentReplyId:
+                        type: string
+                        format: uuid
+                        nullable: true
+                      createdAt:
+                        type: string
+                        format: date-time
+      '404':
+        $ref: '../responses/NotFound.yaml'
+
+  post:
+    tags:
+      - Discussions
+    summary: Add a reply to a discussion
+    description: Add a new reply to an existing discussion
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Discussion ID
+        schema:
+          type: string
+          format: uuid
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - content
+            properties:
+              content:
+                type: string
+                minLength: 1
+                description: Reply content
+              parentReplyId:
+                type: string
+                format: uuid
+                description: Parent reply ID for nested replies
+    responses:
+      '201':
+        description: Reply added successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                id:
+                  type: string
+                  format: uuid
+                discussionId:
+                  type: string
+                  format: uuid
+                authorId:
+                  type: string
+                  format: uuid
+                content:
+                  type: string
+                parentReplyId:
+                  type: string
+                  format: uuid
+                  nullable: true
+                createdAt:
+                  type: string
+                  format: date-time
+      '400':
+        $ref: '../responses/BadRequest.yaml'
+      '401':
+        $ref: '../responses/Unauthorized.yaml'
+      '404':
+        $ref: '../responses/NotFound.yaml'
+
+# Like Discussion
+/discussions/{id}/like:
+  post:
+    tags:
+      - Discussions
+    summary: Like a discussion
+    description: Like a discussion (toggle like status)
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Discussion ID
+        schema:
+          type: string
+          format: uuid
+    responses:
+      '200':
+        description: Discussion liked successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                  example: true
+                liked:
+                  type: boolean
+                  description: Current like status
+      '401':
+        $ref: '../responses/Unauthorized.yaml'
+      '404':
+        $ref: '../responses/NotFound.yaml'
+
+  delete:
+    tags:
+      - Discussions
+    summary: Unlike a discussion
+    description: Remove like from a discussion
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Discussion ID
+        schema:
+          type: string
+          format: uuid
+    responses:
+      '200':
+        description: Discussion unliked successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                  example: true
+                liked:
+                  type: boolean
+                  description: Current like status (false)
+      '401':
+        $ref: '../responses/Unauthorized.yaml'
+      '404':
+        $ref: '../responses/NotFound.yaml' 

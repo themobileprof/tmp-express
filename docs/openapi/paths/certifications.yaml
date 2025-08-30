@@ -1,5 +1,446 @@
 # Certifications Endpoints
 
+# Get All Certifications
+get:
+  get:
+    tags:
+      - Certifications
+    summary: Get all certifications with filtering
+    description: Retrieve all certifications with optional filtering by userId, courseId, classId, status, and pagination
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: userId
+        in: query
+        description: Filter by user ID
+        schema:
+          type: string
+          format: uuid
+      - name: courseId
+        in: query
+        description: Filter by course ID
+        schema:
+          type: string
+          format: uuid
+      - name: classId
+        in: query
+        description: Filter by class ID
+        schema:
+          type: string
+          format: uuid
+      - name: status
+        in: query
+        description: Filter by certification status
+        schema:
+          type: string
+      - name: limit
+        in: query
+        description: Number of results to return
+        schema:
+          type: integer
+          default: 20
+      - name: offset
+        in: query
+        description: Number of results to skip
+        schema:
+          type: integer
+          default: 0
+    responses:
+      '200':
+        description: Certifications retrieved successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                certifications:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      userId:
+                        type: string
+                        format: uuid
+                      userName:
+                        type: string
+                      userEmail:
+                        type: string
+                      certificationName:
+                        type: string
+                      issuer:
+                        type: string
+                      issuedDate:
+                        type: string
+                        format: date-time
+                      expiryDate:
+                        type: string
+                        format: date-time
+                      certificateUrl:
+                        type: string
+                      verificationCode:
+                        type: string
+                      status:
+                        type: string
+                      courseId:
+                        type: string
+                        format: uuid
+                      courseTitle:
+                        type: string
+                      classId:
+                        type: string
+                        format: uuid
+                      classTitle:
+                        type: string
+                      createdAt:
+                        type: string
+                        format: date-time
+      '401':
+        $ref: '../responses/Unauthorized.yaml'
+
+# Create New Certification
+post:
+  post:
+    tags:
+      - Certifications
+    summary: Create new certification
+    description: Create a new certification (instructor/admin only)
+    security:
+      - BearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - userId
+              - certificationName
+              - issuer
+              - issuedDate
+            properties:
+              userId:
+                type: string
+                format: uuid
+                description: User ID to issue certification to
+              certificationName:
+                type: string
+                minLength: 1
+                description: Name of the certification
+              issuer:
+                type: string
+                minLength: 1
+                description: Organization issuing the certification
+              issuedDate:
+                type: string
+                format: date-time
+                description: Date when certification was issued
+              expiryDate:
+                type: string
+                format: date-time
+                description: Optional expiry date
+              courseId:
+                type: string
+                format: uuid
+                description: Associated course ID
+              classId:
+                type: string
+                format: uuid
+                description: Associated class ID
+              certificateUrl:
+                type: string
+                format: uri
+                description: URL to certificate file
+    responses:
+      '201':
+        description: Certification created successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                id:
+                  type: string
+                  format: uuid
+                userId:
+                  type: string
+                  format: uuid
+                courseId:
+                  type: string
+                  format: uuid
+                classId:
+                  type: string
+                  format: uuid
+                certificationName:
+                  type: string
+                issuer:
+                  type: string
+                issuedDate:
+                  type: string
+                  format: date-time
+                expiryDate:
+                  type: string
+                  format: date-time
+                certificateUrl:
+                  type: string
+                verificationCode:
+                  type: string
+                status:
+                  type: string
+                createdAt:
+                  type: string
+                  format: date-time
+      '400':
+        $ref: '../responses/BadRequest.yaml'
+      '401':
+        $ref: '../responses/Unauthorized.yaml'
+      '403':
+        $ref: '../responses/Forbidden.yaml'
+      '404':
+        $ref: '../responses/NotFound.yaml'
+
+# Get Certification by ID
+/{id}:
+  get:
+    tags:
+      - Certifications
+    summary: Get certification by ID
+    description: Retrieve a specific certification by its ID
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Certification ID
+        schema:
+          type: string
+          format: uuid
+    responses:
+      '200':
+        description: Certification retrieved successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                id:
+                  type: string
+                  format: uuid
+                userId:
+                  type: string
+                  format: uuid
+                userName:
+                  type: string
+                userEmail:
+                  type: string
+                certificationName:
+                  type: string
+                issuer:
+                  type: string
+                issuedDate:
+                  type: string
+                  format: date-time
+                expiryDate:
+                  type: string
+                  format: date-time
+                certificateUrl:
+                  type: string
+                verificationCode:
+                  type: string
+                status:
+                  type: string
+                courseId:
+                  type: string
+                  format: uuid
+                courseTitle:
+                  type: string
+                classId:
+                  type: string
+                  format: uuid
+                classTitle:
+                  type: string
+                createdAt:
+                  type: string
+                  format: date-time
+      '401':
+        $ref: '../responses/Unauthorized.yaml'
+      '404':
+        $ref: '../responses/NotFound.yaml'
+
+# Update Certification
+/{id}/put:
+  put:
+    tags:
+      - Certifications
+    summary: Update certification
+    description: Update an existing certification (owner or admin only)
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Certification ID
+        schema:
+          type: string
+          format: uuid
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              certificationName:
+                type: string
+                minLength: 1
+                description: Name of the certification
+              issuer:
+                type: string
+                minLength: 1
+                description: Organization issuing the certification
+              issuedDate:
+                type: string
+                format: date-time
+                description: Date when certification was issued
+              expiryDate:
+                type: string
+                format: date-time
+                description: Optional expiry date
+              certificateUrl:
+                type: string
+                format: uri
+                description: URL to certificate file
+              status:
+                type: string
+                description: Certification status
+    responses:
+      '200':
+        description: Certification updated successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                id:
+                  type: string
+                  format: uuid
+                certificationName:
+                  type: string
+                issuer:
+                  type: string
+                issuedDate:
+                  type: string
+                  format: date-time
+                expiryDate:
+                  type: string
+                  format: date-time
+                certificateUrl:
+                  type: string
+                status:
+                  type: string
+      '400':
+        $ref: '../responses/BadRequest.yaml'
+      '401':
+        $ref: '../responses/Unauthorized.yaml'
+      '403':
+        $ref: '../responses/Forbidden.yaml'
+      '404':
+        $ref: '../responses/NotFound.yaml'
+
+# Delete Certification
+/{id}/delete:
+  delete:
+    tags:
+      - Certifications
+    summary: Delete certification
+    description: Delete a certification (owner or admin only)
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Certification ID
+        schema:
+          type: string
+          format: uuid
+    responses:
+      '200':
+        description: Certification deleted successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+                  example: "Certification deleted successfully"
+      '401':
+        $ref: '../responses/Unauthorized.yaml'
+      '403':
+        $ref: '../responses/Forbidden.yaml'
+      '404':
+        $ref: '../responses/NotFound.yaml'
+
+# Verify Certification by Code
+/verify/{code}:
+  get:
+    tags:
+      - Certifications
+    summary: Verify certification by code
+    description: Verify a certification using its verification code (public endpoint)
+    parameters:
+      - name: code
+        in: path
+        required: true
+        description: Verification code
+        schema:
+          type: string
+    responses:
+      '200':
+        description: Verification result
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                valid:
+                  type: boolean
+                  description: Whether the certification is valid
+                message:
+                  type: string
+                  description: Verification message
+                certification:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                      format: uuid
+                    userName:
+                      type: string
+                    certificationName:
+                      type: string
+                    issuer:
+                      type: string
+                    issuedDate:
+                      type: string
+                      format: date-time
+                    expiryDate:
+                      type: string
+                      format: date-time
+                    status:
+                      type: string
+                    courseTitle:
+                      type: string
+                    classTitle:
+                      type: string
+                    isExpired:
+                      type: boolean
+
 # Get User's Certifications
 /my:
   get:
@@ -20,7 +461,48 @@
                 certifications:
                   type: array
                   items:
-                    $ref: '../schemas/Certification.yaml'
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      title:
+                        type: string
+                        description: Certification name
+                      issuer:
+                        type: string
+                      dateEarned:
+                        type: string
+                        format: date-time
+                      validUntil:
+                        type: string
+                        format: date-time
+                      credentialId:
+                        type: string
+                        description: Verification code
+                      skills:
+                        type: string
+                        nullable: true
+                      certificateUrl:
+                        type: string
+                      course:
+                        type: object
+                        nullable: true
+                        properties:
+                          id:
+                            type: string
+                            format: uuid
+                          title:
+                            type: string
+                      class:
+                        type: object
+                        nullable: true
+                        properties:
+                          id:
+                            type: string
+                            format: uuid
+                          title:
+                            type: string
       '401':
         $ref: '../responses/Unauthorized.yaml'
 
@@ -49,18 +531,13 @@
             schema:
               type: object
               properties:
-                certificateUrl:
+                url:
                   type: string
-                  description: Original certificate URL
-                downloadUrl:
-                  type: string
-                  description: Direct download URL
-                expiresAt:
-                  type: string
-                  format: date-time
-                  description: When the download URL expires
+                  description: Certificate URL
       '401':
         $ref: '../responses/Unauthorized.yaml'
+      '403':
+        $ref: '../responses/Forbidden.yaml'
       '404':
         $ref: '../responses/NotFound.yaml'
 
@@ -86,29 +563,38 @@
                   items:
                     type: object
                     properties:
-                      id:
+                      programId:
                         type: string
                         format: uuid
                       title:
                         type: string
                         description: Program title
+                      level:
+                        type: string
+                      duration:
+                        type: string
                       progress:
                         type: integer
                         minimum: 0
                         maximum: 100
                         description: Overall progress percentage
-                      completedModules:
-                        type: integer
-                        description: Number of completed modules
-                      totalModules:
-                        type: integer
-                        description: Total number of modules
                       nextRequirement:
                         type: string
+                        nullable: true
                         description: Next requirement to complete
                       estimatedCompletion:
                         type: string
                         format: date-time
+                        nullable: true
                         description: Estimated completion date
+                      totals:
+                        type: object
+                        properties:
+                          totalModules:
+                            type: integer
+                            description: Total number of modules
+                          completedModules:
+                            type: integer
+                            description: Number of completed modules
       '401':
         $ref: '../responses/Unauthorized.yaml' 

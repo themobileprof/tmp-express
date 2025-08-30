@@ -2,26 +2,58 @@
 
 # Get Certification Programs
 get:
-  tags:
-    - Certification Programs
-  summary: List available certification programs with modules and pricing
-  description: Retrieve all available certification programs with their modules and pricing information
-  security:
-    - BearerAuth: []
-  responses:
-    '200':
-      description: Certification programs retrieved successfully
-      content:
-        application/json:
-          schema:
-            type: object
-            properties:
-              programs:
-                type: array
-                items:
-                  $ref: '../schemas/CertificationProgram.yaml'
-      '401':
-        $ref: '../responses/Unauthorized.yaml'
+  get:
+    tags:
+      - Certification Programs
+    summary: List available certification programs with modules and pricing
+    description: Retrieve all available certification programs with their modules and pricing information
+    responses:
+      '200':
+        description: Certification programs retrieved successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                programs:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      title:
+                        type: string
+                      description:
+                        type: string
+                      duration:
+                        type: string
+                      level:
+                        type: string
+                      prerequisites:
+                        type: string
+                      price:
+                        type: number
+                      is_active:
+                        type: boolean
+                      created_at:
+                        type: string
+                        format: date-time
+                      modules:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                              format: uuid
+                            title:
+                              type: string
+                            orderIndex:
+                              type: integer
+      '500':
+        description: Internal server error
 
 # Enroll in Certification Program
 /{id}/enroll:
@@ -48,9 +80,6 @@ get:
             schema:
               type: object
               properties:
-                message:
-                  type: string
-                  example: "Successfully enrolled in certification program"
                 enrollment:
                   type: object
                   properties:
@@ -60,18 +89,41 @@ get:
                     programId:
                       type: string
                       format: uuid
-                    userId:
+                    status:
                       type: string
-                      format: uuid
+                      example: "in_progress"
+                    progress:
+                      type: integer
+                      description: Progress percentage (0-100)
+                      example: 0
                     enrolledAt:
                       type: string
                       format: date-time
-                    status:
-                      type: string
-                      example: "enrolled"
       '400':
-        $ref: '../responses/BadRequest.yaml'
+        description: Bad request - User already enrolled
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                error:
+                  type: string
+                  example: "ALREADY_ENROLLED"
+                message:
+                  type: string
+                  example: "Already enrolled in this program"
       '401':
         $ref: '../responses/Unauthorized.yaml'
       '404':
-        $ref: '../responses/NotFound.yaml' 
+        description: Certification program not found or inactive
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                error:
+                  type: string
+                  example: "Program Not Found"
+                message:
+                  type: string
+                  example: "Certification program not found or inactive" 
