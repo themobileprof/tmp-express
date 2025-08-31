@@ -1,4 +1,251 @@
 # Classes Endpoints
+# Get Classes
+/:
+  get:
+    tags:
+      - Classes
+    summary: List classes with filters and pagination
+    description: Retrieve a list of classes with optional filtering and sorting
+    parameters:
+      - name: topic
+        in: query
+        description: Filter by topic
+        schema:
+          type: string
+      - name: type
+        in: query
+        description: Filter by type
+        schema:
+          type: string
+          enum: [online, hybrid]
+      - name: instructorId
+        in: query
+        description: Filter by instructor ID
+        schema:
+          type: string
+          format: uuid
+      - name: priceMin
+        in: query
+        description: Minimum price filter
+        schema:
+          type: number
+          minimum: 0
+      - name: priceMax
+        in: query
+        description: Maximum price filter
+        schema:
+          type: number
+          minimum: 0
+      - name: isPublished
+        in: query
+        description: Filter by publication status
+        schema:
+          type: boolean
+      - name: search
+        in: query
+        description: Search in title and description
+        schema:
+          type: string
+      - name: sort
+        in: query
+        description: Sort field
+        schema:
+          type: string
+          enum: [start_date, title, price, available_slots, created_at]
+          default: start_date
+      - name: order
+        in: query
+        description: Sort order
+        schema:
+          type: string
+          enum: [asc, desc]
+          default: asc
+      - name: limit
+        in: query
+        description: Items per page
+        schema:
+          type: integer
+          default: 20
+          minimum: 1
+          maximum: 100
+      - name: offset
+        in: query
+        description: Number to skip
+        schema:
+          type: integer
+          default: 0
+          minimum: 0
+    responses:
+      '200':
+        description: List of classes retrieved successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                classes:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      title:
+                        type: string
+                      description:
+                        type: string
+                      topic:
+                        type: string
+                      type:
+                        type: string
+                      startDate:
+                        type: string
+                        format: date-time
+                      endDate:
+                        type: string
+                        format: date-time
+                      duration:
+                        type: string
+                      price:
+                        type: number
+                      instructorId:
+                        type: string
+                        format: uuid
+                      instructorName:
+                        type: string
+                      availableSlots:
+                        type: integer
+                      totalSlots:
+                        type: integer
+                      location:
+                        type: string
+                      isPublished:
+                        type: boolean
+                      createdAt:
+                        type: string
+                        format: date-time
+                      updatedAt:
+                        type: string
+                        format: date-time
+
+  # Create New Class
+  post:
+    tags:
+      - Classes
+    summary: Create new class
+    description: Create a new class (instructor only)
+    security:
+      - BearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - title
+              - description
+              - topic
+              - type
+              - startDate
+              - duration
+              - price
+              - availableSlots
+              - totalSlots
+            properties:
+              title:
+                type: string
+                minLength: 1
+                description: Class title
+              description:
+                type: string
+                minLength: 10
+                description: Class description
+              topic:
+                type: string
+                minLength: 1
+                description: Class topic
+              type:
+                type: string
+                enum: [online, hybrid]
+                description: Class type
+              startDate:
+                type: string
+                format: date-time
+                description: Class start date
+              endDate:
+                type: string
+                format: date-time
+                description: Optional end date
+              duration:
+                type: string
+                minLength: 1
+                description: Class duration
+              price:
+                type: number
+                minimum: 0
+                description: Class price
+              availableSlots:
+                type: integer
+                minimum: 1
+                description: Available slots
+              totalSlots:
+                type: integer
+                minimum: 1
+                description: Total slots
+              location:
+                type: string
+                description: Class location
+    responses:
+      '201':
+        description: Class created successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                id:
+                  type: string
+                  format: uuid
+                title:
+                  type: string
+                description:
+                  type: string
+                topic:
+                  type: string
+                type:
+                  type: string
+                startDate:
+                  type: string
+                  format: date-time
+                endDate:
+                  type: string
+                  format: date-time
+                duration:
+                  type: string
+                price:
+                  type: number
+                instructorId:
+                  type: string
+                  format: uuid
+                availableSlots:
+                  type: integer
+                totalSlots:
+                  type: integer
+                location:
+                  type: string
+                isPublished:
+                  type: boolean
+                createdAt:
+                  type: string
+                  format: date-time
+      '400':
+        $ref: '../responses/BadRequest.yaml'
+      '401':
+        $ref: '../responses/Unauthorized.yaml'
+      '403':
+        $ref: '../responses/Forbidden.yaml'
 
 # Get Upcoming Classes
 /upcoming:
@@ -152,254 +399,6 @@
                     type: string
                     description: Topic name
 
-# Get Classes
-get:
-  get:
-    tags:
-      - Classes
-    summary: List classes with filters and pagination
-    description: Retrieve a list of classes with optional filtering and sorting
-    parameters:
-      - name: topic
-        in: query
-        description: Filter by topic
-        schema:
-          type: string
-      - name: type
-        in: query
-        description: Filter by type
-        schema:
-          type: string
-          enum: [online, hybrid]
-      - name: instructorId
-        in: query
-        description: Filter by instructor ID
-        schema:
-          type: string
-          format: uuid
-      - name: priceMin
-        in: query
-        description: Minimum price filter
-        schema:
-          type: number
-          minimum: 0
-      - name: priceMax
-        in: query
-        description: Maximum price filter
-        schema:
-          type: number
-          minimum: 0
-      - name: isPublished
-        in: query
-        description: Filter by publication status
-        schema:
-          type: boolean
-      - name: search
-        in: query
-        description: Search in title and description
-        schema:
-          type: string
-      - name: sort
-        in: query
-        description: Sort field
-        schema:
-          type: string
-          enum: [start_date, title, price, available_slots, created_at]
-          default: start_date
-      - name: order
-        in: query
-        description: Sort order
-        schema:
-          type: string
-          enum: [asc, desc]
-          default: asc
-      - name: limit
-        in: query
-        description: Items per page
-        schema:
-          type: integer
-          default: 20
-          minimum: 1
-          maximum: 100
-      - name: offset
-        in: query
-        description: Number to skip
-        schema:
-          type: integer
-          default: 0
-          minimum: 0
-    responses:
-      '200':
-        description: List of classes retrieved successfully
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                classes:
-                  type: array
-                  items:
-                    type: object
-                    properties:
-                      id:
-                        type: string
-                        format: uuid
-                      title:
-                        type: string
-                      description:
-                        type: string
-                      topic:
-                        type: string
-                      type:
-                        type: string
-                      startDate:
-                        type: string
-                        format: date-time
-                      endDate:
-                        type: string
-                        format: date-time
-                      duration:
-                        type: string
-                      price:
-                        type: number
-                      instructorId:
-                        type: string
-                        format: uuid
-                      instructorName:
-                        type: string
-                      availableSlots:
-                        type: integer
-                      totalSlots:
-                        type: integer
-                      location:
-                        type: string
-                      isPublished:
-                        type: boolean
-                      createdAt:
-                        type: string
-                        format: date-time
-                      updatedAt:
-                        type: string
-                        format: date-time
-
-# Create New Class
-post:
-  post:
-    tags:
-      - Classes
-    summary: Create new class
-    description: Create a new class (instructor only)
-    security:
-      - BearerAuth: []
-    requestBody:
-      required: true
-      content:
-        application/json:
-          schema:
-            type: object
-            required:
-              - title
-              - description
-              - topic
-              - type
-              - startDate
-              - duration
-              - price
-              - availableSlots
-              - totalSlots
-            properties:
-              title:
-                type: string
-                minLength: 1
-                description: Class title
-              description:
-                type: string
-                minLength: 10
-                description: Class description
-              topic:
-                type: string
-                minLength: 1
-                description: Class topic
-              type:
-                type: string
-                enum: [online, hybrid]
-                description: Class type
-              startDate:
-                type: string
-                format: date-time
-                description: Class start date
-              endDate:
-                type: string
-                format: date-time
-                description: Optional end date
-              duration:
-                type: string
-                minLength: 1
-                description: Class duration
-              price:
-                type: number
-                minimum: 0
-                description: Class price
-              availableSlots:
-                type: integer
-                minimum: 1
-                description: Available slots
-              totalSlots:
-                type: integer
-                minimum: 1
-                description: Total slots
-              location:
-                type: string
-                description: Class location
-    responses:
-      '201':
-        description: Class created successfully
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                id:
-                  type: string
-                  format: uuid
-                title:
-                  type: string
-                description:
-                  type: string
-                topic:
-                  type: string
-                type:
-                  type: string
-                startDate:
-                  type: string
-                  format: date-time
-                endDate:
-                  type: string
-                  format: date-time
-                duration:
-                  type: string
-                price:
-                  type: number
-                instructorId:
-                  type: string
-                  format: uuid
-                availableSlots:
-                  type: integer
-                totalSlots:
-                  type: integer
-                location:
-                  type: string
-                isPublished:
-                  type: boolean
-                createdAt:
-                  type: string
-                  format: date-time
-      '400':
-        $ref: '../responses/BadRequest.yaml'
-      '401':
-        $ref: '../responses/Unauthorized.yaml'
-      '403':
-        $ref: '../responses/Forbidden.yaml'
 
 # Get Class by ID
 /{id}:
@@ -652,138 +651,139 @@ post:
       '404':
         $ref: '../responses/NotFound.yaml'
 
-  # Get Class Enrollments
-  /enrollments:
-    get:
-      tags:
-        - Classes
-      summary: Get class enrollments
-      description: Get all enrollments for a specific class (owner or admin only)
-      security:
-        - BearerAuth: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          description: Class ID
-          schema:
-            type: string
-            format: uuid
-      responses:
-        '200':
-          description: Class enrollments retrieved successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  enrollments:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        id:
-                          type: string
-                          format: uuid
-                        userId:
-                          type: string
-                          format: uuid
-                        userName:
-                          type: string
-                        userEmail:
-                          type: string
-                        userAvatar:
-                          type: string
-                        progress:
-                          type: integer
-                        status:
-                          type: string
-                        enrolledAt:
-                          type: string
-                          format: date-time
-                        completedAt:
-                          type: string
-                          format: date-time
-        '401':
-          $ref: '../responses/Unauthorized.yaml'
-        '403':
-          $ref: '../responses/Forbidden.yaml'
-        '404':
-          $ref: '../responses/NotFound.yaml'
-
-  # Enroll in Class
-  /enroll:
-    post:
-      tags:
-        - Classes
-      summary: Enroll in a class
-      description: Enroll in a class with optional sponsorship code
-      security:
-        - BearerAuth: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          description: Class ID
-          schema:
-            type: string
-            format: uuid
-      requestBody:
+# Get Class Enrollments
+/{id}/enrollments:
+  get:
+    tags:
+      - Classes
+    summary: Get class enrollments
+    description: Get all enrollments for a specific class (owner or admin only)
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Class ID
+        schema:
+          type: string
+          format: uuid
+    responses:
+      '200':
+        description: Class enrollments retrieved successfully
         content:
           application/json:
             schema:
               type: object
               properties:
+                enrollments:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      userId:
+                        type: string
+                        format: uuid
+                      userName:
+                        type: string
+                      userEmail:
+                        type: string
+                      userAvatar:
+                        type: string
+                      progress:
+                        type: integer
+                      status:
+                        type: string
+                      enrolledAt:
+                        type: string
+                        format: date-time
+                      completedAt:
+                        type: string
+                        format: date-time
+      '401':
+        $ref: '../responses/Unauthorized.yaml'
+      '403':
+        $ref: '../responses/Forbidden.yaml'
+      '404':
+        $ref: '../responses/NotFound.yaml'
+
+# Enroll in Class
+/{id}/enroll:
+  post:
+    tags:
+      - Classes
+    summary: Enroll in a class
+    description: Enroll in a class with optional sponsorship code
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Class ID
+        schema:
+          type: string
+          format: uuid
+    requestBody:
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              sponsorshipId:
+                type: string
+                format: uuid
+                description: Sponsorship ID for discounted enrollment
+    responses:
+      '201':
+        description: Successfully enrolled in class
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                id:
+                  type: string
+                  format: uuid
+                userId:
+                  type: string
+                  format: uuid
+                classId:
+                  type: string
+                  format: uuid
+                enrollmentType:
+                  type: string
+                  example: "class"
+                progress:
+                  type: integer
+                  example: 0
+                status:
+                  type: string
+                  example: "enrolled"
                 sponsorshipId:
                   type: string
                   format: uuid
-                  description: Sponsorship ID for discounted enrollment
-      responses:
-        '201':
-          description: Successfully enrolled in class
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  id:
-                    type: string
-                    format: uuid
-                  userId:
-                    type: string
-                    format: uuid
-                  classId:
-                    type: string
-                    format: uuid
-                  enrollmentType:
-                    type: string
-                    example: "class"
-                  progress:
-                    type: integer
-                    example: 0
-                  status:
-                    type: string
-                    example: "enrolled"
-                  sponsorshipId:
-                    type: string
-                    format: uuid
-                    nullable: true
-                  enrolledAt:
-                    type: string
-                    format: date-time
-        '400':
-          description: Bad request
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  error:
-                    type: string
-                    enum: [Class Full, Already Enrolled, Invalid Sponsorship, Invalid Sponsorship Mapping, Sponsorship Not Used]
-                  message:
-                    type: string
-        '401':
-          $ref: '../responses/Unauthorized.yaml'
-        '404':
-          $ref: '../responses/NotFound.yaml' 
+                  nullable: true
+                enrolledAt:
+                  type: string
+                  format: date-time
+      '400':
+        description: Bad request
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                error:
+                  type: string
+                  enum: [Class Full, Already Enrolled, Invalid Sponsorship, Invalid Sponsorship Mapping, Sponsorship Not Used]
+                message:
+                  type: string
+      '401':
+        $ref: '../responses/Unauthorized.yaml'
+      '404':
+        $ref: '../responses/NotFound.yaml' 
+        

@@ -1,55 +1,57 @@
 # Debug Endpoints
 debugUploads:
-  tags:
-    - Debug
-  summary: Debug Upload Directory
-  description: Debug endpoint to check upload directory structure and file access
-  responses:
-    '200':
-      description: Upload directory debug information
-      content:
-        application/json:
-          schema:
-            type: object
-            properties:
-              uploadPath:
-                type: string
-              resolvedUploadPath:
-                type: string
-              uploadExists:
-                type: boolean
-              screenshotsExists:
-                type: boolean
-              uploadContents:
-                type: array
-                items:
+  get:
+    tags:
+      - Debug
+    summary: Debug Upload Directory
+    description: Debug endpoint to check upload directory structure and file access
+    responses:
+      '200':
+        description: Upload directory debug information
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                uploadPath:
                   type: string
-              screenshotsContents:
-                type: array
-                items:
+                resolvedUploadPath:
                   type: string
-              cwd:
-                type: string
+                uploadExists:
+                  type: boolean
+                screenshotsExists:
+                  type: boolean
+                uploadContents:
+                  type: array
+                  items:
+                    type: string
+                screenshotsContents:
+                  type: array
+                  items:
+                    type: string
+                cwd:
+                  type: string
 
 testFileAccess:
-  tags:
-    - Debug
-  summary: Test File Access
-  description: Test endpoint to serve a specific file from the uploads directory
-  parameters:
-    - name: filename
-      in: path
-      required: true
-      schema:
-        type: string
-      description: Name of the file to serve
-  responses:
-    '200':
-      description: File served successfully
-      content:
-        application/octet-stream:
-          schema:
-            type: string
-            format: binary
-    '404':
-      description: File not found 
+  get:
+    tags:
+      - Debug
+    summary: Test File Access
+    description: Test endpoint to serve a specific file from the uploads directory
+    parameters:
+      - name: filename
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Name of the file to serve
+    responses:
+      '200':
+        description: File served successfully
+        content:
+          application/octet-stream:
+            schema:
+              type: string
+              format: binary
+      '404':
+        description: File not found 

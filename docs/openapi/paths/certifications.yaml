@@ -1,7 +1,7 @@
 # Certifications Endpoints
 
 # Get All Certifications
-get:
+/:
   get:
     tags:
       - Certifications
@@ -100,8 +100,7 @@ get:
       '401':
         $ref: '../responses/Unauthorized.yaml'
 
-# Create New Certification
-post:
+  # Create New Certification
   post:
     tags:
       - Certifications
@@ -269,9 +268,7 @@ post:
         $ref: '../responses/Unauthorized.yaml'
       '404':
         $ref: '../responses/NotFound.yaml'
-
-# Update Certification
-/{id}/put:
+  
   put:
     tags:
       - Certifications
@@ -350,9 +347,7 @@ post:
         $ref: '../responses/Forbidden.yaml'
       '404':
         $ref: '../responses/NotFound.yaml'
-
-# Delete Certification
-/{id}/delete:
+  
   delete:
     tags:
       - Certifications
