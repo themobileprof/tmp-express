@@ -1,439 +1,438 @@
 # Sponsorship Opportunities Endpoints
-paths:
-  /:
-    # Get All Opportunities
-    get:
-      tags:
-        - Sponsorship Opportunities
-      summary: Get list of sponsorship opportunities
-      description: Retrieve a list of available sponsorship opportunities (public endpoint)
-      parameters:
-        - name: isActive
-          in: query
-          description: Filter by active status
-          schema:
-            type: boolean
-        - name: urgency
-          in: query
-          description: Filter by urgency level
-          schema:
-            type: string
-            enum: [low, medium, high]
-        - name: limit
-          in: query
-          description: Number of results to return
-          schema:
-            type: integer
-            default: 20
-            minimum: 1
-            maximum: 100
-        - name: offset
-          in: query
-          description: Number of results to skip
-          schema:
-            type: integer
-            default: 0
-            minimum: 0
-      responses:
-        '200':
-          description: List of opportunities retrieved successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  opportunities:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        id:
-                          type: string
-                          format: uuid
-                        courseId:
-                          type: string
-                          format: uuid
-                        courseName:
-                          type: string
-                        courseDescription:
-                          type: string
-                        courseDuration:
-                          type: string
-                        courseTopic:
-                          type: string
-                        instructor:
-                          type: string
-                          nullable: true
-                        instructorAvatar:
-                          type: string
-                          nullable: true
-                        targetStudents:
-                          type: integer
-                        fundingGoal:
-                          type: number
-                        fundingRaised:
-                          type: number
-                        fundingProgress:
-                          type: string
-                          description: Percentage as string (e.g., "75.50")
-                        urgency:
-                          type: string
-                          enum: [low, medium, high]
-                        demographics:
-                          type: string
-                          nullable: true
-                        impactDescription:
-                          type: string
-                          nullable: true
-                        isActive:
-                          type: boolean
-                        createdAt:
-                          type: string
-                          format: date-time
-                        updatedAt:
-                          type: string
-                          format: date-time
-        '400':
-          $ref: '../responses/BadRequest.yaml'
-
-    # Create Opportunity
-    post:
-      tags:
-        - Sponsorship Opportunities
-      summary: Create a new sponsorship opportunity
-      description: Create a new sponsorship opportunity (instructor/admin only)
-      security:
-        - BearerAuth: []
-      requestBody:
-        required: true
+/:
+  # Get All Opportunities
+  get:
+    tags:
+      - Sponsorship Opportunities
+    summary: Get list of sponsorship opportunities
+    description: Retrieve a list of available sponsorship opportunities (public endpoint)
+    parameters:
+      - name: isActive
+        in: query
+        description: Filter by active status
+        schema:
+          type: boolean
+      - name: urgency
+        in: query
+        description: Filter by urgency level
+        schema:
+          type: string
+          enum: [low, medium, high]
+      - name: limit
+        in: query
+        description: Number of results to return
+        schema:
+          type: integer
+          default: 20
+          minimum: 1
+          maximum: 100
+      - name: offset
+        in: query
+        description: Number of results to skip
+        schema:
+          type: integer
+          default: 0
+          minimum: 0
+    responses:
+      '200':
+        description: List of opportunities retrieved successfully
         content:
           application/json:
             schema:
               type: object
-              required:
-                - courseId
-                - targetStudents
-                - fundingGoal
-                - urgency
-                - demographics
-                - impactDescription
               properties:
+                opportunities:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      courseId:
+                        type: string
+                        format: uuid
+                      courseName:
+                        type: string
+                      courseDescription:
+                        type: string
+                      courseDuration:
+                        type: string
+                      courseTopic:
+                        type: string
+                      instructor:
+                        type: string
+                        nullable: true
+                      instructorAvatar:
+                        type: string
+                        nullable: true
+                      targetStudents:
+                        type: integer
+                      fundingGoal:
+                        type: number
+                      fundingRaised:
+                        type: number
+                      fundingProgress:
+                        type: string
+                        description: Percentage as string (e.g., "75.50")
+                      urgency:
+                        type: string
+                        enum: [low, medium, high]
+                      demographics:
+                        type: string
+                        nullable: true
+                      impactDescription:
+                        type: string
+                        nullable: true
+                      isActive:
+                        type: boolean
+                      createdAt:
+                        type: string
+                        format: date-time
+                      updatedAt:
+                        type: string
+                        format: date-time
+      '400':
+        $ref: '../responses/BadRequest.yaml'
+
+  # Create Opportunity
+  post:
+    tags:
+      - Sponsorship Opportunities
+    summary: Create a new sponsorship opportunity
+    description: Create a new sponsorship opportunity (instructor/admin only)
+    security:
+      - BearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - courseId
+              - targetStudents
+              - fundingGoal
+              - urgency
+              - demographics
+              - impactDescription
+            properties:
+              courseId:
+                type: string
+                format: uuid
+                description: ID of the course seeking sponsorship
+              targetStudents:
+                type: integer
+                minimum: 1
+                description: Target number of students to sponsor
+              fundingGoal:
+                type: number
+                minimum: 0
+                description: Funding goal amount
+              urgency:
+                type: string
+                enum: [low, medium, high]
+                description: Urgency level of the opportunity
+              demographics:
+                type: string
+                description: Target student demographics
+              impactDescription:
+                type: string
+                description: Description of the impact this sponsorship will have
+    responses:
+      '201':
+        description: Opportunity created successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                id:
+                  type: string
+                  format: uuid
                 courseId:
                   type: string
                   format: uuid
-                  description: ID of the course seeking sponsorship
                 targetStudents:
                   type: integer
-                  minimum: 1
-                  description: Target number of students to sponsor
                 fundingGoal:
                   type: number
-                  minimum: 0
-                  description: Funding goal amount
+                fundingRaised:
+                  type: number
                 urgency:
                   type: string
                   enum: [low, medium, high]
-                  description: Urgency level of the opportunity
                 demographics:
                   type: string
-                  description: Target student demographics
+                  nullable: true
                 impactDescription:
                   type: string
-                  description: Description of the impact this sponsorship will have
-      responses:
-        '201':
-          description: Opportunity created successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  id:
-                    type: string
-                    format: uuid
-                  courseId:
-                    type: string
-                    format: uuid
-                  targetStudents:
-                    type: integer
-                  fundingGoal:
-                    type: number
-                  fundingRaised:
-                    type: number
-                  urgency:
-                    type: string
-                    enum: [low, medium, high]
-                  demographics:
-                    type: string
-                    nullable: true
-                  impactDescription:
-                    type: string
-                    nullable: true
-                  isActive:
-                    type: boolean
-                  createdAt:
-                    type: string
-                    format: date-time
-        '400':
-          $ref: '../responses/BadRequest.yaml'
-        '401':
-          $ref: '../responses/Unauthorized.yaml'
-        '403':
-          $ref: '../responses/Forbidden.yaml'
-        '404':
-          $ref: '../responses/NotFound.yaml'
-
-  /{id}:
-    # Get Specific Opportunity
-    get:
-      tags:
-        - Sponsorship Opportunities
-      summary: Get details of a specific opportunity
-      description: Retrieve detailed information about a specific sponsorship opportunity (public endpoint)
-      parameters:
-        - name: id
-          in: path
-          required: true
-          description: Opportunity ID
-          schema:
-            type: string
-            format: uuid
-      responses:
-        '200':
-          description: Opportunity details retrieved successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  id:
-                    type: string
-                    format: uuid
-                  courseId:
-                    type: string
-                    format: uuid
-                  courseName:
-                    type: string
-                  courseDescription:
-                    type: string
-                  courseDuration:
-                    type: string
-                  courseTopic:
-                    type: string
-                  coursePrice:
-                    type: number
-                  instructor:
-                    type: string
-                    nullable: true
-                  instructorAvatar:
-                    type: string
-                    nullable: true
-                  instructorBio:
-                    type: string
-                    nullable: true
-                  targetStudents:
-                    type: integer
-                  fundingGoal:
-                    type: number
-                  fundingRaised:
-                    type: number
-                  fundingProgress:
-                    type: string
-                    description: Percentage as string (e.g., "75.50")
-                  urgency:
-                    type: string
-                    enum: [low, medium, high]
-                  demographics:
-                    type: string
-                    nullable: true
-                  impactDescription:
-                    type: string
-                    nullable: true
-                  isActive:
-                    type: boolean
-                  createdAt:
-                    type: string
-                    format: date-time
-                  updatedAt:
-                    type: string
-                    format: date-time
-        '404':
-          $ref: '../responses/NotFound.yaml'
-
-    # Update Opportunity
-    put:
-      tags:
-        - Sponsorship Opportunities
-      summary: Update opportunity details
-      description: Update an existing opportunity (owner/admin only)
-      security:
-        - BearerAuth: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          description: Opportunity ID
-          schema:
-            type: string
-            format: uuid
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                targetStudents:
-                  type: integer
-                  minimum: 1
-                  description: Updated target number of students
-                fundingGoal:
-                  type: number
-                  minimum: 0
-                  description: Updated funding goal amount
-                urgency:
-                  type: string
-                  enum: [low, medium, high]
-                  description: Updated urgency level
-                demographics:
-                  type: string
-                  description: Updated target student demographics
-                impactDescription:
-                  type: string
-                  description: Updated impact description
+                  nullable: true
                 isActive:
                   type: boolean
-                  description: Whether the opportunity is active
-      responses:
-        '200':
-          description: Opportunity updated successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  id:
-                    type: string
-                    format: uuid
-                  targetStudents:
-                    type: integer
-                  fundingGoal:
-                    type: number
-                  fundingRaised:
-                    type: number
-                  urgency:
-                    type: string
-                    enum: [low, medium, high]
-                  demographics:
-                    type: string
-                    nullable: true
-                  impactDescription:
-                    type: string
-                    nullable: true
-                  isActive:
-                    type: boolean
-                  updatedAt:
-                    type: string
-                    format: date-time
-        '400':
-          $ref: '../responses/BadRequest.yaml'
-        '401':
-          $ref: '../responses/Unauthorized.yaml'
-        '403':
-          $ref: '../responses/Forbidden.yaml'
-        '404':
-          $ref: '../responses/NotFound.yaml'
+                createdAt:
+                  type: string
+                  format: date-time
+      '400':
+        $ref: '../responses/BadRequest.yaml'
+      '401':
+        $ref: '../responses/Unauthorized.yaml'
+      '403':
+        $ref: '../responses/Forbidden.yaml'
+      '404':
+        $ref: '../responses/NotFound.yaml'
 
-    # Delete Opportunity
-    delete:
-      tags:
-        - Sponsorship Opportunities
-      summary: Delete an opportunity
-      description: Delete a sponsorship opportunity (owner/admin only)
-      security:
-        - BearerAuth: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          description: Opportunity ID
-          schema:
-            type: string
-            format: uuid
-      responses:
-        '200':
-          description: Opportunity deleted successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  message:
-                    type: string
-                    example: "Sponsorship opportunity deleted successfully"
-        '401':
-          $ref: '../responses/Unauthorized.yaml'
-        '403':
-          $ref: '../responses/Forbidden.yaml'
-        '404':
-          $ref: '../responses/NotFound.yaml'
-
-  /{id}/contribute:
-    # Contribute to Opportunity
-    post:
-      tags:
-        - Sponsorship Opportunities
-      summary: Contribute to a sponsorship opportunity
-      description: Make a contribution to a sponsorship opportunity
-      security:
-        - BearerAuth: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          description: Opportunity ID
-          schema:
-            type: string
-            format: uuid
-      requestBody:
+/{id}:
+  # Get Specific Opportunity
+  get:
+    tags:
+      - Sponsorship Opportunities
+    summary: Get details of a specific opportunity
+    description: Retrieve detailed information about a specific sponsorship opportunity (public endpoint)
+    parameters:
+      - name: id
+        in: path
         required: true
+        description: Opportunity ID
+        schema:
+          type: string
+          format: uuid
+    responses:
+      '200':
+        description: Opportunity details retrieved successfully
         content:
           application/json:
             schema:
               type: object
-              required:
-                - amount
               properties:
-                amount:
+                id:
+                  type: string
+                  format: uuid
+                courseId:
+                  type: string
+                  format: uuid
+                courseName:
+                  type: string
+                courseDescription:
+                  type: string
+                courseDuration:
+                  type: string
+                courseTopic:
+                  type: string
+                coursePrice:
                   type: number
-                  minimum: 0.01
-                  description: Contribution amount (must be greater than 0)
+                instructor:
+                  type: string
+                  nullable: true
+                instructorAvatar:
+                  type: string
+                  nullable: true
+                instructorBio:
+                  type: string
+                  nullable: true
+                targetStudents:
+                  type: integer
+                fundingGoal:
+                  type: number
+                fundingRaised:
+                  type: number
+                fundingProgress:
+                  type: string
+                  description: Percentage as string (e.g., "75.50")
+                urgency:
+                  type: string
+                  enum: [low, medium, high]
+                demographics:
+                  type: string
+                  nullable: true
+                impactDescription:
+                  type: string
+                  nullable: true
+                isActive:
+                  type: boolean
+                createdAt:
+                  type: string
+                  format: date-time
+                updatedAt:
+                  type: string
+                  format: date-time
+      '404':
+        $ref: '../responses/NotFound.yaml'
+
+  # Update Opportunity
+  put:
+    tags:
+      - Sponsorship Opportunities
+    summary: Update opportunity details
+    description: Update an existing opportunity (owner/admin only)
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Opportunity ID
+        schema:
+          type: string
+          format: uuid
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              targetStudents:
+                type: integer
+                minimum: 1
+                description: Updated target number of students
+              fundingGoal:
+                type: number
+                minimum: 0
+                description: Updated funding goal amount
+              urgency:
+                type: string
+                enum: [low, medium, high]
+                description: Updated urgency level
+              demographics:
+                type: string
+                description: Updated target student demographics
+              impactDescription:
+                type: string
+                description: Updated impact description
+              isActive:
+                type: boolean
+                description: Whether the opportunity is active
+    responses:
+      '200':
+        description: Opportunity updated successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                id:
+                  type: string
+                  format: uuid
+                targetStudents:
+                  type: integer
+                fundingGoal:
+                  type: number
+                fundingRaised:
+                  type: number
+                urgency:
+                  type: string
+                  enum: [low, medium, high]
+                demographics:
+                  type: string
+                  nullable: true
+                impactDescription:
+                  type: string
+                  nullable: true
+                isActive:
+                  type: boolean
+                updatedAt:
+                  type: string
+                  format: date-time
+      '400':
+        $ref: '../responses/BadRequest.yaml'
+      '401':
+        $ref: '../responses/Unauthorized.yaml'
+      '403':
+        $ref: '../responses/Forbidden.yaml'
+      '404':
+        $ref: '../responses/NotFound.yaml'
+
+  # Delete Opportunity
+  delete:
+    tags:
+      - Sponsorship Opportunities
+    summary: Delete an opportunity
+    description: Delete a sponsorship opportunity (owner/admin only)
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Opportunity ID
+        schema:
+          type: string
+          format: uuid
+    responses:
+      '200':
+        description: Opportunity deleted successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
                 message:
                   type: string
-                  description: Optional message with the contribution
-      responses:
-        '200':
-          description: Contribution recorded successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                    example: true
-                  amount:
-                    type: number
-                    description: Contribution amount
-                  newFundingRaised:
-                    type: number
-                    description: Updated total funding raised
-                  message:
-                    type: string
-                    example: "Contribution recorded successfully"
-        '400':
-          $ref: '../responses/BadRequest.yaml'
-        '401':
-          $ref: '../responses/Unauthorized.yaml'
-        '404':
-          $ref: '../responses/NotFound.yaml' 
+                  example: "Sponsorship opportunity deleted successfully"
+      '401':
+        $ref: '../responses/Unauthorized.yaml'
+      '403':
+        $ref: '../responses/Forbidden.yaml'
+      '404':
+        $ref: '../responses/NotFound.yaml'
+
+/{id}/contribute:
+  # Contribute to Opportunity
+  post:
+    tags:
+      - Sponsorship Opportunities
+    summary: Contribute to a sponsorship opportunity
+    description: Make a contribution to a sponsorship opportunity
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Opportunity ID
+        schema:
+          type: string
+          format: uuid
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - amount
+            properties:
+              amount:
+                type: number
+                minimum: 0.01
+                description: Contribution amount (must be greater than 0)
+              message:
+                type: string
+                description: Optional message with the contribution
+    responses:
+      '200':
+        description: Contribution recorded successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                  example: true
+                amount:
+                  type: number
+                  description: Contribution amount
+                newFundingRaised:
+                  type: number
+                  description: Updated total funding raised
+                message:
+                  type: string
+                  example: "Contribution recorded successfully"
+      '400':
+        $ref: '../responses/BadRequest.yaml'
+      '401':
+        $ref: '../responses/Unauthorized.yaml'
+      '404':
+        $ref: '../responses/NotFound.yaml' 

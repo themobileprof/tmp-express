@@ -1,7 +1,7 @@
 # Notification Endpoints
 
 # Get Notifications
-/notifications:
+/:
   get:
     tags:
       - Notifications
@@ -114,7 +114,7 @@
         $ref: '../responses/Unauthorized.yaml'
 
 # Get Notification Types
-/notifications/types:
+/types:
   get:
     tags:
       - Notifications
@@ -143,7 +143,7 @@
         $ref: '../responses/Unauthorized.yaml'
 
 # Get Unread Count
-/notifications/count:
+/count:
   get:
     tags:
       - Notifications
@@ -172,7 +172,7 @@
         $ref: '../responses/Unauthorized.yaml'
 
 # Get Notification Statistics
-/notifications/stats:
+/stats:
   get:
     tags:
       - Notifications
@@ -218,7 +218,7 @@
         $ref: '../responses/Unauthorized.yaml'
 
 # Get Notification Preferences
-/notifications/preferences:
+/preferences:
   get:
     tags:
       - Notifications
@@ -313,7 +313,7 @@
         $ref: '../responses/Unauthorized.yaml'
 
 # Mark Notification as Read
-/notifications/{id}/read:
+/{id}/read:
   patch:
     tags:
       - Notifications
@@ -348,7 +348,7 @@
         $ref: '../responses/NotFound.yaml'
 
 # Mark All Notifications as Read
-/notifications/read-all:
+/read-all:
   patch:
     tags:
       - Notifications
@@ -373,7 +373,7 @@
         $ref: '../responses/Unauthorized.yaml'
 
 # Mark Notifications by Type as Read
-/notifications/read-by-type:
+/read-by-type:
   patch:
     tags:
       - Notifications
@@ -412,7 +412,7 @@
         $ref: '../responses/Unauthorized.yaml'
 
 # Delete Notification
-/notifications/{id}:
+/{id}:
   delete:
     tags:
       - Notifications
@@ -447,7 +447,7 @@
         $ref: '../responses/NotFound.yaml'
 
 # Delete Multiple Notifications
-/notifications/bulk:
+/bulk:
   delete:
     tags:
       - Notifications
@@ -493,7 +493,7 @@
         $ref: '../responses/Unauthorized.yaml'
 
 # Send System Notification (Admin Only)
-/notifications/system:
+/system:
   post:
     tags:
       - Notifications
@@ -556,7 +556,7 @@
         $ref: '../responses/NotFound.yaml'
 
 # Cleanup Old Notifications (Admin Only)
-/notifications/cleanup:
+/cleanup:
   delete:
     tags:
       - Notifications

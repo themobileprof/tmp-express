@@ -1,476 +1,475 @@
 # File Upload Endpoints
-paths:
-  /:
-    # Upload Screenshots/Images
-    post:
-      tags:
-        - File Uploads
-      summary: Upload Screenshots/Images
-      description: |
-        Upload general images and screenshots.
-        
-        **Supported formats**: JPEG, JPG, PNG, GIF, WebP
-        **Maximum file size**: 5MB
-        **Storage**: Files stored with unique UUID-based names to prevent conflicts
-        **Access**: Files accessible via `/uploads/screenshots/filename` URL path
-      security:
-        - BearerAuth: []
-      requestBody:
-        required: true
-        content:
-          multipart/form-data:
-            schema:
-              type: object
-              properties:
-                file:
-                  type: string
-                  format: binary
-                  description: Image file to upload
-      responses:
-        '200':
-          description: File uploaded successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                    example: true
-                  message:
-                    type: string
-                    example: "File uploaded successfully"
-                  data:
-                    type: object
-                    properties:
-                      filename:
-                        type: string
-                        description: Unique generated filename
-                      originalName:
-                        type: string
-                        description: Original filename from user
-                      size:
-                        type: integer
-                        description: File size in bytes
-                      mimetype:
-                        type: string
-                        description: MIME type of the file
-                      url:
-                        type: string
-                        format: uri
-                        description: Public URL to access the file
-        '400':
-          $ref: '../responses/BadRequest.yaml'
-        '401':
-          $ref: '../responses/Unauthorized.yaml'
-
-  /course-image:
-    # Upload Course Image
-    post:
-      tags:
-        - File Uploads
-      summary: Upload Course Image
-      description: Upload an image for a course
-      security:
-        - BearerAuth: []
-      requestBody:
-        required: true
-        content:
-          multipart/form-data:
-            schema:
-              type: object
-              properties:
-                image:
-                  type: string
-                  format: binary
-                  description: Course image file
-      responses:
-        '200':
-          description: Course image uploaded successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                    example: true
-                  message:
-                    type: string
-                    example: "Course image uploaded successfully"
-                  data:
-                    type: object
-                    properties:
-                      filename:
-                        type: string
-                        description: Unique generated filename
-                      originalName:
-                        type: string
-                        description: Original filename from user
-                      size:
-                        type: integer
-                        description: File size in bytes
-                      mimetype:
-                        type: string
-                        description: MIME type of the file
-                      imageUrl:
-                        type: string
-                        format: uri
-                        description: Public URL to access the course image
-        '400':
-          $ref: '../responses/BadRequest.yaml'
-        '401':
-          $ref: '../responses/Unauthorized.yaml'
-
-  /lesson-material:
-    # Upload Lesson Material
-    post:
-      tags:
-        - File Uploads
-      summary: Upload Lesson Material
-      description: |
-        Upload a material file for a lesson.
-        
-        **Supported formats**: 
-        - Images: JPEG, JPG, PNG, GIF, WebP
-        - Documents: PDF, DOC, DOCX, TXT
-        - Videos: MP4, WebM, OGG
-        **Maximum file size**: 10MB
-      security:
-        - BearerAuth: []
-      requestBody:
-        required: true
-        content:
-          multipart/form-data:
-            schema:
-              type: object
-              properties:
-                file:
-                  type: string
-                  format: binary
-                  description: Lesson material file
-      responses:
-        '200':
-          description: Lesson material uploaded successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                    example: true
-                  message:
-                    type: string
-                    example: "Lesson material uploaded successfully"
-                  data:
-                    type: object
-                    properties:
-                      filename:
-                        type: string
-                        description: Unique generated filename
-                      originalName:
-                        type: string
-                        description: Original filename from user
-                      size:
-                        type: integer
-                        description: File size in bytes
-                      mimetype:
-                        type: string
-                        description: MIME type of the file
-                      fileUrl:
-                        type: string
-                        format: uri
-                        description: Public URL to access the lesson material
-        '400':
-          $ref: '../responses/BadRequest.yaml'
-        '401':
-          $ref: '../responses/Unauthorized.yaml'
-
-  /avatar:
-    # Upload User Avatar
-    post:
-      tags:
-        - File Uploads
-      summary: Upload User Avatar
-      description: Upload a user avatar image
-      security:
-        - BearerAuth: []
-      requestBody:
-        required: true
-        content:
-          multipart/form-data:
-            schema:
-              type: object
-              properties:
-                avatar:
-                  type: string
-                  format: binary
-                  description: Avatar image file
-      responses:
-        '200':
-          description: Avatar uploaded successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                    example: true
-                  message:
-                    type: string
-                    example: "Avatar uploaded successfully"
-                  data:
-                    type: object
-                    properties:
-                      filename:
-                        type: string
-                        description: Unique generated filename
-                      originalName:
-                        type: string
-                        description: Original filename from user
-                      size:
-                        type: integer
-                        description: File size in bytes
-                      mimetype:
-                        type: string
-                        description: MIME type of the file
-                      avatarUrl:
-                        type: string
-                        format: uri
-                        description: Public URL to access the avatar
-        '400':
-          $ref: '../responses/BadRequest.yaml'
-        '401':
-          $ref: '../responses/Unauthorized.yaml'
-
-  /certificate:
-    # Upload Certificate
-    post:
-      tags:
-        - File Uploads
-      summary: Upload Certificate
-      description: Upload a certificate file
-      security:
-        - BearerAuth: []
-      requestBody:
-        required: true
-        content:
-          multipart/form-data:
-            schema:
-              type: object
-              properties:
-                certificate:
-                  type: string
-                  format: binary
-                  description: Certificate file
-      responses:
-        '200':
-          description: Certificate uploaded successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                    example: true
-                  message:
-                    type: string
-                    example: "Certificate uploaded successfully"
-                  data:
-                    type: object
-                    properties:
-                      filename:
-                        type: string
-                        description: Unique generated filename
-                      originalName:
-                        type: string
-                        description: Original filename from user
-                      size:
-                        type: integer
-                        description: File size in bytes
-                      mimetype:
-                        type: string
-                        description: MIME type of the file
-                      certificateUrl:
-                        type: string
-                        format: uri
-                        description: Public URL to access the certificate
-        '400':
-          $ref: '../responses/BadRequest.yaml'
-        '401':
-          $ref: '../responses/Unauthorized.yaml'
-
-  /{filename}:
-    # Delete Uploaded File
-    delete:
-      tags:
-        - File Uploads
-      summary: Delete Uploaded File
-      description: Delete an uploaded file
-      security:
-        - BearerAuth: []
-      parameters:
-        - name: filename
-          in: path
-          required: true
+/:
+  # Upload Screenshots/Images
+  post:
+    tags:
+      - File Uploads
+    summary: Upload Screenshots/Images
+    description: |
+      Upload general images and screenshots.
+      
+      **Supported formats**: JPEG, JPG, PNG, GIF, WebP
+      **Maximum file size**: 5MB
+      **Storage**: Files stored with unique UUID-based names to prevent conflicts
+      **Access**: Files accessible via `/uploads/screenshots/filename` URL path
+    security:
+      - BearerAuth: []
+    requestBody:
+      required: true
+      content:
+        multipart/form-data:
           schema:
-            type: string
-          description: Name of the file to delete
-        - name: type
-          in: query
-          required: true
-          schema:
-            type: string
-            enum: [screenshots, courseImages, lessonMaterials, userAvatars, certificates]
-          description: File type for proper deletion
-      responses:
-        '200':
-          description: File deleted successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                    example: true
-                  message:
-                    type: string
-                    example: "File deleted successfully"
-        '400':
-          $ref: '../responses/BadRequest.yaml'
-        '401':
-          $ref: '../responses/Unauthorized.yaml'
-        '404':
-          $ref: '../responses/NotFound.yaml'
+            type: object
+            properties:
+              file:
+                type: string
+                format: binary
+                description: Image file to upload
+    responses:
+      '200':
+        description: File uploaded successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                  example: true
+                message:
+                  type: string
+                  example: "File uploaded successfully"
+                data:
+                  type: object
+                  properties:
+                    filename:
+                      type: string
+                      description: Unique generated filename
+                    originalName:
+                      type: string
+                      description: Original filename from user
+                    size:
+                      type: integer
+                      description: File size in bytes
+                    mimetype:
+                      type: string
+                      description: MIME type of the file
+                    url:
+                      type: string
+                      format: uri
+                      description: Public URL to access the file
+      '400':
+        $ref: '../responses/BadRequest.yaml'
+      '401':
+        $ref: '../responses/Unauthorized.yaml'
 
-  /files:
-    # List Uploaded Files (Admin Only)
-    get:
-      tags:
-        - File Uploads
-      summary: List Uploaded Files (Admin Only)
-      description: List all uploaded files (admin only)
-      security:
-        - BearerAuth: []
-      parameters:
-        - name: type
-          in: query
-          required: false
+/course-image:
+  # Upload Course Image
+  post:
+    tags:
+      - File Uploads
+    summary: Upload Course Image
+    description: Upload an image for a course
+    security:
+      - BearerAuth: []
+    requestBody:
+      required: true
+      content:
+        multipart/form-data:
           schema:
-            type: string
-            enum: [screenshots, courseImages, lessonMaterials, userAvatars, certificates]
-          description: Filter by file type
-      responses:
-        '200':
-          description: Files listed successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                    example: true
-                  data:
-                    type: object
-                    properties:
-                      files:
-                        type: array
-                        items:
-                          type: object
-                          properties:
-                            filename:
-                              type: string
-                              description: Name of the file
-                            type:
-                              type: string
-                              enum: [screenshots, courseImages, lessonMaterials, userAvatars, certificates]
-                              description: Type/category of the file
-                            url:
-                              type: string
-                              format: uri
-                              description: Public URL to access the file
-                            path:
-                              type: string
-                              description: Server file system path
-                      total:
-                        type: integer
-                        description: Total number of files
-        '401':
-          $ref: '../responses/Unauthorized.yaml'
-        '403':
-          $ref: '../responses/Forbidden.yaml'
+            type: object
+            properties:
+              image:
+                type: string
+                format: binary
+                description: Course image file
+    responses:
+      '200':
+        description: Course image uploaded successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                  example: true
+                message:
+                  type: string
+                  example: "Course image uploaded successfully"
+                data:
+                  type: object
+                  properties:
+                    filename:
+                      type: string
+                      description: Unique generated filename
+                    originalName:
+                      type: string
+                      description: Original filename from user
+                    size:
+                      type: integer
+                      description: File size in bytes
+                    mimetype:
+                      type: string
+                      description: MIME type of the file
+                    imageUrl:
+                      type: string
+                      format: uri
+                      description: Public URL to access the course image
+      '400':
+        $ref: '../responses/BadRequest.yaml'
+      '401':
+        $ref: '../responses/Unauthorized.yaml'
 
-  /debug:
-    # Debug Upload Directories (Admin Only)
-    get:
-      tags:
-        - File Uploads
-      summary: Debug Upload Directories (Admin Only)
-      description: Debug upload directories and file system information (admin only)
-      security:
-        - BearerAuth: []
-      responses:
-        '200':
-          description: Debug information retrieved successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                    example: true
-                  data:
-                    type: object
-                    properties:
-                      uploadPath:
-                        type: string
-                        description: Main upload directory path
-                      uploadDirs:
-                        type: object
-                        description: All upload subdirectory paths
-                        additionalProperties:
-                          type: string
-                      env:
+/lesson-material:
+  # Upload Lesson Material
+  post:
+    tags:
+      - File Uploads
+    summary: Upload Lesson Material
+    description: |
+      Upload a material file for a lesson.
+      
+      **Supported formats**: 
+      - Images: JPEG, JPG, PNG, GIF, WebP
+      - Documents: PDF, DOC, DOCX, TXT
+      - Videos: MP4, WebM, OGG
+      **Maximum file size**: 10MB
+    security:
+      - BearerAuth: []
+    requestBody:
+      required: true
+      content:
+        multipart/form-data:
+          schema:
+            type: object
+            properties:
+              file:
+                type: string
+                format: binary
+                description: Lesson material file
+    responses:
+      '200':
+        description: Lesson material uploaded successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                  example: true
+                message:
+                  type: string
+                  example: "Lesson material uploaded successfully"
+                data:
+                  type: object
+                  properties:
+                    filename:
+                      type: string
+                      description: Unique generated filename
+                    originalName:
+                      type: string
+                      description: Original filename from user
+                    size:
+                      type: integer
+                      description: File size in bytes
+                    mimetype:
+                      type: string
+                      description: MIME type of the file
+                    fileUrl:
+                      type: string
+                      format: uri
+                      description: Public URL to access the lesson material
+      '400':
+        $ref: '../responses/BadRequest.yaml'
+      '401':
+        $ref: '../responses/Unauthorized.yaml'
+
+/avatar:
+  # Upload User Avatar
+  post:
+    tags:
+      - File Uploads
+    summary: Upload User Avatar
+    description: Upload a user avatar image
+    security:
+      - BearerAuth: []
+    requestBody:
+      required: true
+      content:
+        multipart/form-data:
+          schema:
+            type: object
+            properties:
+              avatar:
+                type: string
+                format: binary
+                description: Avatar image file
+    responses:
+      '200':
+        description: Avatar uploaded successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                  example: true
+                message:
+                  type: string
+                  example: "Avatar uploaded successfully"
+                data:
+                  type: object
+                  properties:
+                    filename:
+                      type: string
+                      description: Unique generated filename
+                    originalName:
+                      type: string
+                      description: Original filename from user
+                    size:
+                      type: integer
+                      description: File size in bytes
+                    mimetype:
+                      type: string
+                      description: MIME type of the file
+                    avatarUrl:
+                      type: string
+                      format: uri
+                      description: Public URL to access the avatar
+      '400':
+        $ref: '../responses/BadRequest.yaml'
+      '401':
+        $ref: '../responses/Unauthorized.yaml'
+
+/certificate:
+  # Upload Certificate
+  post:
+    tags:
+      - File Uploads
+    summary: Upload Certificate
+    description: Upload a certificate file
+    security:
+      - BearerAuth: []
+    requestBody:
+      required: true
+      content:
+        multipart/form-data:
+          schema:
+            type: object
+            properties:
+              certificate:
+                type: string
+                format: binary
+                description: Certificate file
+    responses:
+      '200':
+        description: Certificate uploaded successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                  example: true
+                message:
+                  type: string
+                  example: "Certificate uploaded successfully"
+                data:
+                  type: object
+                  properties:
+                    filename:
+                      type: string
+                      description: Unique generated filename
+                    originalName:
+                      type: string
+                      description: Original filename from user
+                    size:
+                      type: integer
+                      description: File size in bytes
+                    mimetype:
+                      type: string
+                      description: MIME type of the file
+                    certificateUrl:
+                      type: string
+                      format: uri
+                      description: Public URL to access the certificate
+      '400':
+        $ref: '../responses/BadRequest.yaml'
+      '401':
+        $ref: '../responses/Unauthorized.yaml'
+
+/{filename}:
+  # Delete Uploaded File
+  delete:
+    tags:
+      - File Uploads
+    summary: Delete Uploaded File
+    description: Delete an uploaded file
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: filename
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Name of the file to delete
+      - name: type
+        in: query
+        required: true
+        schema:
+          type: string
+          enum: [screenshots, courseImages, lessonMaterials, userAvatars, certificates]
+        description: File type for proper deletion
+    responses:
+      '200':
+        description: File deleted successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                  example: true
+                message:
+                  type: string
+                  example: "File deleted successfully"
+      '400':
+        $ref: '../responses/BadRequest.yaml'
+      '401':
+        $ref: '../responses/Unauthorized.yaml'
+      '404':
+        $ref: '../responses/NotFound.yaml'
+
+/files:
+  # List Uploaded Files (Admin Only)
+  get:
+    tags:
+      - File Uploads
+    summary: List Uploaded Files (Admin Only)
+    description: List all uploaded files (admin only)
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: type
+        in: query
+        required: false
+        schema:
+          type: string
+          enum: [screenshots, courseImages, lessonMaterials, userAvatars, certificates]
+        description: Filter by file type
+    responses:
+      '200':
+        description: Files listed successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                  example: true
+                data:
+                  type: object
+                  properties:
+                    files:
+                      type: array
+                      items:
                         type: object
                         properties:
-                          UPLOAD_PATH:
+                          filename:
                             type: string
-                            nullable: true
-                            description: Environment variable for upload path
-                          BASE_URL:
+                            description: Name of the file
+                          type:
                             type: string
-                            nullable: true
-                            description: Environment variable for base URL
-                      directories:
+                            enum: [screenshots, courseImages, lessonMaterials, userAvatars, certificates]
+                            description: Type/category of the file
+                          url:
+                            type: string
+                            format: uri
+                            description: Public URL to access the file
+                          path:
+                            type: string
+                            description: Server file system path
+                    total:
+                      type: integer
+                      description: Total number of files
+      '401':
+        $ref: '../responses/Unauthorized.yaml'
+      '403':
+        $ref: '../responses/Forbidden.yaml'
+
+/debug:
+  # Debug Upload Directories (Admin Only)
+  get:
+    tags:
+      - File Uploads
+    summary: Debug Upload Directories (Admin Only)
+    description: Debug upload directories and file system information (admin only)
+    security:
+      - BearerAuth: []
+    responses:
+      '200':
+        description: Debug information retrieved successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                  example: true
+                data:
+                  type: object
+                  properties:
+                    uploadPath:
+                      type: string
+                      description: Main upload directory path
+                    uploadDirs:
+                      type: object
+                      description: All upload subdirectory paths
+                      additionalProperties:
+                        type: string
+                    env:
+                      type: object
+                      properties:
+                        UPLOAD_PATH:
+                          type: string
+                          nullable: true
+                          description: Environment variable for upload path
+                        BASE_URL:
+                          type: string
+                          nullable: true
+                          description: Environment variable for base URL
+                    directories:
+                      type: object
+                      description: Status of each upload directory
+                      additionalProperties:
                         type: object
-                        description: Status of each upload directory
-                        additionalProperties:
-                          type: object
-                          properties:
-                            path:
+                        properties:
+                          path:
+                            type: string
+                            description: Directory path
+                          exists:
+                            type: boolean
+                            description: Whether directory exists
+                          isDirectory:
+                            type: boolean
+                            description: Whether path is a directory
+                          fileCount:
+                            type: integer
+                            description: Number of files in directory
+                          files:
+                            type: array
+                            items:
                               type: string
-                              description: Directory path
-                            exists:
-                              type: boolean
-                              description: Whether directory exists
-                            isDirectory:
-                              type: boolean
-                              description: Whether path is a directory
-                            fileCount:
-                              type: integer
-                              description: Number of files in directory
-                            files:
-                              type: array
-                              items:
-                                type: string
-                              description: List of filenames (first 10)
-        '401':
-          $ref: '../responses/Unauthorized.yaml'
-        '403':
-          $ref: '../responses/Forbidden.yaml' 
+                            description: List of filenames (first 10)
+      '401':
+        $ref: '../responses/Unauthorized.yaml'
+      '403':
+        $ref: '../responses/Forbidden.yaml' 

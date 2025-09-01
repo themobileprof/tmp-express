@@ -1,7 +1,7 @@
 # Lessons Endpoints
 
 # Get Lesson Details
-/lessons/{id}:
+/{id}:
   get:
     tags:
       - Lessons
@@ -241,7 +241,7 @@
         $ref: '../responses/NotFound.yaml'
 
 # Get Lesson Tests
-/lessons/{id}/tests:
+/{id}/tests:
   get:
     tags:
       - Lessons
@@ -317,7 +317,7 @@
         $ref: '../responses/NotFound.yaml'
 
 # Mark Lesson as Completed
-/lessons/{id}/complete:
+/{id}/complete:
   post:
     tags:
       - Lessons
@@ -369,7 +369,7 @@
         $ref: '../responses/NotFound.yaml'
 
 # Get Lesson Progress
-/lessons/{id}/progress:
+/{id}/progress:
   get:
     tags:
       - Lessons
@@ -419,7 +419,7 @@
         $ref: '../responses/NotFound.yaml'
 
 # Get Lesson Discussions
-/lessons/{id}/discussions:
+/{id}/discussions:
   get:
     tags:
       - Lessons
@@ -535,7 +535,7 @@
         $ref: '../responses/NotFound.yaml'
 
 # Admin: Get Lessons for a Course
-/lessons/admin/courses/{courseId}/lessons:
+/admin/courses/{courseId}/lessons:
   get:
     tags:
       - Lessons
@@ -683,7 +683,7 @@
         $ref: '../responses/NotFound.yaml'
 
 # Get Course Lessons (for enrolled users)
-/lessons/courses/{id}/lessons:
+/courses/{id}/lessons:
   get:
     tags:
       - Lessons

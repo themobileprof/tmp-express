@@ -1,7 +1,7 @@
 # Courses Endpoints
 
 # Browse Courses (Public)
-/courses/browse:
+/browse:
   get:
     tags:
       - Courses
@@ -147,7 +147,7 @@
                       type: integer
 
 # Get Courses with Filters
-/courses:
+/:
   get:
     tags:
       - Courses
@@ -379,7 +379,7 @@
         $ref: '../responses/Forbidden.yaml'
 
 # Get Course by ID
-/courses/{id}:
+/{id}:
   get:
     tags:
       - Courses
@@ -666,7 +666,7 @@
         $ref: '../responses/NotFound.yaml'
 
 # Get Course Tests
-/courses/{id}/tests:
+/{id}/tests:
   get:
     tags:
       - Courses
@@ -709,7 +709,7 @@
         $ref: '../responses/NotFound.yaml'
 
 # Get Course Enrollments (Admin/Instructor)
-/courses/{id}/enrollments:
+/{id}/enrollments:
   get:
     tags:
       - Courses
@@ -773,7 +773,7 @@
         $ref: '../responses/NotFound.yaml'
 
 # Enroll in Course
-/courses/{id}/enroll:
+/{id}/enroll:
   post:
     tags:
       - Courses
@@ -796,7 +796,7 @@
       1. User enters discount code "SPONSOR123"
       2. Frontend calls: `GET /api/sponsorships/code/SPONSOR123`
       3. Response includes: `sponsorship.id = "uuid-here"`
-      4. Frontend calls: `POST /api/courses/{courseId}/enroll` with `sponsorshipId: "uuid-here"`
+      4. Frontend calls: `POST /api/{courseId}/enroll` with `sponsorshipId: "uuid-here"`
     security:
       - BearerAuth: []
     parameters:
@@ -881,7 +881,7 @@
         $ref: '../responses/NotFound.yaml'
 
 # Update Course Enrollment Progress
-/courses/{id}/enrollments/{enrollmentId}:
+/{id}/enrollments/{enrollmentId}:
   put:
     tags:
       - Courses
@@ -948,7 +948,7 @@
         $ref: '../responses/NotFound.yaml'
 
 # Get Course Lessons with Unlock Status
-/courses/{id}/lessons:
+/{id}/lessons:
   get:
     tags:
       - Courses
@@ -1049,7 +1049,7 @@
         $ref: '../responses/NotFound.yaml'
 
 # Get Course Progression Status
-/courses/{id}/progression:
+/{id}/progression:
   get:
     tags:
       - Courses
@@ -1172,7 +1172,7 @@
         $ref: '../responses/NotFound.yaml'
 
 # Get Course Test Statistics
-/courses/{id}/test-stats:
+/{id}/test-stats:
   get:
     tags:
       - Courses
@@ -1204,7 +1204,7 @@
                       type: integer
 
 # Get Course Analytics (Admin/Instructor)
-/courses/{id}/analytics:
+/{id}/analytics:
   get:
     tags:
       - Courses
@@ -1273,7 +1273,7 @@
         $ref: '../responses/NotFound.yaml'
 
 # Get Course Discussions
-/courses/{id}/discussions:
+/{id}/discussions:
   get:
     tags:
       - Courses

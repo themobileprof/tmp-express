@@ -12,7 +12,23 @@ properties:
   courseId:
     type: string
     format: uuid
-    description: ID of the course being sponsored
+    description: ID of the course being sponsored (legacy field for single-course sponsorships)
+  courseIds:
+    type: array
+    items:
+      type: string
+      format: uuid
+    description: Array of course IDs for multi-course sponsorships
+  courseTitles:
+    type: array
+    items:
+      type: string
+    description: Array of course titles for multi-course sponsorships
+  coursePrices:
+    type: array
+    items:
+      type: number
+    description: Array of course prices for multi-course sponsorships
   discountCode:
     type: string
     description: Unique discount code for students to use
@@ -58,6 +74,48 @@ properties:
   isFullyFunded:
     type: boolean
     description: Whether the sponsorship provides 100% discount (free enrollment)
+  
+  # Admin Payment Tracking Fields
+  isPaid:
+    type: boolean
+    default: false
+    description: Whether the sponsorship has been paid for (admin tracking)
+  paidAt:
+    type: string
+    format: date-time
+    nullable: true
+    description: When the sponsorship was marked as paid
+  paymentId:
+    type: string
+    format: uuid
+    nullable: true
+    description: Reference to payment record (if applicable)
+  paymentReference:
+    type: string
+    nullable: true
+    description: External payment reference (e.g., bank transfer reference)
+  paidAmount:
+    type: number
+    nullable: true
+    description: Amount paid for the sponsorship
+  paidCurrency:
+    type: string
+    default: "USD"
+    description: Currency of the payment
+  createdBy:
+    type: string
+    enum: [sponsor, admin]
+    default: "sponsor"
+    description: Who created the sponsorship (sponsor or admin)
+  adminNote:
+    type: string
+    nullable: true
+    description: Internal admin note about the sponsorship
+  invoiceNumber:
+    type: string
+    nullable: true
+    description: Generated invoice number for the sponsorship
+  
   createdAt:
     type: string
     format: date-time
@@ -69,7 +127,6 @@ properties:
 required:
   - id
   - sponsorId
-  - courseId
   - discountCode
   - discountType
   - discountValue

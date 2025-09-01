@@ -1,72 +1,71 @@
 # Search Endpoints
-paths:
-  /suggestions:
-    get:
-      tags:
-        - Search
-      summary: Get Search Suggestions
-      description: Get lightweight search suggestions for search bars
-      security:
-        - BearerAuth: []
-      parameters:
-        - name: scope
-          in: query
-          required: false
-          schema:
-            type: string
-            enum: [classes, discussions]
-            default: classes
-          description: Search scope (classes or discussions)
-        - name: q
-          in: query
-          required: true
-          schema:
-            type: string
-          description: Search query string
-        - name: limit
-          in: query
-          required: false
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 20
-            default: 10
-          description: Maximum number of suggestions to return (max 20)
-      responses:
-        '200':
-          description: Search suggestions retrieved successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  suggestions:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        id:
-                          type: string
-                          format: uuid
-                        label:
-                          type: string
-                          description: Display title for the suggestion
-                        subtitle:
-                          type: string
-                          description: Additional context (topic for classes, empty for discussions)
-                        type:
-                          type: string
-                          enum: [class, discussion]
-                          description: Type of the suggestion
-        '400':
-          description: Bad request - invalid scope parameter
-          content:
-            application/json:
-              schema:
-                $ref: '../responses/BadRequest.yaml'
-        '401':
-          description: Unauthorized - authentication required
-          content:
-            application/json:
-              schema:
-                $ref: '../responses/Unauthorized.yaml' 
+/suggestions:
+  get:
+    tags:
+      - Search
+    summary: Get Search Suggestions
+    description: Get lightweight search suggestions for search bars
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: scope
+        in: query
+        required: false
+        schema:
+          type: string
+          enum: [classes, discussions]
+          default: classes
+        description: Search scope (classes or discussions)
+      - name: q
+        in: query
+        required: true
+        schema:
+          type: string
+        description: Search query string
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 20
+          default: 10
+        description: Maximum number of suggestions to return (max 20)
+    responses:
+      '200':
+        description: Search suggestions retrieved successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                suggestions:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      label:
+                        type: string
+                        description: Display title for the suggestion
+                      subtitle:
+                        type: string
+                        description: Additional context (topic for classes, empty for discussions)
+                      type:
+                        type: string
+                        enum: [class, discussion]
+                        description: Type of the suggestion
+      '400':
+        description: Bad request - invalid scope parameter
+        content:
+          application/json:
+            schema:
+              $ref: '../responses/BadRequest.yaml'
+      '401':
+        description: Unauthorized - authentication required
+        content:
+          application/json:
+            schema:
+              $ref: '../responses/Unauthorized.yaml' 

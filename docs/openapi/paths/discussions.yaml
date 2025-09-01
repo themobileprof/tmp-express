@@ -1,7 +1,7 @@
 # Discussions Endpoints
 
 # Get Recent Discussions (Public)
-/discussions/recent:
+/recent:
   get:
     tags:
       - Discussions
@@ -131,7 +131,7 @@
                       type: integer
 
 # Get Discussions with Filters
-/discussions:
+/:
   get:
     tags:
       - Discussions
@@ -378,7 +378,7 @@
         $ref: '../responses/NotFound.yaml'
 
 # Get Discussion Categories
-/discussions/categories:
+/categories:
   get:
     tags:
       - Discussions
@@ -526,7 +526,7 @@
         $ref: '../responses/Forbidden.yaml'
 
 # Update Discussion Category
-/discussions/categories/{id}:
+/categories/{id}:
   put:
     tags:
       - Discussions
@@ -663,7 +663,7 @@
         $ref: '../responses/NotFound.yaml'
 
 # Get Category Statistics
-/discussions/categories/{id}/stats:
+/categories/{id}/stats:
   get:
     tags:
       - Discussions
@@ -723,7 +723,7 @@
         $ref: '../responses/NotFound.yaml'
 
 # Get Popular Tags
-/discussions/tags:
+/tags:
   get:
     tags:
       - Discussions
@@ -759,7 +759,7 @@
                         description: Number of times this tag is used
 
 # Get Discussion by ID
-/discussions/{id}:
+/{id}:
   get:
     tags:
       - Discussions
@@ -939,7 +939,7 @@
         $ref: '../responses/NotFound.yaml'
 
 # Get Discussion Replies
-/discussions/{id}/replies:
+/{id}/replies:
   get:
     tags:
       - Discussions
@@ -1057,7 +1057,7 @@
         $ref: '../responses/NotFound.yaml'
 
 # Like Discussion
-/discussions/{id}/like:
+/{id}/like:
   post:
     tags:
       - Discussions

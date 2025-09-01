@@ -1,7 +1,7 @@
 # Scraping Management Endpoints
 
 # Get all scraped URLs with filtering and pagination
-/scraping/urls:
+/urls:
   get:
     tags:
       - Scraping
@@ -278,7 +278,7 @@
                       type: string
 
 # Add multiple URLs to be scraped
-/scraping/urls/bulk:
+/urls/bulk:
   post:
     tags:
       - Scraping
@@ -395,7 +395,7 @@
                       type: string
 
 # Get pending URLs for scraping
-/scraping/urls/pending:
+/urls/pending:
   get:
     tags:
       - Scraping
@@ -483,7 +483,7 @@
                       type: string
 
 # Update URL status (for scraping agent)
-/scraping/urls/{id}/status:
+/urls/{id}/status:
   put:
     tags:
       - Scraping
@@ -611,7 +611,7 @@
                       type: string
 
 # Delete a scraped URL
-/scraping/urls/{id}:
+/urls/{id}:
   delete:
     tags:
       - Scraping
@@ -667,7 +667,7 @@
                       type: string
 
 # Get scraping statistics
-/scraping/stats:
+/stats:
   get:
     tags:
       - Scraping
@@ -776,7 +776,7 @@
                       type: string
 
 # Reset failed URLs for retry
-/scraping/urls/reset-failed:
+/urls/reset-failed:
   post:
     tags:
       - Scraping

@@ -35,6 +35,13 @@ info:
     - **Use sponsorship.id** (UUID), not the discount code string
     - **Check isExpired and isFull** before allowing enrollment
     
+    **Admin Sponsorship Management:**
+    - **Create Sponsorships**: POST /api/admin/sponsorships (multi-course support)
+    - **Payment Tracking**: GET /api/admin/sponsorships/{id}/payment-status
+    - **Mark as Paid**: POST /api/admin/sponsorships/{id}/mark-paid (offline payments)
+    - **Generate Invoices**: GET /api/admin/sponsorships/{id}/invoice
+    - **Admin Features**: Support for offline payments, invoice generation, multi-course sponsorships
+    
     **Implementation Status**: All documented endpoints are fully implemented and tested, including the complete file upload system with persistent storage support and comprehensive sponsorship discount handling.
   version: 1.0.0
   contact:
@@ -98,45 +105,55 @@ paths:
 
     # Sponsorship Endpoints
     /sponsorships:
-      $ref: './paths/sponsorships.yaml#/paths/~1'
+      $ref: './paths/sponsorships.yaml#/~1'
     /sponsorships/{id}:
-      $ref: './paths/sponsorships.yaml#/paths/~1{id}'
+      $ref: './paths/sponsorships.yaml#/~1{id}'
     /sponsorships/{id}/use:
-      $ref: './paths/sponsorships.yaml#/paths/~1{id}~1use'
+      $ref: './paths/sponsorships.yaml#/~1{id}~1use'
     /sponsorships/{id}/stats:
-      $ref: './paths/sponsorships.yaml#/paths/~1{id}~1stats'
+      $ref: './paths/sponsorships.yaml#/~1{id}~1stats'
     /sponsorships/{id}/email:
-      $ref: './paths/sponsorships.yaml#/paths/~1{id}~1email'
+      $ref: './paths/sponsorships.yaml#/~1{id}~1email'
     /sponsorships/code/{discountCode}:
-      $ref: './paths/sponsorships.yaml#/paths/~1code~1{discountCode}'
+      $ref: './paths/sponsorships.yaml#/~1code~1{discountCode}'
+
+    # Admin Sponsorship Endpoints
+    /admin/sponsorships:
+      $ref: './paths/sponsorships.yaml#/admin~1sponsorships'
+    /admin/sponsorships/{id}/payment-status:
+      $ref: './paths/sponsorships.yaml#/admin~1sponsorships~1{id}~1payment-status'
+    /admin/sponsorships/{id}/mark-paid:
+      $ref: './paths/sponsorships.yaml#/admin~1sponsorships~1{id}~1mark-paid'
+    /admin/sponsorships/{id}/invoice:
+      $ref: './paths/sponsorships.yaml#/admin~1sponsorships~1{id}~1invoice'
 
     # Sponsorship Opportunities Endpoints
     /sponsorship-opportunities:
-      $ref: './paths/sponsorship-opportunities.yaml#/paths/~1'
+      $ref: './paths/sponsorship-opportunities.yaml#/~1'
     /sponsorship-opportunities/{id}:
-      $ref: './paths/sponsorship-opportunities.yaml#/paths/~1{id}'
+      $ref: './paths/sponsorship-opportunities.yaml#/~1{id}'
     /sponsorship-opportunities/{id}/contribute:
-      $ref: './paths/sponsorship-opportunities.yaml#/paths/~1{id}~1contribute'
+      $ref: './paths/sponsorship-opportunities.yaml#/~1{id}~1contribute'
 
     # Discussion Endpoints
     /discussions/recent:
-      $ref: './paths/discussions.yaml#/~1discussions~1recent'
+      $ref: './paths/discussions.yaml#/~1recent'
     /discussions:
-      $ref: './paths/discussions.yaml#/~1discussions'
+      $ref: './paths/discussions.yaml#/~1'
     /discussions/categories:
-      $ref: './paths/discussions.yaml#/~1discussions~1categories'
+      $ref: './paths/discussions.yaml#/~1categories'
     /discussions/categories/{id}:
-      $ref: './paths/discussions.yaml#/~1discussions~1categories~1{id}'
+      $ref: './paths/discussions.yaml#/~1categories~1{id}'
     /discussions/categories/{id}/stats:
-      $ref: './paths/discussions.yaml#/~1discussions~1categories~1{id}~1stats'
+      $ref: './paths/discussions.yaml#/~1categories~1{id}~1stats'
     /discussions/tags:
-      $ref: './paths/discussions.yaml#/~1discussions~1tags'
+      $ref: './paths/discussions.yaml#/~1tags'
     /discussions/{id}:
-      $ref: './paths/discussions.yaml#/~1discussions~1{id}'
+      $ref: './paths/discussions.yaml#/~1{id}'
     /discussions/{id}/replies:
-      $ref: './paths/discussions.yaml#/~1discussions~1{id}~1replies'
+      $ref: './paths/discussions.yaml#/~1{id}~1replies'
     /discussions/{id}/like:
-      $ref: './paths/discussions.yaml#/~1discussions~1{id}~1like'
+      $ref: './paths/discussions.yaml#/~1{id}~1like'
 
     # Certifications Endpoints
     /certifications:
@@ -160,41 +177,41 @@ paths:
 
     # Lessons (path-level refs)
     /lessons/{id}:
-      $ref: './paths/lessons.yaml#/~1lessons~1{id}'
+      $ref: './paths/lessons.yaml#/~1{id}'
     /lessons/{id}/complete:
-      $ref: './paths/lessons.yaml#/~1lessons~1{id}~1complete'
+      $ref: './paths/lessons.yaml#/~1{id}~1complete'
     /lessons/{id}/progress:
-      $ref: './paths/lessons.yaml#/~1lessons~1{id}~1progress'
+      $ref: './paths/lessons.yaml#/~1{id}~1progress'
     /lessons/admin/courses/{courseId}/lessons:
-      $ref: './paths/lessons.yaml#/~1lessons~1admin~1courses~1{courseId}~1lessons'
+      $ref: './paths/lessons.yaml#/~1admin~1courses~1{courseId}~1lessons'
     /lessons/courses/{id}/lessons:
-      $ref: './paths/lessons.yaml#/~1lessons~1courses~1{id}~1lessons'
+      $ref: './paths/lessons.yaml#/~1courses~1{id}~1lessons'
 
     # Courses (use correct file per path)
     /courses/browse:
-      $ref: './paths/courses.yaml#/~1courses~1browse'
+      $ref: './paths/courses.yaml#/~1browse'
     /courses:
-      $ref: './paths/courses.yaml#/~1courses'
+      $ref: './paths/courses.yaml#/~1'
     /courses/{id}:
-      $ref: './paths/courses.yaml#/~1courses~1{id}'
+      $ref: './paths/courses.yaml#/~1{id}'
     /courses/{id}/tests:
-      $ref: './paths/courses.yaml#/~1courses~1{id}~1tests'
+      $ref: './paths/courses.yaml#/~1{id}~1tests'
     /courses/{id}/enrollments:
-      $ref: './paths/courses.yaml#/~1courses~1{id}~1enrollments'
+      $ref: './paths/courses.yaml#/~1{id}~1enrollments'
     /courses/{id}/enroll:
-      $ref: './paths/courses.yaml#/~1courses~1{id}~1enroll'
+      $ref: './paths/courses.yaml#/~1{id}~1enroll'
     /courses/{id}/enrollments/{enrollmentId}:
-      $ref: './paths/courses.yaml#/~1courses~1{id}~1enrollments~1{enrollmentId}'
+      $ref: './paths/courses.yaml#/~1{id}~1enrollments~1{enrollmentId}'
     /courses/{id}/lessons:
-      $ref: './paths/courses.yaml#/~1courses~1{id}~1lessons'
+      $ref: './paths/courses.yaml#/~1{id}~1lessons'
     /courses/{id}/progression:
-      $ref: './paths/courses.yaml#/~1courses~1{id}~1progression'
+      $ref: './paths/courses.yaml#/~1{id}~1progression'
     /courses/{id}/test-stats:
-      $ref: './paths/courses.yaml#/~1courses~1{id}~1test-stats'
+      $ref: './paths/courses.yaml#/~1{id}~1test-stats'
     /courses/{id}/analytics:
-      $ref: './paths/courses.yaml#/~1courses~1{id}~1analytics'
+      $ref: './paths/courses.yaml#/~1{id}~1analytics'
     /courses/{id}/discussions:
-      $ref: './paths/courses.yaml#/~1courses~1{id}~1discussions'
+      $ref: './paths/courses.yaml#/~1{id}~1discussions'
 
     # Classes
     /classes/upcoming:
@@ -208,77 +225,77 @@ paths:
 
     # Uploads
     /uploads:
-      $ref: './paths/uploads.yaml#/paths/~1'
+      $ref: './paths/uploads.yaml#/~1'
     /uploads/course-image:
-      $ref: './paths/uploads.yaml#/paths/~1course-image'
+      $ref: './paths/uploads.yaml#/~1course-image'
     /uploads/lesson-material:
-      $ref: './paths/uploads.yaml#/paths/~1lesson-material'
+      $ref: './paths/uploads.yaml#/~1lesson-material'
     /uploads/avatar:
-      $ref: './paths/uploads.yaml#/paths/~1avatar'
+      $ref: './paths/uploads.yaml#/~1avatar'
     /uploads/certificate:
-      $ref: './paths/uploads.yaml#/paths/~1certificate'
+      $ref: './paths/uploads.yaml#/~1certificate'
     /uploads/{filename}:
-      $ref: './paths/uploads.yaml#/paths/~1{filename}'
+      $ref: './paths/uploads.yaml#/~1{filename}'
     /uploads/files:
-      $ref: './paths/uploads.yaml#/paths/~1files'
+      $ref: './paths/uploads.yaml#/~1files'
     /uploads/debug:
-      $ref: './paths/uploads.yaml#/paths/~1debug'
+      $ref: './paths/uploads.yaml#/~1debug'
 
     # Users
     /users/{id}:
-      $ref: './paths/users.yaml#/paths/~1{id}'
+      $ref: './paths/users.yaml#/~1{id}'
     /users/{id}/enrollments:
-      $ref: './paths/users.yaml#/paths/~1{id}~1enrollments'
+      $ref: './paths/users.yaml#/~1{id}~1enrollments'
     /users/{id}/enrolled-courses:
-      $ref: './paths/users.yaml#/paths/~1{id}~1enrolled-courses'
+      $ref: './paths/users.yaml#/~1{id}~1enrolled-courses'
     /users/{id}/enrolled-classes:
-      $ref: './paths/users.yaml#/paths/~1{id}~1enrolled-classes'
+      $ref: './paths/users.yaml#/~1{id}~1enrolled-classes'
     /users/{id}/dashboard-stats:
-      $ref: './paths/users.yaml#/paths/~1{id}~1dashboard-stats'
+      $ref: './paths/users.yaml#/~1{id}~1dashboard-stats'
     /users/{id}/certifications:
-      $ref: './paths/users.yaml#/paths/~1{id}~1certifications'
+      $ref: './paths/users.yaml#/~1{id}~1certifications'
     /users/{id}/test-attempts:
-      $ref: './paths/users.yaml#/paths/~1{id}~1test-attempts'
+      $ref: './paths/users.yaml#/~1{id}~1test-attempts'
     /users/{id}/discussions:
-      $ref: './paths/users.yaml#/paths/~1{id}~1discussions'
+      $ref: './paths/users.yaml#/~1{id}~1discussions'
     /users/enrollments/courses:
-      $ref: './paths/users.yaml#/paths/~1enrollments~1courses'
+      $ref: './paths/users.yaml#/~1enrollments~1courses'
     /users/enrollments/classes:
-      $ref: './paths/users.yaml#/paths/~1enrollments~1classes'
+      $ref: './paths/users.yaml#/~1enrollments~1classes'
     /users/dashboard-stats:
-      $ref: './paths/users.yaml#/paths/~1dashboard-stats'
+      $ref: './paths/users.yaml#/~1dashboard-stats'
     /users/me/settings:
-      $ref: './paths/users.yaml#/paths/~1me~1settings'
+      $ref: './paths/users.yaml#/~1me~1settings'
     /users/me/profile:
-      $ref: './paths/users.yaml#/paths/~1me~1profile'
+      $ref: './paths/users.yaml#/~1me~1profile'
 
     # Notifications
     /notifications:
-      $ref: './paths/notifications.yaml#/~1notifications'
+      $ref: './paths/notifications.yaml#/~1'
     /notifications/types:
-      $ref: './paths/notifications.yaml#/~1notifications~1types'
+      $ref: './paths/notifications.yaml#/~1types'
     /notifications/count:
-      $ref: './paths/notifications.yaml#/~1notifications~1count'
+      $ref: './paths/notifications.yaml#/~1count'
     /notifications/preferences:
-      $ref: './paths/notifications.yaml#/~1notifications~1preferences'
+      $ref: './paths/notifications.yaml#/~1preferences'
     /notifications/{id}/read:
-      $ref: './paths/notifications.yaml#/~1notifications~1{id}~1read'
+      $ref: './paths/notifications.yaml#/~1{id}~1read'
     /notifications/read-all:
-      $ref: './paths/notifications.yaml#/~1notifications~1read-all'
+      $ref: './paths/notifications.yaml#/~1read-all'
     /notifications/read-by-type:
-      $ref: './paths/notifications.yaml#/~1notifications~1read-by-type'
+      $ref: './paths/notifications.yaml#/~1read-by-type'
     /notifications/{id}:
-      $ref: './paths/notifications.yaml#/~1notifications~1{id}'
+      $ref: './paths/notifications.yaml#/~1{id}'
     /notifications/bulk:
-      $ref: './paths/notifications.yaml#/~1notifications~1bulk'
+      $ref: './paths/notifications.yaml#/~1bulk'
     /notifications/system:
-      $ref: './paths/notifications.yaml#/~1notifications~1system'
+      $ref: './paths/notifications.yaml#/~1system'
     /notifications/cleanup:
-      $ref: './paths/notifications.yaml#/~1notifications~1cleanup'
+      $ref: './paths/notifications.yaml#/~1cleanup'
 
     # Search and Meta
     /search/suggestions:
-      $ref: './paths/search.yaml#/paths/~1suggestions'
+      $ref: './paths/search.yaml#/~1suggestions'
     /meta/classes-facets:
       $ref: './paths/meta.yaml#/getClassesFacets'
 
@@ -290,47 +307,47 @@ paths:
 
     # Scraping
     /scraping/urls:
-      $ref: './paths/scraping.yaml#/~1scraping~1urls'
+      $ref: './paths/scraping.yaml#/~1urls'
     /scraping/urls/bulk:
-      $ref: './paths/scraping.yaml#/~1scraping~1urls~1bulk'
+      $ref: './paths/scraping.yaml#/~1urls~1bulk'
     /scraping/urls/pending:
-      $ref: './paths/scraping.yaml#/~1scraping~1urls~1pending'
+      $ref: './paths/scraping.yaml#/~1urls~1pending'
     /scraping/urls/{id}/status:
-      $ref: './paths/scraping.yaml#/~1scraping~1urls~1{id}~1status'
+      $ref: './paths/scraping.yaml#/~1urls~1{id}~1status'
     /scraping/urls/{id}:
-      $ref: './paths/scraping.yaml#/~1scraping~1urls~1{id}'
+      $ref: './paths/scraping.yaml#/~1urls~1{id}'
     /scraping/stats:
-      $ref: './paths/scraping.yaml#/~1scraping~1stats'
+      $ref: './paths/scraping.yaml#/~1stats'
     /scraping/urls/reset-failed:
-      $ref: './paths/scraping.yaml#/~1scraping~1urls~1reset-failed'
+      $ref: './paths/scraping.yaml#/~1urls~1reset-failed'
 
     # Tests
     /tests/{id}:
-      $ref: './paths/tests.yaml#/paths/~1{id}'
+      $ref: './paths/tests.yaml#/~1{id}'
     /tests/{id}/questions:
-      $ref: './paths/tests.yaml#/paths/~1{id}~1questions'
+      $ref: './paths/tests.yaml#/~1{id}~1questions'
     /tests/{id}/questions/{questionId}:
-      $ref: './paths/tests.yaml#/paths/~1{id}~1questions~1{questionId}'
+      $ref: './paths/tests.yaml#/~1{id}~1questions~1{questionId}'
     /tests/{id}/start:
-      $ref: './paths/tests.yaml#/paths/~1{id}~1start'
+      $ref: './paths/tests.yaml#/~1{id}~1start'
     /tests/{id}/proceed:
-      $ref: './paths/tests.yaml#/paths/~1{id}~1proceed'
+      $ref: './paths/tests.yaml#/~1{id}~1proceed'
     /tests/{id}/attempts/{attemptId}/answer:
-      $ref: './paths/tests.yaml#/paths/~1{id}~1attempts~1{attemptId}~1answer'
+      $ref: './paths/tests.yaml#/~1{id}~1attempts~1{attemptId}~1answer'
     /tests/{id}/attempts/{attemptId}/submit:
-      $ref: './paths/tests.yaml#/paths/~1{id}~1attempts~1{attemptId}~1submit'
+      $ref: './paths/tests.yaml#/~1{id}~1attempts~1{attemptId}~1submit'
     /tests/{id}/attempts/{attemptId}/results:
-      $ref: './paths/tests.yaml#/paths/~1{id}~1attempts~1{attemptId}~1results'
+      $ref: './paths/tests.yaml#/~1{id}~1attempts~1{attemptId}~1results'
     /tests/{id}/questions/{questionId}/image/upload:
-      $ref: './paths/tests.yaml#/paths/~1{id}~1questions~1{questionId}~1image~1upload'
+      $ref: './paths/tests.yaml#/~1{id}~1questions~1{questionId}~1image~1upload'
     /tests/{id}/analytics:
-      $ref: './paths/tests.yaml#/paths/~1{id}~1analytics'
+      $ref: './paths/tests.yaml#/~1{id}~1analytics'
     /tests/{id}/attempts:
-      $ref: './paths/tests.yaml#/paths/~1{id}~1attempts'
+      $ref: './paths/tests.yaml#/~1{id}~1attempts'
     /tests/{id}/my-attempts:
-      $ref: './paths/tests.yaml#/paths/~1{id}~1my-attempts'
+      $ref: './paths/tests.yaml#/~1{id}~1my-attempts'
     /tests/{id}/attempts/{attemptId}/details:
-      $ref: './paths/tests.yaml#/paths/~1{id}~1attempts~1{attemptId}~1details'
+      $ref: './paths/tests.yaml#/~1{id}~1attempts~1{attemptId}~1details'
 
 components:
   securitySchemes:
@@ -397,15 +414,15 @@ components:
   
   responses:
     NotFound:
-      $ref: './responses/index.yaml#/NotFound'
+      $ref: './responses/NotFound.yaml'
     Unauthorized:
-      $ref: './responses/index.yaml#/Unauthorized'
+      $ref: './responses/Unauthorized.yaml'
     Forbidden:
-      $ref: './responses/index.yaml#/Forbidden'
+      $ref: './responses/Forbidden.yaml'
     BadRequest:
-      $ref: './responses/index.yaml#/BadRequest'
+      $ref: './responses/BadRequest.yaml'
     Conflict:
-      $ref: './responses/index.yaml#/Conflict'
+      $ref: './responses/Conflict.yaml'
 
 tags:
   - name: Authentication
@@ -415,7 +432,7 @@ tags:
   - name: Admin Payments
     description: Admin payment management and analytics
   - name: Sponsorships
-    description: 'Sponsorship management and discount code system. **Important**: Use validation endpoint first to get sponsorship UUID for enrollment.'
+    description: 'Sponsorship management and discount code system with admin payment tracking and invoice generation. **Important**: Use validation endpoint first to get sponsorship UUID for enrollment. **Admin Features**: Multi-course sponsorships, offline payment tracking, invoice generation.'
   - name: Sponsorship Opportunities
     description: Sponsorship opportunity creation and management
   - name: Discussions
