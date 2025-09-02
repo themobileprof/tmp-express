@@ -44,5 +44,5 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=5 \
 ENV NODE_ENV=production
 ENV PORT=3000
 
-# Start the application with migration
-CMD ["sh", "-c", "node src/database/migrate.js && node src/server.js"] 
+# Start the application with migration, init, and optional seed
+CMD ["sh", "-c", "scripts/start.sh"] 

@@ -118,7 +118,7 @@ echo "📋 .env file size: $(wc -c < .env) bytes"
 
 # Run new container with host networking
 echo "🐳 Starting new container with host networking..."
-echo "📋 Container command: docker run -d --name themobileprof-backend --restart unless-stopped --network host -v \"$UPLOADS_DIR:/app/uploads\" --env-file .env docker.io/themobileprof/tmp-express:latest"
+echo "📋 Container command: docker run -d --name themobileprof-backend --restart unless-stopped --network host -v \"$UPLOADS_DIR:/app/uploads\" --env-file .env -e RUN_INIT_SETTINGS=true -e RUN_SEED=${RUN_SEED:-false} docker.io/themobileprof/tmp-express:latest"
 
 # Start container and capture the container ID
 echo "🐳 Starting container..."
@@ -128,6 +128,8 @@ CONTAINER_ID=$(docker run -d \
   --network host \
   -v "$UPLOADS_DIR:/app/uploads" \
   --env-file .env \
+  -e RUN_INIT_SETTINGS=true \
+  -e RUN_SEED=${RUN_SEED:-false} \
   docker.io/themobileprof/tmp-express:latest)
 
 if [ -z "$CONTAINER_ID" ]; then

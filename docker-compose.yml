@@ -48,7 +48,7 @@ services:
       - ./uploads:/app/uploads
     networks:
       - app-network
-    command: npm run dev
+    command: sh -c "RUN_SEED=true RUN_INIT_SETTINGS=true node src/database/migrate.js && node scripts/init-system-settings.js && node src/database/seed.js && npm run dev"
 
 volumes:
   db_data:

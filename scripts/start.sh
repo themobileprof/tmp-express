@@ -21,6 +21,22 @@ fi
 
 echo "✅ Database migration completed"
 
+# Initialize system settings (idempotent)
+if [ "${RUN_INIT_SETTINGS:-true}" = "true" ]; then
+  echo "🔧 Initializing system settings..."
+  node scripts/init-system-settings.js || {
+    echo "⚠️  System settings initialization failed (continuing)";
+  }
+fi
+
+# Optional seed data (idempotent)
+if [ "${RUN_SEED:-false}" = "true" ]; then
+  echo "🌱 Seeding database..."
+  node src/database/seed.js || {
+    echo "⚠️  Database seeding failed (continuing)";
+  }
+fi
+
 # Start the server
 echo "🌐 Starting server..."
 exec node src/server.js 
