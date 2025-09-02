@@ -1,0 +1,70 @@
+# Discussion Stats Schema
+type: object
+properties:
+  totalDiscussions:
+    type: integer
+    minimum: 0
+    description: Total number of discussions
+  totalReplies:
+    type: integer
+    minimum: 0
+    description: Total number of replies
+  totalLikes:
+    type: integer
+    minimum: 0
+    description: Total number of likes
+  totalViews:
+    type: integer
+    minimum: 0
+    description: Total number of views
+  activeDiscussions:
+    type: integer
+    minimum: 0
+    description: Number of active discussions (recent activity)
+  topContributors:
+    type: array
+    items:
+      type: object
+      properties:
+        userId:
+          type: string
+          format: uuid
+        firstName:
+          type: string
+        lastName:
+          type: string
+        avatarUrl:
+          type: string
+          nullable: true
+        contributionCount:
+          type: integer
+          minimum: 0
+    description: Top contributors to discussions
+  recentActivity:
+    type: array
+    items:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [discussion_created, reply_added, discussion_liked]
+        discussionId:
+          type: string
+          format: uuid
+        discussionTitle:
+          type: string
+        userId:
+          type: string
+          format: uuid
+        userName:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+    description: Recent activity in discussions
+required:
+  - totalDiscussions
+  - totalReplies
+  - totalLikes
+  - totalViews
+  - activeDiscussions 

@@ -125,7 +125,7 @@ router.post('/initialize', authenticateToken, asyncHandler(async (req, res) => {
   const reference = generateReference('TMP');
 
   // Build redirect URL
-  const frontendUrl = process.env.FRONTEND_URL || 'https://themobileprof.com';
+  const frontendUrl = process.env.FRONTEND_URL || 'https://lms.themobileprof.com';
   const redirectUrl = callbackUrl 
     ? `${callbackUrl}?tx_ref=${reference}&payment_id=${uuidv4()}`
     : `${frontendUrl}/payment/callback?tx_ref=${reference}&payment_id=${uuidv4()}`;

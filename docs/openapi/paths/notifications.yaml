@@ -110,6 +110,27 @@
                       type: integer
                     totalPages:
                       type: integer
+            examples:
+              course_enrollment:
+                summary: Course enrollment notification
+                value:
+                  notifications:
+                    - id: "550e8400-e29b-41d4-a716-446655440000"
+                      type: "course_enrollment"
+                      title: "Course Enrollment Successful"
+                      message: "You have successfully enrolled in JavaScript Fundamentals"
+                      data:
+                        courseId: "course-uuid-123"
+                        courseTitle: "JavaScript Fundamentals"
+                      isRead: false
+                      priority: "normal"
+                      createdAt: "2024-01-01T10:00:00Z"
+                      readAt: null
+                  pagination:
+                    page: 1
+                    limit: 20
+                    total: 5
+                    totalPages: 1
       '401':
         $ref: '../responses/Unauthorized.yaml'
 
@@ -168,6 +189,11 @@
               properties:
                 unreadCount:
                   type: integer
+            examples:
+              unread_count:
+                summary: Unread notification count
+                value:
+                  unreadCount: 5
       '401':
         $ref: '../responses/Unauthorized.yaml'
 
@@ -588,6 +614,121 @@
                   type: integer
                 daysOld:
                   type: integer
+      '401':
+        $ref: '../responses/Unauthorized.yaml'
+      '403':
+        $ref: '../responses/Forbidden.yaml' 
+
+# Get Email Logs (Admin Only)
+/email-logs:
+  get:
+    tags:
+      - Notifications
+    summary: Get Email Logs (Admin Only)
+    description: |
+      Retrieve email sending logs and statistics for monitoring and debugging.
+      This endpoint is restricted to admin users only.
+      
+      **Features:**
+      - View all email send attempts with detailed information
+      - Filter by status (sent/failed), recipient, and time period
+      - Get delivery statistics and success rates
+      - Monitor email performance and troubleshoot issues
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: status
+        in: query
+        required: false
+        schema:
+          type: string
+          enum: [sent, failed]
+        description: Filter by email status
+      - name: recipient
+        in: query
+        required: false
+        schema:
+          type: string
+        description: Filter by recipient email (partial match)
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 1
+          minimum: 1
+        description: Page number
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 50
+          minimum: 1
+          maximum: 200
+        description: Items per page
+      - name: days
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 7
+          minimum: 1
+          maximum: 365
+        description: Number of days to look back
+    responses:
+      '200':
+        description: Email logs retrieved successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                logs:
+                  type: array
+                  items:
+                    $ref: '../schemas/EmailLog.yaml'
+                pagination:
+                  type: object
+                  properties:
+                    page:
+                      type: integer
+                    limit:
+                      type: integer
+                    total:
+                      type: integer
+                    totalPages:
+                      type: integer
+                stats:
+                  $ref: '../schemas/EmailLogStats.yaml'
+            examples:
+              email_logs:
+                summary: Email logs with statistics
+                value:
+                  logs:
+                    - id: "550e8400-e29b-41d4-a716-446655440000"
+                      emailId: "abc123def"
+                      recipientEmail: "user@example.com"
+                      subject: "Course Enrollment Successful"
+                      template: "notification"
+                      messageId: "<abc123@mailersend.net>"
+                      status: "sent"
+                      errorMessage: null
+                      durationMs: 1250
+                      createdAt: "2024-01-01T10:00:00Z"
+                      sentAt: "2024-01-01T10:00:00Z"
+                  pagination:
+                    page: 1
+                    limit: 50
+                    total: 25
+                    totalPages: 1
+                  stats:
+                    total: 25
+                    sent: 23
+                    failed: 2
+                    avgDuration: 1150.5
+                    uniqueRecipients: 20
+                    successRate: "92.00"
       '401':
         $ref: '../responses/Unauthorized.yaml'
       '403':

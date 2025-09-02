@@ -1,0 +1,28 @@
+# Email Log Statistics Schema
+type: object
+properties:
+  total:
+    type: integer
+    description: Total number of emails in the time period
+  sent:
+    type: integer
+    description: Number of successfully sent emails
+  failed:
+    type: integer
+    description: Number of failed email attempts
+  avgDuration:
+    type: number
+    description: Average send duration in milliseconds
+  uniqueRecipients:
+    type: integer
+    description: Number of unique recipients
+  successRate:
+    type: string
+    description: Success rate percentage as a string (e.g., "92.00")
+required:
+  - total
+  - sent
+  - failed
+  - avgDuration
+  - uniqueRecipients
+  - successRate 

@@ -6,6 +6,8 @@ const { getRow, query } = require('../database/config');
 const { asyncHandler, AppError } = require('../middleware/errorHandler');
 const { OAuth2Client } = require('google-auth-library');
 const { authenticateToken } = require('../middleware/auth');
+const crypto = require('crypto');
+const { sendEmail } = require('../mailer');
 
 const router = express.Router();
 
@@ -597,6 +599,149 @@ router.post('/admin/google', [
 
   // Admin not found - don't allow creation of admin accounts via Google OAuth
   throw new AppError('Admin account not found. Please contact system administrator.', 401, 'Admin Not Found');
+}));
+
+// Request password reset
+router.post('/forgot-password', [
+  body('email').isEmail().normalizeEmail().withMessage('Valid email required')
+], asyncHandler(async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    throw new AppError('Validation failed', 400, 'Validation Error');
+  }
+  const { email } = req.body;
+  const user = await getRow('SELECT id, email, first_name, auth_provider FROM users WHERE email = $1 AND is_active = true', [email]);
+  // Don't reveal whether the email exists or provider type
+  if (user && user.auth_provider !== 'google') {
+    const token = crypto.randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + 1000 * 60 * 60); // 1 hour
+    await query('UPDATE users SET password_reset_token = $1, password_reset_expires = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3', [token, expiresAt, user.id]);
+    const resetUrl = `${process.env.FRONTEND_URL || 'https://themobileprof.com'}/reset-password?token=${token}`;
+    await sendEmail({
+      to: email,
+      subject: 'Reset your password',
+      template: 'notification',
+      context: {
+        firstName: user.first_name || 'there',
+        message: `Click the button below to reset your password. This link expires in 1 hour.`,
+        data: { resetUrl }
+      },
+      html: `<p>Hello ${user.first_name || 'there'},</p><p>Click <a href="${resetUrl}">here</a> to reset your password. This link expires in 1 hour.</p>`
+    });
+  }
+  res.json({ message: 'If that email exists, we have sent password reset instructions.' });
+}));
+
+// Reset password with token
+router.post('/reset-password', [
+  body('token').notEmpty().withMessage('Token is required'),
+  body('newPassword').isLength({ min: 6 }).withMessage('New password must be at least 6 characters long')
+], asyncHandler(async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    throw new AppError('Validation failed', 400, 'Validation Error');
+  }
+  const { token, newPassword } = req.body;
+  const user = await getRow('SELECT id, auth_provider FROM users WHERE password_reset_token = $1 AND password_reset_expires > NOW() AND is_active = true', [token]);
+  if (!user) {
+    throw new AppError('Invalid or expired reset token', 400, 'Invalid Token');
+  }
+  if (user.auth_provider === 'google') {
+    throw new AppError('Password reset not available for Google OAuth accounts', 400, 'Invalid Operation');
+  }
+  const saltRounds = parseInt(process.env.BCRYPT_ROUNDS) || 12;
+  const newHash = await bcrypt.hash(newPassword, saltRounds);
+  await query('UPDATE users SET password_hash = $1, password_reset_token = NULL, password_reset_expires = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = $2', [newHash, user.id]);
+  res.json({ message: 'Password has been reset successfully.' });
+}));
+
+// Send verification email (user-initiated)
+router.post('/resend-verification', [
+  body('email').isEmail().normalizeEmail().withMessage('Valid email required')
+], asyncHandler(async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    throw new AppError('Validation failed', 400, 'Validation Error');
+  }
+  const { email } = req.body;
+  const user = await getRow('SELECT id, email, first_name, email_verified FROM users WHERE email = $1 AND is_active = true', [email]);
+  if (!user) return res.json({ message: 'If that email exists, a verification email has been sent.' });
+  if (user.email_verified) return res.json({ message: 'Email is already verified.' });
+
+  const token = crypto.randomBytes(32).toString('hex');
+  const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24); // 24 hours
+  await query('UPDATE users SET verification_token = $1, verification_token_expires = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3', [token, expiresAt, user.id]);
+  const verifyUrl = `${process.env.FRONTEND_URL || 'https://themobileprof.com'}/verify-email?token=${token}`;
+  await sendEmail({
+    to: email,
+    subject: 'Verify your email address',
+    template: 'notification',
+    context: {
+      firstName: user.first_name || 'there',
+      message: 'Click the button below to verify your email address.',
+      data: { verifyUrl }
+    },
+    html: `<p>Hello ${user.first_name || 'there'},</p><p>Click <a href="${verifyUrl}">here</a> to verify your email address.</p>`
+  });
+  res.json({ message: 'Verification email sent if the account exists and is unverified.' });
+}));
+
+// Verify email with token
+router.post('/verify-email', [
+  body('token').notEmpty().withMessage('Token is required')
+], asyncHandler(async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    throw new AppError('Validation failed', 400, 'Validation Error');
+  }
+  const { token } = req.body;
+  const user = await getRow('SELECT id FROM users WHERE verification_token = $1 AND verification_token_expires > NOW() AND is_active = true', [token]);
+  if (!user) {
+    throw new AppError('Invalid or expired verification token', 400, 'Invalid Token');
+  }
+  await query('UPDATE users SET email_verified = true, verification_token = NULL, verification_token_expires = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = $1', [user.id]);
+  res.json({ message: 'Email verified successfully.' });
+}));
+
+// Admin: resend verification email for a user by ID
+router.post('/admin/users/:id/resend-verification', authenticateToken, asyncHandler(async (req, res) => {
+  if (req.user.role !== 'admin') {
+    throw new AppError('Forbidden', 403, 'Forbidden');
+  }
+  const user = await getRow('SELECT id, email, first_name, email_verified FROM users WHERE id = $1 AND is_active = true', [req.params.id]);
+  if (!user) throw new AppError('User not found', 404, 'Not Found');
+  if (user.email_verified) return res.json({ message: 'Email is already verified.' });
+  const token = crypto.randomBytes(32).toString('hex');
+  const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24);
+  await query('UPDATE users SET verification_token = $1, verification_token_expires = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3', [token, expiresAt, user.id]);
+  const verifyUrl = `${process.env.FRONTEND_URL || 'https://themobileprof.com'}/verify-email?token=${token}`;
+  await sendEmail({
+    to: user.email,
+    subject: 'Verify your email address',
+    template: 'notification',
+    context: { firstName: user.first_name || 'there', message: 'Click the button below to verify your email address.', data: { verifyUrl } },
+    html: `<p>Hello ${user.first_name || 'there'},</p><p>Click <a href="${verifyUrl}">here</a> to verify your email address.</p>`
+  });
+  res.json({ message: 'Verification email sent.' });
+}));
+
+// User-initiated resend for authenticated users (no email in body)
+router.post('/me/resend-verification', authenticateToken, asyncHandler(async (req, res) => {
+  const user = await getRow('SELECT id, email, first_name, email_verified FROM users WHERE id = $1 AND is_active = true', [req.user.id]);
+  if (!user) throw new AppError('User not found', 404, 'Not Found');
+  if (user.email_verified) return res.json({ message: 'Email is already verified.' });
+  const token = crypto.randomBytes(32).toString('hex');
+  const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24);
+  await query('UPDATE users SET verification_token = $1, verification_token_expires = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3', [token, expiresAt, user.id]);
+  const verifyUrl = `${process.env.FRONTEND_URL || 'https://themobileprof.com'}/verify-email?token=${token}`;
+  await sendEmail({
+    to: user.email,
+    subject: 'Verify your email address',
+    template: 'notification',
+    context: { firstName: user.first_name || 'there', message: 'Click the button below to verify your email address.', data: { verifyUrl } },
+    html: `<p>Hello ${user.first_name || 'there'},</p><p>Click <a href="${verifyUrl}">here</a> to verify your email address.</p>`
+  });
+  res.json({ message: 'Verification email sent.' });
 }));
 
 module.exports = router; 

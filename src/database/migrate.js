@@ -155,6 +155,15 @@ const createTables = async () => {
       )
     `);
 
+    // Add verification/reset columns if they do not exist
+    await query(`
+      ALTER TABLE users
+      ADD COLUMN IF NOT EXISTS verification_token VARCHAR(255),
+      ADD COLUMN IF NOT EXISTS verification_token_expires TIMESTAMP,
+      ADD COLUMN IF NOT EXISTS password_reset_token VARCHAR(255),
+      ADD COLUMN IF NOT EXISTS password_reset_expires TIMESTAMP;
+    `);
+
     // Create Courses table
     await query(`
       CREATE TABLE IF NOT EXISTS courses (
@@ -667,6 +676,23 @@ const createTables = async () => {
       )
     `);
 
+    // Create Email Logs table for tracking email sends
+    await query(`
+      CREATE TABLE IF NOT EXISTS email_logs (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        email_id VARCHAR(50) NOT NULL,
+        recipient_email VARCHAR(255) NOT NULL,
+        subject VARCHAR(255) NOT NULL,
+        template VARCHAR(100),
+        message_id VARCHAR(255),
+        status VARCHAR(20) DEFAULT 'sent',
+        error_message TEXT,
+        duration_ms INTEGER,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
     // Create indexes for better performance
     await query('CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)');
     await query('CREATE INDEX IF NOT EXISTS idx_users_role ON users(role)');
@@ -700,8 +726,11 @@ const createTables = async () => {
     await query('CREATE INDEX IF NOT EXISTS idx_cert_program_enrollments_user ON certification_program_enrollments(user_id)');
     await query('CREATE INDEX IF NOT EXISTS idx_cert_program_enrollments_program ON certification_program_enrollments(program_id)');
     		await query('CREATE INDEX IF NOT EXISTS idx_cert_program_progress_enrollment ON certification_program_progress(enrollment_id)');
-		await query('CREATE INDEX IF NOT EXISTS idx_discussion_categories_key ON discussion_categories(key)');
-		await query('CREATE INDEX IF NOT EXISTS idx_discussion_categories_active ON discussion_categories(is_active)');
+		    await query('CREATE INDEX IF NOT EXISTS idx_discussion_categories_key ON discussion_categories(key)');
+    await query('CREATE INDEX IF NOT EXISTS idx_discussion_categories_active ON discussion_categories(is_active)');
+    await query('CREATE INDEX IF NOT EXISTS idx_email_logs_recipient ON email_logs(recipient_email)');
+    await query('CREATE INDEX IF NOT EXISTS idx_email_logs_status ON email_logs(status)');
+    await query('CREATE INDEX IF NOT EXISTS idx_email_logs_created ON email_logs(created_at)');
 
 		console.log('✅ Database migration completed successfully!');
     console.log('🎉 All tables created and ready!');

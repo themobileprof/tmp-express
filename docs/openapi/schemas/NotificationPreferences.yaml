@@ -4,27 +4,46 @@ properties:
   emailNotifications:
     type: boolean
     default: true
+    description: Enable/disable email notifications
   pushNotifications:
     type: boolean
     default: true
+    description: Enable/disable push notifications (future feature)
   courseNotifications:
     type: boolean
     default: true
+    description: Enable/disable course-related notifications
   classNotifications:
     type: boolean
     default: true
+    description: Enable/disable class-related notifications
   discussionNotifications:
     type: boolean
     default: true
+    description: Enable/disable discussion-related notifications
   testNotifications:
     type: boolean
     default: true
+    description: Enable/disable test-related notifications
   certificationNotifications:
     type: boolean
     default: true
+    description: Enable/disable certification-related notifications
   paymentNotifications:
     type: boolean
     default: true
+    description: Enable/disable payment-related notifications
   systemNotifications:
     type: boolean
-    default: true 
+    default: true
+    description: Enable/disable system notifications
+required:
+  - emailNotifications
+  - pushNotifications
+  - courseNotifications
+  - classNotifications
+  - discussionNotifications
+  - testNotifications
+  - certificationNotifications
+  - paymentNotifications
+  - systemNotifications 

@@ -1,0 +1,77 @@
+# Test Attempt Schema
+type: object
+properties:
+  id:
+    type: string
+    format: uuid
+    description: Unique identifier for the test attempt
+  userId:
+    type: string
+    format: uuid
+    description: ID of the user taking the test
+  testId:
+    type: string
+    format: uuid
+    description: ID of the test being attempted
+  status:
+    type: string
+    enum: [in_progress, completed, abandoned]
+    description: Current status of the test attempt
+  score:
+    type: number
+    minimum: 0
+    nullable: true
+    description: Final score achieved
+  maxScore:
+    type: number
+    minimum: 1
+    description: Maximum possible score
+  percentage:
+    type: number
+    minimum: 0
+    maximum: 100
+    nullable: true
+    description: Percentage score achieved
+  passed:
+    type: boolean
+    nullable: true
+    description: Whether the attempt passed the test
+  startedAt:
+    type: string
+    format: date-time
+    description: When the test attempt started
+  completedAt:
+    type: string
+    format: date-time
+    nullable: true
+    description: When the test attempt was completed
+  timeSpent:
+    type: integer
+    minimum: 0
+    nullable: true
+    description: Time spent on test in seconds
+  answers:
+    type: array
+    items:
+      type: object
+      properties:
+        questionId:
+          type: string
+          format: uuid
+        answer:
+          type: string
+        isCorrect:
+          type: boolean
+          nullable: true
+        points:
+          type: number
+          minimum: 0
+    nullable: true
+    description: Array of answers provided
+required:
+  - id
+  - userId
+  - testId
+  - status
+  - maxScore
+  - startedAt 

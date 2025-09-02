@@ -445,4 +445,114 @@ router.delete('/cleanup', authenticateToken, asyncHandler(async (req, res) => {
   });
 }));
 
+// Email logs endpoint (Admin only)
+router.get('/email-logs', authenticateToken, asyncHandler(async (req, res) => {
+  // Only admins can view email logs
+  if (req.user.role !== 'admin') {
+    throw new AppError('Access denied', 403, 'Access Denied');
+  }
+
+  const { 
+    status, 
+    recipient, 
+    page = 1, 
+    limit = 50,
+    days = 7 
+  } = req.query;
+
+  let whereConditions = [];
+  let params = [];
+  let paramIndex = 1;
+
+  // Filter by status
+  if (status) {
+    whereConditions.push(`status = $${paramIndex}`);
+    params.push(status);
+    paramIndex++;
+  }
+
+  // Filter by recipient
+  if (recipient) {
+    whereConditions.push(`recipient_email ILIKE $${paramIndex}`);
+    params.push(`%${recipient}%`);
+    paramIndex++;
+  }
+
+  // Filter by days
+  whereConditions.push(`created_at >= NOW() - INTERVAL '${days} days'`);
+
+  const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
+
+  // Get total count
+  const countQuery = `
+    SELECT COUNT(*) as total
+    FROM email_logs
+    ${whereClause}
+  `;
+  
+  const countResult = await getRow(countQuery, params);
+  const total = parseInt(countResult.total);
+
+  // Calculate offset
+  const offset = (parseInt(page) - 1) * parseInt(limit);
+
+  // Get email logs
+  const logsQuery = `
+    SELECT 
+      id, email_id, recipient_email, subject, template, message_id,
+      status, error_message, duration_ms, created_at, sent_at
+    FROM email_logs
+    ${whereClause}
+    ORDER BY created_at DESC
+    LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
+  `;
+
+  params.push(parseInt(limit), offset);
+  const logs = await getRows(logsQuery, params);
+
+  // Get summary statistics
+  const statsQuery = `
+    SELECT 
+      COUNT(*) as total,
+      COUNT(CASE WHEN status = 'sent' THEN 1 END) as sent,
+      COUNT(CASE WHEN status = 'failed' THEN 1 END) as failed,
+      AVG(duration_ms) as avg_duration,
+      COUNT(DISTINCT recipient_email) as unique_recipients
+    FROM email_logs
+    WHERE created_at >= NOW() - INTERVAL '${days} days'
+  `;
+  
+  const stats = await getRow(statsQuery);
+
+  res.json({
+    logs: logs.map(log => ({
+      id: log.id,
+      emailId: log.email_id,
+      recipientEmail: log.recipient_email,
+      subject: log.subject,
+      template: log.template,
+      messageId: log.message_id,
+      status: log.status,
+      errorMessage: log.error_message,
+      durationMs: log.duration_ms,
+      createdAt: log.created_at,
+      sentAt: log.sent_at
+    })),
+    pagination: {
+      page: parseInt(page),
+      limit: parseInt(limit),
+      total,
+      totalPages: Math.ceil(total / parseInt(limit))
+    },
+    stats: {
+      total: parseInt(stats.total),
+      sent: parseInt(stats.sent),
+      failed: parseInt(stats.failed),
+      avgDuration: parseFloat(stats.avg_duration) || 0,
+      uniqueRecipients: parseInt(stats.unique_recipients),
+      successRate: stats.total > 0 ? ((stats.sent / stats.total) * 100).toFixed(2) : 0
+    }
+  });
+}));
+
 module.exports = router; 

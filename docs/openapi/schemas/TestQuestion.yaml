@@ -1,0 +1,50 @@
+# Test Question Schema
+type: object
+properties:
+  id:
+    type: string
+    format: uuid
+    description: Unique identifier for the question
+  question:
+    type: string
+    description: The question text
+  questionType:
+    type: string
+    enum: [multiple_choice, true_false, short_answer, essay]
+    description: Type of question
+  options:
+    type: array
+    items:
+      type: string
+    nullable: true
+    description: Array of options for multiple choice questions
+  correctAnswer:
+    type: integer
+    nullable: true
+    description: Index of correct answer for multiple choice questions
+  correctAnswerText:
+    type: string
+    nullable: true
+    description: Correct answer text for short answer questions
+  points:
+    type: integer
+    minimum: 1
+    description: Points awarded for correct answer
+  orderIndex:
+    type: integer
+    minimum: 1
+    description: Order of question in the test
+  imageUrl:
+    type: string
+    nullable: true
+    description: URL to question image (if applicable)
+  explanation:
+    type: string
+    nullable: true
+    description: Explanation of the correct answer
+required:
+  - id
+  - question
+  - questionType
+  - points
+  - orderIndex 

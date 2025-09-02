@@ -1,0 +1,65 @@
+# User Settings Schema
+type: object
+properties:
+  theme:
+    type: string
+    enum: [light, dark, system]
+    default: system
+    description: User's preferred theme
+  language:
+    type: string
+    default: en
+    description: User's preferred language
+  timezone:
+    type: string
+    default: UTC
+    description: User's timezone
+  emailNotifications:
+    type: boolean
+    default: true
+    description: Enable email notifications
+  pushNotifications:
+    type: boolean
+    default: true
+    description: Enable push notifications
+  courseNotifications:
+    type: boolean
+    default: true
+    description: Enable course-related notifications
+  classNotifications:
+    type: boolean
+    default: true
+    description: Enable class-related notifications
+  discussionNotifications:
+    type: boolean
+    default: true
+    description: Enable discussion-related notifications
+  testNotifications:
+    type: boolean
+    default: true
+    description: Enable test-related notifications
+  certificationNotifications:
+    type: boolean
+    default: true
+    description: Enable certification-related notifications
+  paymentNotifications:
+    type: boolean
+    default: true
+    description: Enable payment-related notifications
+  systemNotifications:
+    type: boolean
+    default: true
+    description: Enable system notifications
+required:
+  - theme
+  - language
+  - timezone
+  - emailNotifications
+  - pushNotifications
+  - courseNotifications
+  - classNotifications
+  - discussionNotifications
+  - testNotifications
+  - certificationNotifications
+  - paymentNotifications
+  - systemNotifications 

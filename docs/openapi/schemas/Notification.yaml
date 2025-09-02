@@ -4,22 +4,41 @@ properties:
   id:
     type: string
     format: uuid
+    description: Unique identifier for the notification
   type:
     type: string
+    description: Type of notification (e.g., course_enrollment, discussion_reply, test_result)
   title:
     type: string
+    description: Notification title
   message:
     type: string
+    description: Notification message content
   data:
     type: object
+    nullable: true
+    description: Additional data for the notification (e.g., courseId, discussionId)
   isRead:
     type: boolean
+    description: Whether the notification has been read
   priority:
     type: string
     enum: [low, normal, high, urgent]
+    description: Priority level of the notification
   createdAt:
     type: string
     format: date-time
+    description: When the notification was created
   readAt:
     type: string
-    format: date-time 
+    format: date-time
+    nullable: true
+    description: When the notification was marked as read
+required:
+  - id
+  - type
+  - title
+  - message
+  - isRead
+  - priority
+  - createdAt 

@@ -388,4 +388,183 @@ admin/google:
       '401':
         $ref: '../responses/Unauthorized.yaml'
       '409':
-        $ref: '../responses/Conflict.yaml' 
+        $ref: '../responses/Conflict.yaml'
+
+forgot-password:
+  post:
+    tags:
+      - Authentication
+    summary: Request Password Reset
+    description: Request a password reset link. Always returns success to avoid account enumeration.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - email
+            properties:
+              email:
+                type: string
+                format: email
+    responses:
+      '200':
+        description: If the email exists, reset instructions will be sent
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+      '400':
+        $ref: '../responses/BadRequest.yaml'
+
+reset-password:
+  post:
+    tags:
+      - Authentication
+    summary: Reset Password
+    description: Reset password using a valid reset token. Not available for Google OAuth accounts.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - token
+              - newPassword
+            properties:
+              token:
+                type: string
+              newPassword:
+                type: string
+                minLength: 6
+    responses:
+      '200':
+        description: Password reset successful
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+      '400':
+        $ref: '../responses/BadRequest.yaml'
+
+verify-email:
+  post:
+    tags:
+      - Authentication
+    summary: Verify Email
+    description: Verify a user's email using a verification token
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - token
+            properties:
+              token:
+                type: string
+    responses:
+      '200':
+        description: Email verified successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+      '400':
+        $ref: '../responses/BadRequest.yaml'
+
+resend-verification:
+  post:
+    tags:
+      - Authentication
+    summary: Resend Verification Email (by email)
+    description: Resend the verification email. Always returns success to avoid account enumeration.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - email
+            properties:
+              email:
+                type: string
+                format: email
+    responses:
+      '200':
+        description: Verification email sent if account exists and is unverified
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+      '400':
+        $ref: '../responses/BadRequest.yaml'
+
+me~1resend-verification:
+  post:
+    tags:
+      - Authentication
+    summary: Resend Verification Email (current user)
+    description: Resend the verification email for the authenticated user
+    security:
+      - BearerAuth: []
+    responses:
+      '200':
+        description: Verification email sent
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+      '401':
+        $ref: '../responses/Unauthorized.yaml'
+
+admin~1users~1{id}~1resend-verification:
+  post:
+    tags:
+      - Authentication
+    summary: Admin Resend Verification Email for User
+    description: Admin can resend verification email for any user
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    responses:
+      '200':
+        description: Verification email sent
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+      '401':
+        $ref: '../responses/Unauthorized.yaml'
+      '403':
+        $ref: '../responses/Forbidden.yaml'
+      '404':
+        $ref: '../responses/NotFound.yaml' 

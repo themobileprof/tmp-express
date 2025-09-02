@@ -4,7 +4,7 @@ const { query, getRow, getRows } = require('../database/config');
 const { asyncHandler, AppError } = require('../middleware/errorHandler');
 const { authenticateToken, authorizeSponsor, authorizeOwnerOrAdmin } = require('../middleware/auth');
 const { v4: uuidv4 } = require('uuid');
-const transporter = require('../mailer');
+const { sendEmail } = require('../mailer');
 const { getSystemSetting } = require('../utils/systemSettings');
 
 const router = express.Router();
@@ -545,11 +545,11 @@ router.post('/:id/email', authenticateToken, authorizeOwnerOrAdmin('sponsorships
   `;
 
   // Send email
-  await transporter.sendMail({
-    from: process.env.EMAIL_FROM_ADDRESS,
+  await sendEmail({
     to: recipientEmail,
     subject,
     html: message,
+    from: process.env.EMAIL_FROM_ADDRESS
   });
 
   res.json({

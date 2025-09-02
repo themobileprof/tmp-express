@@ -81,6 +81,18 @@ paths:
       $ref: './paths/auth.yaml#/logout'
     /auth/change-password:
       $ref: './paths/auth.yaml#/change-password'
+    /auth/forgot-password:
+      $ref: './paths/auth.yaml#/forgot-password'
+    /auth/reset-password:
+      $ref: './paths/auth.yaml#/reset-password'
+    /auth/verify-email:
+      $ref: './paths/auth.yaml#/verify-email'
+    /auth/resend-verification:
+      $ref: './paths/auth.yaml#/resend-verification'
+    /auth/me/resend-verification:
+      $ref: './paths/auth.yaml#/me~1resend-verification'
+    /auth/admin/users/{id}/resend-verification:
+      $ref: './paths/auth.yaml#/admin~1users~1{id}~1resend-verification'
     /auth/admin/login:
       $ref: './paths/auth.yaml#/admin~1login'
     /auth/admin/google:
@@ -119,13 +131,13 @@ paths:
 
     # Admin Sponsorship Endpoints
     /admin/sponsorships:
-      $ref: './paths/sponsorships.yaml#/admin~1sponsorships'
+      $ref: './paths/sponsorships.yaml#/~1admin~1sponsorships'
     /admin/sponsorships/{id}/payment-status:
-      $ref: './paths/sponsorships.yaml#/admin~1sponsorships~1{id}~1payment-status'
+      $ref: './paths/sponsorships.yaml#/~1admin~1sponsorships~1{id}~1payment-status'
     /admin/sponsorships/{id}/mark-paid:
-      $ref: './paths/sponsorships.yaml#/admin~1sponsorships~1{id}~1mark-paid'
+      $ref: './paths/sponsorships.yaml#/~1admin~1sponsorships~1{id}~1mark-paid'
     /admin/sponsorships/{id}/invoice:
-      $ref: './paths/sponsorships.yaml#/admin~1sponsorships~1{id}~1invoice'
+      $ref: './paths/sponsorships.yaml#/~1admin~1sponsorships~1{id}~1invoice'
 
     # Sponsorship Opportunities Endpoints
     /sponsorship-opportunities:
@@ -292,6 +304,8 @@ paths:
       $ref: './paths/notifications.yaml#/~1system'
     /notifications/cleanup:
       $ref: './paths/notifications.yaml#/~1cleanup'
+    /notifications/email-logs:
+      $ref: './paths/notifications.yaml#/~1email-logs'
 
     # Search and Meta
     /search/suggestions:
@@ -382,6 +396,12 @@ components:
     NotificationPreferences:
       $ref: './schemas/NotificationPreferences.yaml'
 
+    EmailLog:
+      $ref: './schemas/EmailLog.yaml'
+
+    EmailLogStats:
+      $ref: './schemas/EmailLogStats.yaml'
+
     Pagination:
       $ref: './schemas/Pagination.yaml'
 
@@ -410,7 +430,22 @@ components:
       $ref: './schemas/Class.yaml'
 
     Course:
-      $ref: './schemas/Course.yaml' 
+      $ref: './schemas/Course.yaml'
+
+    CourseInstructor:
+      $ref: './schemas/CourseInstructor.yaml'
+
+    TestQuestion:
+      $ref: './schemas/TestQuestion.yaml'
+
+    TestAttempt:
+      $ref: './schemas/TestAttempt.yaml'
+
+    UserSettings:
+      $ref: './schemas/UserSettings.yaml'
+
+    DiscussionStats:
+      $ref: './schemas/DiscussionStats.yaml' 
   
   responses:
     NotFound:

@@ -1,0 +1,43 @@
+# Course Instructor Schema
+type: object
+properties:
+  id:
+    type: string
+    format: uuid
+    description: Unique identifier for the instructor
+  firstName:
+    type: string
+    description: Instructor's first name
+  lastName:
+    type: string
+    description: Instructor's last name
+  avatarUrl:
+    type: string
+    nullable: true
+    description: URL to instructor's avatar image
+  bio:
+    type: string
+    nullable: true
+    description: Instructor's biography
+  email:
+    type: string
+    format: email
+    description: Instructor's email address
+  specialization:
+    type: string
+    nullable: true
+    description: Instructor's area of specialization
+  rating:
+    type: number
+    minimum: 0
+    maximum: 5
+    nullable: true
+    description: Average instructor rating
+  courseCount:
+    type: integer
+    minimum: 0
+    description: Number of courses taught by instructor
+required:
+  - id
+  - firstName
+  - lastName 

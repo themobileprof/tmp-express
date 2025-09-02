@@ -207,31 +207,7 @@
                 questions:
                   type: array
                   items:
-                    type: object
-                    properties:
-                      id:
-                        type: string
-                        format: uuid
-                      question:
-                        type: string
-                      questionType:
-                        type: string
-                        enum: [multiple_choice, true_false, short_answer]
-                      options:
-                        type: array
-                        items:
-                          type: string
-                        nullable: true
-                      correctAnswer:
-                        type: integer
-                        nullable: true
-                      correctAnswerText:
-                        type: string
-                        nullable: true
-                      points:
-                        type: integer
-                      orderIndex:
-                        type: integer
+                    $ref: '../schemas/TestQuestion.yaml'
       '404':
         $ref: '../responses/NotFound.yaml'
 

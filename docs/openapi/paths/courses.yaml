@@ -123,17 +123,7 @@
                         type: string
                         format: date-time
                       instructor:
-                        type: object
-                        properties:
-                          id:
-                            type: string
-                            format: uuid
-                          firstName:
-                            type: string
-                          lastName:
-                            type: string
-                          avatarUrl:
-                            type: string
+                        $ref: '../schemas/CourseInstructor.yaml'
                 pagination:
                   type: object
                   properties:

@@ -1,0 +1,53 @@
+# Email Log Schema
+type: object
+properties:
+  id:
+    type: string
+    format: uuid
+    description: Unique identifier for the email log entry
+  emailId:
+    type: string
+    description: Unique email identifier used for tracking
+  recipientEmail:
+    type: string
+    format: email
+    description: Email address of the recipient
+  subject:
+    type: string
+    description: Subject line of the email
+  template:
+    type: string
+    nullable: true
+    description: Template name used for the email (e.g., 'notification')
+  messageId:
+    type: string
+    nullable: true
+    description: SMTP message ID returned by the email service
+  status:
+    type: string
+    enum: [sent, failed]
+    description: Status of the email send attempt
+  errorMessage:
+    type: string
+    nullable: true
+    description: Error message if the email failed to send
+  durationMs:
+    type: integer
+    description: Time taken to send the email in milliseconds
+  createdAt:
+    type: string
+    format: date-time
+    description: When the email log entry was created
+  sentAt:
+    type: string
+    format: date-time
+    description: When the email was actually sent
+required:
+  - id
+  - emailId
+  - recipientEmail
+  - subject
+  - status
+  - durationMs
+  - createdAt
+  - sentAt 
