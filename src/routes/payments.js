@@ -168,7 +168,7 @@ router.post('/initialize', authenticateToken, asyncHandler(async (req, res) => {
           `SELECT s.* FROM sponsorships s
            JOIN sponsorship_courses sc ON s.id = sc.sponsorship_id
            WHERE s.discount_code = $1 AND s.status = 'active' AND sc.course_id = $2`,
-          [sponsorshipCode, paymentType === 'course' ? itemId : payment.course_id]
+          [sponsorshipCode, paymentType === 'course' ? itemId : null]
         );
         if (sponsorship) {
           const existingUsage = await getRow(
@@ -351,7 +351,7 @@ router.get('/verify/:reference', authenticateToken, asyncHandler(async (req, res
               discount_amount, final_price, used_at
             ) VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP)`,
             [
-              sponsorship.id, userId, payment.course_id || payment.class_id,
+              sponsorship.id, userId, payment.payment_type === 'course' ? payment.item_id || payment.course_id : null,
               payment.metadata.originalPrice, payment.metadata.discountAmount, payment.metadata.finalPrice
             ]
           );
@@ -365,17 +365,17 @@ router.get('/verify/:reference', authenticateToken, asyncHandler(async (req, res
     if (payment.payment_type === 'course') {
       await query(
         `INSERT INTO enrollments (user_id, course_id, enrollment_type, sponsorship_id) VALUES ($1, $2, 'course', $3)`,
-        [userId, payment.course_id, payment.metadata?.sponsorshipCode ? 
+        [userId, payment.course_id || payment.item_id, payment.metadata?.sponsorshipCode ? 
           (await getRow('SELECT id FROM sponsorships WHERE discount_code = $1', [payment.metadata.sponsorshipCode]))?.id : null]
       );
-      await query('UPDATE courses SET student_count = student_count + 1 WHERE id = payment.course_id');
+      await query('UPDATE courses SET student_count = student_count + 1 WHERE id = $1', [payment.course_id || payment.item_id]);
     } else {
       await query(
         `INSERT INTO enrollments (user_id, class_id, enrollment_type, sponsorship_id) VALUES ($1, $2, 'class', $3)`,
         [userId, payment.class_id, payment.metadata?.sponsorshipCode ? 
           (await getRow('SELECT id FROM sponsorships WHERE discount_code = $1', [payment.metadata.sponsorshipCode]))?.id : null]
       );
-      await query('UPDATE classes SET available_slots = available_slots - 1 WHERE id = payment.class_id');
+      await query('UPDATE classes SET available_slots = available_slots - 1 WHERE id = $1', [payment.class_id]);
     }
 
     // Send payment success notification

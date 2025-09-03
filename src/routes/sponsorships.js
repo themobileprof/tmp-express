@@ -138,8 +138,9 @@ router.get('/', authenticateToken, authorizeSponsor, asyncHandler(async (req, re
   }
 
   if (courseId) {
-    whereClause += ` AND course_id = $${paramIndex}`;
+    whereClause += ` AND sc.course_id = $${paramIndex}`;
     params.push(courseId);
+    paramIndex++;
   }
 
   const sponsorships = await getRows(
