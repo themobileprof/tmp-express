@@ -25,16 +25,32 @@ function resolveTransportOptions() {
       host: 'smtp.mailersend.net',
       port: 587,
       secure: false,
-      auth: {
+  auth: {
         user: process.env.EMAIL_USER || 'your-email@domain.com', // Can be any email
         pass: process.env.MAILERSEND_API_KEY,
       },
     };
   }
 
+  if (EMAIL_PROVIDER === 'zoho') {
+    // Zoho Mail SMTP using user/pass (use app-specific password if 2FA)
+    if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+      throw new Error("For EMAIL_PROVIDER=zoho, please set EMAIL_USER and EMAIL_PASS in your environment variables.");
+    }
+    return {
+      host: process.env.EMAIL_HOST || 'smtp.zoho.com',
+      port: parseInt(process.env.EMAIL_PORT || '587', 10),
+      secure: false, // STARTTLS on 587
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS,
+      },
+    };
+  }
+
   // If no API key, throw error
-  const requiredKey = EMAIL_PROVIDER === 'brevo' ? 'BREVO_API_KEY' : 'MAILERSEND_API_KEY';
-  throw new Error(`EMAIL_PROVIDER is set to '${EMAIL_PROVIDER}' but ${requiredKey} is not configured. Please set ${requiredKey} in your environment variables.`);
+  const requiredKey = EMAIL_PROVIDER === 'brevo' ? 'BREVO_API_KEY' : (EMAIL_PROVIDER === 'mailersend' ? 'MAILERSEND_API_KEY' : 'EMAIL_USER/EMAIL_PASS');
+  throw new Error(`EMAIL_PROVIDER is set to '${EMAIL_PROVIDER}' but required credentials (${requiredKey}) are not configured.`);
 }
 
 // Configure transporter with selected provider
@@ -65,6 +81,9 @@ const verifyTransporter = async () => {
       if (EMAIL_PROVIDER === 'mailersend') {
         console.log(`🏠 Host: smtp.mailersend.net`);
         console.log(`🔑 Using MailerSend API Key (${process.env.MAILERSEND_API_KEY.substring(0, 8)}...)`);
+      } else if (EMAIL_PROVIDER === 'zoho') {
+        console.log(`🏠 Host: ${process.env.EMAIL_HOST || 'smtp.zoho.com'}`);
+        console.log(`👤 User: ${process.env.EMAIL_USER || '(not set)'}`);
       }
       console.log(`🔌 Port: 587`);
     }
@@ -96,8 +115,8 @@ const sendEmailViaBrevoAPI = async (emailData, emailId) => {
     headers: {
       'api-key': apiKey,
       'Content-Type': 'application/json',
-    },
-  });
+  },
+});
 
   return {
     messageId: response.data.messageId,
