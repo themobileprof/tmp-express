@@ -4,6 +4,8 @@ const createTables = async () => {
   try {
     console.log('📋 Creating database tables...');
     console.log('🔗 Database URL:', process.env.DATABASE_URL ? 'Set' : 'Not set');
+    console.log('🌍 Environment:', process.env.NODE_ENV || 'development');
+    console.log('⏰ Migration started at:', new Date().toISOString());
 
     // Create custom types
     await query(`
@@ -191,12 +193,12 @@ const createTables = async () => {
       )
     `);
 
-    // Create Sponsorships table
+    // Create Sponsorships table (updated for multi-course support)
     await query(`
       CREATE TABLE IF NOT EXISTS sponsorships (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         sponsor_id UUID NOT NULL,
-        course_id UUID NOT NULL,
+        course_id UUID, -- Legacy field for single-course sponsorships
         discount_code VARCHAR(50) UNIQUE NOT NULL,
         discount_type discount_type NOT NULL,
         discount_value DECIMAL(10,2) NOT NULL,
@@ -207,12 +209,35 @@ const createTables = async () => {
         status sponsorship_status DEFAULT 'active',
         completion_rate DECIMAL(5,2) DEFAULT 0,
         notes TEXT,
+        is_paid BOOLEAN DEFAULT false,
+        paid_at TIMESTAMP,
+        payment_id UUID,
+        payment_reference VARCHAR(255),
+        paid_amount DECIMAL(10,2),
+        paid_currency VARCHAR(3) DEFAULT 'USD',
+        created_by VARCHAR(20) DEFAULT 'sponsor',
+        admin_note TEXT,
+        invoice_number VARCHAR(100),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (sponsor_id) REFERENCES users(id) ON DELETE CASCADE,
-        FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE
+        FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE SET NULL
       )
     `);
+
+    // Create Sponsorship_Courses table for multi-course sponsorships
+    await query(`
+      CREATE TABLE IF NOT EXISTS sponsorship_courses (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        sponsorship_id UUID NOT NULL,
+        course_id UUID NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (sponsorship_id) REFERENCES sponsorships(id) ON DELETE CASCADE,
+        FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE,
+        UNIQUE(sponsorship_id, course_id)
+      )
+    `);
+    console.log('✅ Created sponsorship_courses table for multi-course sponsorships');
 
     // Create Sponsorship_Usage table
     await query(`
@@ -734,6 +759,7 @@ const createTables = async () => {
 
 		console.log('✅ Database migration completed successfully!');
     console.log('🎉 All tables created and ready!');
+    console.log('⏰ Migration completed at:', new Date().toISOString());
     
     // Migrate existing courses table to add new fields
     await migrateCoursesTable();
