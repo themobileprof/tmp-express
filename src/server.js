@@ -89,10 +89,75 @@ app.use(helmet({
   },
   crossOriginResourcePolicy: { policy: "cross-origin" }
 }));
-app.use(cors({
-  origin: process.env.CORS_ORIGIN || '*',
-  credentials: true
-}));
+// Enhanced CORS configuration for Google Sign-In and FedCM
+const corsOptions = {
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    // Allow specific origins
+    const allowedOrigins = [
+      'http://localhost:3000',
+      'http://localhost:8080',
+      'https://lms.themobileprof.com',
+      'https://www.themobileprof.com',
+      'https://themobileprof.com'
+    ];
+    
+    // Add custom CORS_ORIGIN if set
+    if (process.env.CORS_ORIGIN) {
+      allowedOrigins.push(process.env.CORS_ORIGIN);
+    }
+    
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      console.log('CORS blocked origin:', origin);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: [
+    'Origin',
+    'X-Requested-With',
+    'Content-Type',
+    'Accept',
+    'Authorization',
+    'Cache-Control',
+    'Pragma',
+    'X-Google-AuthUser',
+    'X-Google-Id-Token',
+    'X-Google-Access-Token'
+  ],
+  exposedHeaders: [
+    'X-Google-AuthUser',
+    'X-Google-Id-Token',
+    'X-Google-Access-Token'
+  ],
+  optionsSuccessStatus: 200 // Some legacy browsers choke on 204
+};
+
+app.use(cors(corsOptions));
+
+// Handle preflight requests for Google OAuth
+app.options('/api/auth/google', (req, res) => {
+  res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
+  res.header('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Google-AuthUser, X-Google-Id-Token, X-Google-Access-Token');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.header('Access-Control-Max-Age', '86400'); // 24 hours
+  res.status(200).end();
+});
+
+app.options('/api/auth/admin/google', (req, res) => {
+  res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
+  res.header('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Google-AuthUser, X-Google-Id-Token, X-Google-Access-Token');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.header('Access-Control-Max-Age', '86400'); // 24 hours
+  res.status(200).end();
+});
 
 // Rate limiting
 const limiter = rateLimit({
@@ -218,6 +283,23 @@ app.get('/health', (req, res) => {
     status: 'OK',
     timestamp: new Date().toISOString(),
     uptime: process.uptime()
+  });
+});
+
+// Google Identity Assertion endpoint for FedCM
+app.get('/.well-known/identity-assertion', (req, res) => {
+  res.status(200).json({
+    "provider_urls": [
+      "https://accounts.google.com"
+    ]
+  });
+});
+
+// Google OAuth callback endpoint (for compatibility)
+app.get('/auth/google/callback', (req, res) => {
+  res.status(200).json({
+    message: 'Google OAuth callback endpoint',
+    note: 'This endpoint is for compatibility. Use POST /api/auth/google for authentication.'
   });
 });
 
