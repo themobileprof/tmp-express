@@ -51,3 +51,4 @@ required:
   - durationMs
   - createdAt
   - sentAt 
+  

@@ -1,6 +1,7 @@
 const express = require('express');
 const { getRows, getRow } = require('../database/config');
 const { asyncHandler } = require('../middleware/errorHandler');
+const { verifyTransporter } = require('../mailer');
 
 const router = express.Router();
 

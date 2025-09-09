@@ -35,7 +35,6 @@ const { errorHandler } = require('./middleware/errorHandler');
 const { authenticateToken } = require('./middleware/auth');
 const { getSystemSetting } = require('./utils/systemSettings');
 const maintenanceMiddleware = require('./middleware/maintenance');
-const { verifyTransporter } = require('./mailer');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -463,14 +462,6 @@ app.listen(PORT, async () => {
   console.log(`📊 Health check available at http://localhost:${PORT}/health`);
   console.log(`🔗 API documentation: http://localhost:${PORT}/api-docs`);
   
-  // Verify email configuration on startup
-  try {
-    await verifyTransporter();
-    console.log('📧 Email service verified and ready');
-  } catch (error) {
-    console.error('⚠️  Email service verification failed:', error.message);
-    console.log('📧 Emails may not be delivered until SMTP is configured correctly');
-  }
 });
 
 module.exports = app; 

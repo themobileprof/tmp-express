@@ -516,7 +516,7 @@ resend-verification:
       '400':
         $ref: '../responses/BadRequest.yaml'
 
-me~1resend-verification:
+me/resend-verification:
   post:
     tags:
       - Authentication
@@ -537,7 +537,7 @@ me~1resend-verification:
       '401':
         $ref: '../responses/Unauthorized.yaml'
 
-admin~1users~1{id}~1resend-verification:
+admin/users/{id}/resend-verification:
   post:
     tags:
       - Authentication
