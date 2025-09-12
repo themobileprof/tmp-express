@@ -266,6 +266,192 @@ const logEmailToDatabase = async (logData) => {
  * Generate HTML email content
  */
 const generateEmailHTML = (emailData) => {
+  const baseStyles = `
+    body { 
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+      line-height: 1.6; 
+      color: #333; 
+      margin: 0; 
+      padding: 0; 
+      background-color: #f4f4f4; 
+    }
+    .email-container { 
+      max-width: 600px; 
+      margin: 0 auto; 
+      background-color: #ffffff;
+      box-shadow: 0 0 20px rgba(0,0,0,0.1);
+    }
+    .header { 
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white; 
+      padding: 30px 20px; 
+      text-align: center; 
+    }
+    .header h1 { 
+      margin: 0; 
+      font-size: 28px; 
+      font-weight: 300;
+    }
+    .content { 
+      padding: 40px 30px; 
+      background: #ffffff; 
+    }
+    .content h2 { 
+      color: #333; 
+      margin-top: 0; 
+      font-size: 24px;
+      font-weight: 400;
+    }
+    .content p { 
+      margin-bottom: 20px; 
+      font-size: 16px;
+      color: #555;
+    }
+    .button { 
+      display: inline-block; 
+      padding: 15px 30px; 
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white; 
+      text-decoration: none; 
+      border-radius: 8px; 
+      font-weight: 600;
+      font-size: 16px;
+      margin: 20px 0;
+      transition: transform 0.2s ease;
+    }
+    .button:hover { 
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+    }
+    .footer { 
+      padding: 30px 20px; 
+      text-align: center; 
+      font-size: 14px; 
+      color: #888; 
+      background-color: #f8f9fa;
+      border-top: 1px solid #e9ecef;
+    }
+    .footer p { 
+      margin: 5px 0; 
+    }
+    .footer a { 
+      color: #667eea; 
+      text-decoration: none; 
+    }
+    .security-note { 
+      background-color: #fff3cd; 
+      border: 1px solid #ffeaa7; 
+      border-radius: 6px; 
+      padding: 15px; 
+      margin: 20px 0; 
+      color: #856404;
+      font-size: 14px;
+    }
+    .divider { 
+      height: 1px; 
+      background: linear-gradient(to right, transparent, #ddd, transparent); 
+      margin: 30px 0; 
+    }
+    @media only screen and (max-width: 600px) {
+      .email-container { margin: 0; }
+      .content { padding: 30px 20px; }
+      .header { padding: 20px 15px; }
+    }
+  `;
+
+  // Password Reset Template
+  if (emailData.template === 'password-reset') {
+    return `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Reset Your Password - TheMobileProf</title>
+        <style>${baseStyles}</style>
+      </head>
+      <body>
+        <div class="email-container">
+          <div class="header">
+            <h1>🔐 Password Reset</h1>
+          </div>
+          <div class="content">
+            <h2>Hello ${emailData.context?.firstName || 'there'}!</h2>
+            <p>We received a request to reset your password for your TheMobileProf account. If you made this request, click the button below to reset your password:</p>
+            
+            <div style="text-align: center;">
+              <a href="${emailData.context?.data?.resetUrl}" class="button">Reset My Password</a>
+            </div>
+            
+            <div class="security-note">
+              <strong>⚠️ Security Notice:</strong> This link will expire in 1 hour for your security. If you didn't request this password reset, please ignore this email and your password will remain unchanged.
+            </div>
+            
+            <div class="divider"></div>
+            
+            <p>If the button above doesn't work, you can copy and paste this link into your browser:</p>
+            <p style="word-break: break-all; background-color: #f8f9fa; padding: 10px; border-radius: 4px; font-family: monospace; font-size: 14px;">
+              ${emailData.context?.data?.resetUrl}
+            </p>
+          </div>
+          <div class="footer">
+            <p><strong>TheMobileProf Learning Platform</strong></p>
+            <p>This email was sent because a password reset was requested for your account.</p>
+            <p>If you have any questions, please contact our support team.</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+  }
+
+  // Email Verification Template
+  if (emailData.template === 'email-verification') {
+    return `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Verify Your Email - TheMobileProf</title>
+        <style>${baseStyles}</style>
+      </head>
+      <body>
+        <div class="email-container">
+          <div class="header">
+            <h1>📧 Verify Your Email</h1>
+          </div>
+          <div class="content">
+            <h2>Welcome to TheMobileProf, ${emailData.context?.firstName || 'there'}!</h2>
+            <p>Thank you for joining our learning platform. To complete your registration and access all features, please verify your email address by clicking the button below:</p>
+            
+            <div style="text-align: center;">
+              <a href="${emailData.context?.data?.verifyUrl}" class="button">Verify My Email</a>
+            </div>
+            
+            <div class="security-note">
+              <strong>💡 What happens next?</strong> Once verified, you'll have full access to all courses, be able to track your progress, and receive important updates about your learning journey.
+            </div>
+            
+            <div class="divider"></div>
+            
+            <p>If the button above doesn't work, you can copy and paste this link into your browser:</p>
+            <p style="word-break: break-all; background-color: #f8f9fa; padding: 10px; border-radius: 4px; font-family: monospace; font-size: 14px;">
+              ${emailData.context?.data?.verifyUrl}
+            </p>
+          </div>
+          <div class="footer">
+            <p><strong>TheMobileProf Learning Platform</strong></p>
+            <p>Ready to start your mobile development journey? Verify your email to get started!</p>
+            <p>This verification link will expire in 24 hours.</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+  }
+
+  // Generic Notification Template (fallback)
   if (emailData.template === 'notification') {
     return `
       <!DOCTYPE html>
@@ -273,29 +459,32 @@ const generateEmailHTML = (emailData) => {
       <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>${emailData.subject}</title>
-        <style>
-          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-          .header { background: #3B82F6; color: white; padding: 20px; text-align: center; }
-          .content { padding: 20px; background: #f9f9f9; }
-          .footer { padding: 20px; text-align: center; font-size: 12px; color: #666; }
-          .button { display: inline-block; padding: 10px 20px; background: #3B82F6; color: white; text-decoration: none; border-radius: 5px; }
-        </style>
+        <title>${emailData.subject} - TheMobileProf</title>
+        <style>${baseStyles}</style>
       </head>
       <body>
-        <div class="container">
+        <div class="email-container">
           <div class="header">
-            <h1>TheMobileProf</h1>
+            <h1>📱 TheMobileProf</h1>
           </div>
           <div class="content">
             <h2>${emailData.subject}</h2>
             <p>Hello ${emailData.context?.firstName || 'there'},</p>
             <p>${emailData.context?.message || emailData.message}</p>
-            ${emailData.context?.data ? `<p><strong>Details:</strong> ${JSON.stringify(emailData.context.data)}</p>` : ''}
+            ${emailData.context?.data?.resetUrl ? `
+              <div style="text-align: center;">
+                <a href="${emailData.context.data.resetUrl}" class="button">Take Action</a>
+              </div>
+            ` : ''}
+            ${emailData.context?.data?.verifyUrl ? `
+              <div style="text-align: center;">
+                <a href="${emailData.context.data.verifyUrl}" class="button">Verify Email</a>
+              </div>
+            ` : ''}
           </div>
           <div class="footer">
-            <p>This email was sent from TheMobileProf Learning Platform</p>
+            <p><strong>TheMobileProf Learning Platform</strong></p>
+            <p>Empowering mobile developers worldwide</p>
             ${emailData.context?.unsubscribeUrl ? `<p><a href="${emailData.context.unsubscribeUrl}">Unsubscribe</a></p>` : ''}
           </div>
         </div>
@@ -311,10 +500,21 @@ const generateEmailHTML = (emailData) => {
     <head>
       <meta charset="utf-8">
       <title>${emailData.subject}</title>
+      <style>${baseStyles}</style>
     </head>
     <body>
-      <h1>${emailData.subject}</h1>
-      <p>${emailData.message || emailData.context?.message || ''}</p>
+      <div class="email-container">
+        <div class="header">
+          <h1>📱 TheMobileProf</h1>
+        </div>
+        <div class="content">
+          <h2>${emailData.subject}</h2>
+          <p>${emailData.message || emailData.context?.message || ''}</p>
+        </div>
+        <div class="footer">
+          <p><strong>TheMobileProf Learning Platform</strong></p>
+        </div>
+      </div>
     </body>
     </html>
   `;
@@ -324,6 +524,55 @@ const generateEmailHTML = (emailData) => {
  * Generate text email content
  */
 const generateEmailText = (emailData) => {
+  // Password Reset Text Template
+  if (emailData.template === 'password-reset') {
+    return `
+TheMobileProf - Password Reset Request
+
+Hello ${emailData.context?.firstName || 'there'}!
+
+We received a request to reset your password for your TheMobileProf account.
+
+To reset your password, please click this link:
+${emailData.context?.data?.resetUrl}
+
+IMPORTANT SECURITY NOTICE:
+- This link will expire in 1 hour for your security
+- If you didn't request this password reset, please ignore this email
+- Your password will remain unchanged if you don't click the link
+
+If you have any questions, please contact our support team.
+
+---
+TheMobileProf Learning Platform
+This email was sent because a password reset was requested for your account.
+    `;
+  }
+
+  // Email Verification Text Template
+  if (emailData.template === 'email-verification') {
+    return `
+TheMobileProf - Email Verification
+
+Welcome to TheMobileProf, ${emailData.context?.firstName || 'there'}!
+
+Thank you for joining our learning platform. To complete your registration and access all features, please verify your email address.
+
+Click this link to verify your email:
+${emailData.context?.data?.verifyUrl}
+
+What happens next?
+Once verified, you'll have full access to all courses, be able to track your progress, and receive important updates about your learning journey.
+
+This verification link will expire in 24 hours.
+
+---
+TheMobileProf Learning Platform
+Ready to start your mobile development journey? Verify your email to get started!
+    `;
+  }
+
+  // Generic Notification Text Template
   if (emailData.template === 'notification') {
     return `
 TheMobileProf Notification
@@ -334,10 +583,12 @@ Hello ${emailData.context?.firstName || 'there'},
 
 ${emailData.context?.message || emailData.message}
 
-${emailData.context?.data ? `Details: ${JSON.stringify(emailData.context.data)}` : ''}
+${emailData.context?.data?.resetUrl ? `Action Required: ${emailData.context.data.resetUrl}` : ''}
+${emailData.context?.data?.verifyUrl ? `Verify Email: ${emailData.context.data.verifyUrl}` : ''}
 
 ---
-This email was sent from TheMobileProf Learning Platform
+TheMobileProf Learning Platform
+Empowering mobile developers worldwide
 ${emailData.context?.unsubscribeUrl ? `Unsubscribe: ${emailData.context.unsubscribeUrl}` : ''}
     `;
   }
@@ -351,5 +602,7 @@ verifyTransporter().catch(console.error);
 module.exports = {
   transporter,
   sendEmail,
-  verifyTransporter
+  verifyTransporter,
+  generateEmailHTML,
+  generateEmailText
 }; 

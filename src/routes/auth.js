@@ -620,13 +620,11 @@ router.post('/forgot-password', [
     await sendEmail({
       to: email,
       subject: 'Reset your password',
-      template: 'notification',
+      template: 'password-reset',
       context: {
         firstName: user.first_name || 'there',
-        message: `Click the button below to reset your password. This link expires in 1 hour.`,
         data: { resetUrl }
-      },
-      html: `<p>Hello ${user.first_name || 'there'},</p><p>Click <a href="${resetUrl}">here</a> to reset your password. This link expires in 1 hour.</p>`
+      }
     });
   }
   res.json({ message: 'If that email exists, we have sent password reset instructions.' });
@@ -675,13 +673,11 @@ router.post('/resend-verification', [
   await sendEmail({
     to: email,
     subject: 'Verify your email address',
-    template: 'notification',
+    template: 'email-verification',
     context: {
       firstName: user.first_name || 'there',
-      message: 'Click the button below to verify your email address.',
       data: { verifyUrl }
-    },
-    html: `<p>Hello ${user.first_name || 'there'},</p><p>Click <a href="${verifyUrl}">here</a> to verify your email address.</p>`
+    }
   });
   res.json({ message: 'Verification email sent if the account exists and is unverified.' });
 }));
@@ -718,9 +714,11 @@ router.post('/admin/users/:id/resend-verification', authenticateToken, asyncHand
   await sendEmail({
     to: user.email,
     subject: 'Verify your email address',
-    template: 'notification',
-    context: { firstName: user.first_name || 'there', message: 'Click the button below to verify your email address.', data: { verifyUrl } },
-    html: `<p>Hello ${user.first_name || 'there'},</p><p>Click <a href="${verifyUrl}">here</a> to verify your email address.</p>`
+    template: 'email-verification',
+    context: { 
+      firstName: user.first_name || 'there', 
+      data: { verifyUrl } 
+    }
   });
   res.json({ message: 'Verification email sent.' });
 }));
@@ -737,9 +735,11 @@ router.post('/me/resend-verification', authenticateToken, asyncHandler(async (re
   await sendEmail({
     to: user.email,
     subject: 'Verify your email address',
-    template: 'notification',
-    context: { firstName: user.first_name || 'there', message: 'Click the button below to verify your email address.', data: { verifyUrl } },
-    html: `<p>Hello ${user.first_name || 'there'},</p><p>Click <a href="${verifyUrl}">here</a> to verify your email address.</p>`
+    template: 'email-verification',
+    context: { 
+      firstName: user.first_name || 'there', 
+      data: { verifyUrl } 
+    }
   });
   res.json({ message: 'Verification email sent.' });
 }));
