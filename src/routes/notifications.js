@@ -89,7 +89,7 @@ router.get('/', authenticateToken, asyncHandler(async (req, res) => {
       type: notification.type,
       title: notification.title,
       message: notification.message,
-      data: notification.data ? JSON.parse(notification.data) : null,
+      data: notification.data,
       isRead: notification.is_read,
       priority: notification.priority,
       createdAt: notification.created_at,

@@ -82,7 +82,7 @@ async function createNotification({
       `INSERT INTO notifications (user_id, type, title, message, data, priority)
        VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING id`,
-      [userId, type, title, message, data ? JSON.stringify(data) : null, priority]
+      [userId, type, title, message, data, priority]
     );
 
     const notificationId = result.rows[0].id;
