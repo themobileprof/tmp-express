@@ -248,7 +248,14 @@ router.get('/:id', authenticateToken, asyncHandler(async (req, res) => {
 router.put('/:id', authenticateToken, authorizeOwnerOrAdmin('lessons', 'id'), validateLesson, asyncHandler(async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
-    throw new AppError('Validation failed', 400, 'Validation Error');
+    const errorDetails = errors.array().reduce((acc, error) => {
+      acc[error.path] = error.msg;
+      return acc;
+    }, {});
+    
+    const validationError = new AppError('Validation failed', 400, 'VALIDATION_ERROR');
+    validationError.details = errorDetails;
+    throw validationError;
   }
 
   const { id } = req.params;
@@ -517,3 +524,34 @@ router.get('/:id/discussions', asyncHandler(async (req, res) => {
 }));
 
 module.exports = router; 
+ 
+// ===== Student workshop read-only endpoint =====
+// GET /api/lessons/:id/workshop - returns enabled workshop spec if present
+router.get('/:id/workshop', authenticateToken, asyncHandler(async (req, res) => {
+  const { id } = req.params;
+
+  // Verify lesson exists
+  const lesson = await getRow('SELECT id, title FROM lessons WHERE id = $1', [id]);
+  if (!lesson) {
+    throw new AppError('Lesson not found', 404, 'Lesson Not Found');
+  }
+
+  // Fetch enabled workshop
+  const workshop = await getRow(
+    'SELECT is_enabled, spec, updated_at FROM lesson_workshops WHERE lesson_id = $1',
+    [id]
+  );
+
+  if (!workshop || workshop.is_enabled !== true) {
+    return res.json({ lesson: { id: lesson.id, title: lesson.title }, workshop: null });
+  }
+
+  res.json({
+    lesson: { id: lesson.id, title: lesson.title },
+    workshop: {
+      isEnabled: true,
+      spec: workshop.spec,
+      updatedAt: workshop.updated_at
+    }
+  });
+}));

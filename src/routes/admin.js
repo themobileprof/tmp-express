@@ -922,6 +922,115 @@ router.delete('/lessons/:id', asyncHandler(async (req, res) => {
   });
 }));
 
+// ===== LESSON WORKSHOP MANAGEMENT (Admin) =====
+
+// Get workshop spec for a lesson
+router.get('/lessons/:lessonId/workshop', asyncHandler(async (req, res) => {
+  const { lessonId } = req.params;
+
+  // Ensure lesson exists
+  const lesson = await getRow('SELECT id, title FROM lessons WHERE id = $1', [lessonId]);
+  if (!lesson) {
+    throw new AppError('Lesson not found', 404, 'Lesson Not Found');
+  }
+
+  const workshop = await getRow(
+    'SELECT id, lesson_id, is_enabled, spec, created_at, updated_at FROM lesson_workshops WHERE lesson_id = $1',
+    [lessonId]
+  );
+
+  res.json({
+    lesson: { id: lesson.id, title: lesson.title },
+    workshop: workshop || null
+  });
+}));
+
+// Create or replace workshop spec for a lesson
+router.post('/lessons/:lessonId/workshop', [
+  body('isEnabled').optional().isBoolean(),
+  body('spec').isObject().withMessage('spec must be a JSON object')
+], asyncHandler(async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    const errorDetails = errors.array().reduce((acc, error) => { acc[error.path] = error.msg; return acc; }, {});
+    const validationError = new AppError('Validation failed', 400, 'VALIDATION_ERROR');
+    validationError.details = errorDetails;
+    throw validationError;
+  }
+
+  const { lessonId } = req.params;
+  const { isEnabled = false, spec } = req.body;
+
+  // Ensure lesson exists
+  const lesson = await getRow('SELECT id FROM lessons WHERE id = $1', [lessonId]);
+  if (!lesson) {
+    throw new AppError('Lesson not found', 404, 'Lesson Not Found');
+  }
+
+  // Upsert workshop
+  const result = await query(
+    `INSERT INTO lesson_workshops (lesson_id, is_enabled, spec)
+     VALUES ($1, $2, $3)
+     ON CONFLICT (lesson_id)
+     DO UPDATE SET is_enabled = EXCLUDED.is_enabled, spec = EXCLUDED.spec, updated_at = CURRENT_TIMESTAMP
+     RETURNING id, lesson_id, is_enabled, spec, created_at, updated_at`,
+    [lessonId, isEnabled, spec]
+  );
+
+  res.status(201).json({
+    workshop: result.rows[0]
+  });
+}));
+
+// Update workshop spec partially
+router.put('/lessons/:lessonId/workshop', [
+  body('isEnabled').optional().isBoolean(),
+  body('spec').optional().isObject()
+], asyncHandler(async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    throw new AppError('Validation failed', 400, 'Validation Error');
+  }
+
+  const { lessonId } = req.params;
+  const { isEnabled, spec } = req.body;
+
+  // Ensure existing record
+  const existing = await getRow('SELECT id FROM lesson_workshops WHERE lesson_id = $1', [lessonId]);
+  if (!existing) {
+    throw new AppError('Workshop not found for lesson', 404, 'Workshop Not Found');
+  }
+
+  const updates = [];
+  const params = [];
+  let p = 0;
+  if (typeof isEnabled === 'boolean') { p++; updates.push(`is_enabled = $${p}`); params.push(isEnabled); }
+  if (spec !== undefined) { p++; updates.push(`spec = $${p}`); params.push(spec); }
+  if (updates.length === 0) {
+    throw new AppError('No fields to update', 400, 'No Updates');
+  }
+  updates.push('updated_at = CURRENT_TIMESTAMP');
+  p++; params.push(lessonId);
+
+  const result = await query(
+    `UPDATE lesson_workshops SET ${updates.join(', ')} WHERE lesson_id = $${p} RETURNING id, lesson_id, is_enabled, spec, created_at, updated_at`,
+    params
+  );
+
+  res.json({ workshop: result.rows[0] });
+}));
+
+// Delete workshop spec for a lesson
+router.delete('/lessons/:lessonId/workshop', asyncHandler(async (req, res) => {
+  const { lessonId } = req.params;
+  const existing = await getRow('SELECT id FROM lesson_workshops WHERE lesson_id = $1', [lessonId]);
+  if (!existing) {
+    throw new AppError('Workshop not found for lesson', 404, 'Workshop Not Found');
+  }
+  await query('DELETE FROM lesson_workshops WHERE lesson_id = $1', [lessonId]);
+  res.json({ message: 'Workshop removed for lesson' });
+}));
+
 // ===== TEST MANAGEMENT =====
 
 // Get test details

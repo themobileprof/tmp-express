@@ -730,6 +730,19 @@ const createTables = async () => {
     await query('CREATE INDEX IF NOT EXISTS idx_lessons_course ON lessons(course_id)');
     await query('CREATE INDEX IF NOT EXISTS idx_tests_course ON tests(course_id)');
     await query('CREATE INDEX IF NOT EXISTS idx_tests_lesson ON tests(lesson_id)');
+    // Workshops support
+    await query(`
+      CREATE TABLE IF NOT EXISTS lesson_workshops (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        lesson_id UUID NOT NULL UNIQUE,
+        is_enabled BOOLEAN DEFAULT false,
+        spec JSONB NOT NULL DEFAULT '{}'::jsonb, -- Structured steps and checks for the interactive terminal
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (lesson_id) REFERENCES lessons(id) ON DELETE CASCADE
+      )
+    `);
+    await query('CREATE INDEX IF NOT EXISTS idx_lesson_workshops_enabled ON lesson_workshops(is_enabled)');
     await query('CREATE INDEX IF NOT EXISTS idx_test_attempts_user ON test_attempts(user_id)');
     await query('CREATE INDEX IF NOT EXISTS idx_discussions_author ON discussions(author_id)');
     await query('CREATE INDEX IF NOT EXISTS idx_discussions_course ON discussions(course_id)');

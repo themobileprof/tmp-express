@@ -194,6 +194,10 @@ paths:
       $ref: './paths/lessons.yaml#/~1{id}~1complete'
     /lessons/{id}/progress:
       $ref: './paths/lessons.yaml#/~1{id}~1progress'
+    /lessons/{id}/workshop:
+      $ref: './paths/lessons.yaml#/~1{id}~1workshop'
+    /admin/lessons/{lessonId}/workshop:
+      $ref: './paths/lessons.yaml#/~1admin~1lessons~1{lessonId}~1workshop'
     /lessons/admin/courses/{courseId}/lessons:
       $ref: './paths/lessons.yaml#/~1admin~1courses~1{courseId}~1lessons'
     /lessons/courses/{id}/lessons:
@@ -446,6 +450,95 @@ components:
 
     DiscussionStats:
       $ref: './schemas/DiscussionStats.yaml' 
+
+    LessonWorkshopSpec:
+      type: object
+      description: Structured interactive terminal workshop spec for a lesson
+      properties:
+        title:
+          type: string
+          description: Title of the workshop
+        intro:
+          type: string
+          description: Intro text shown before the terminal
+        environment:
+          type: object
+          description: Optional runtime hints for the terminal emulator
+          properties:
+            os:
+              type: string
+              example: ubuntu-22.04
+            shell:
+              type: string
+              example: bash
+            workingDir:
+              type: string
+              example: /home/student
+        steps:
+          type: array
+          description: Ordered list of steps for the workshop
+          items:
+            type: object
+            required: [step, prompt, expect]
+            properties:
+              step:
+                type: integer
+                description: Sequential step number starting at 1
+                minimum: 1
+              title:
+                type: string
+                description: Short title for the step
+              instruction:
+                type: string
+                description: Instruction shown to the student for this step
+              prompt:
+                type: string
+                description: The terminal prompt string to display
+                example: student@vm:~$ 
+              expect:
+                type: object
+                description: Expectation config for validating input/output
+                properties:
+                  inputPattern:
+                    type: string
+                    description: Regex to validate the exact command the student should type
+                    example: ^ls\s+-la$
+                  outputIncludes:
+                    type: array
+                    items:
+                      type: string
+                    description: Strings that should appear in the simulated output
+                  outputExcludes:
+                    type: array
+                    items:
+                      type: string
+                    description: Strings that must not appear in the output
+                  exitCode:
+                    type: integer
+                    description: Expected exit code for the command
+                    default: 0
+              simulate:
+                type: object
+                description: Simulator hints for frontend to render fake output
+                properties:
+                  stdout:
+                    type: string
+                    description: Example stdout to show on success
+                  stderr:
+                    type: string
+                    description: Example stderr to show on failure
+                  filesChanged:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        path:
+                          type: string
+                        diff:
+                          type: string
+              comments:
+                type: string
+                description: Human-readable notes for admins about what is expected
   
   responses:
     NotFound:

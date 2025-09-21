@@ -240,6 +240,175 @@
       '404':
         $ref: '../responses/NotFound.yaml'
 
+# Lesson Workshop (Student)
+/{id}/workshop:
+  get:
+    tags:
+      - Lessons
+    summary: Get the enabled workshop spec for a lesson
+    description: Returns the interactive terminal workshop spec if enabled for the lesson. Returns null if no workshop or disabled.
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Lesson ID
+        schema:
+          type: string
+          format: uuid
+    responses:
+      '200':
+        description: Workshop spec fetched
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                lesson:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                      format: uuid
+                    title:
+                      type: string
+                workshop:
+                  oneOf:
+                    - type: 'null'
+                    - type: object
+                      properties:
+                        isEnabled:
+                          type: boolean
+                          example: true
+                        spec:
+                          $ref: '../schemas/LessonWorkshopSpec'
+                        updatedAt:
+                          type: string
+                          format: date-time
+      '401':
+        $ref: '../responses/Unauthorized.yaml'
+      '404':
+        $ref: '../responses/NotFound.yaml'
+
+# Admin: Lesson Workshop Management
+/admin/lessons/{lessonId}/workshop:
+  get:
+    tags:
+      - Lessons
+    summary: Get a lesson's workshop spec (admin)
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: lessonId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    responses:
+      '200':
+        description: Workshop returned or null
+      '401':
+        $ref: '../responses/Unauthorized.yaml'
+      '403':
+        $ref: '../responses/Forbidden.yaml'
+      '404':
+        $ref: '../responses/NotFound.yaml'
+  post:
+    tags:
+      - Lessons
+    summary: Create or replace a lesson's workshop spec (admin)
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: lessonId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              isEnabled:
+                type: boolean
+                default: false
+              spec:
+                $ref: '../schemas/LessonWorkshopSpec'
+    responses:
+      '201':
+        description: Workshop upserted
+      '400':
+        $ref: '../responses/BadRequest.yaml'
+      '401':
+        $ref: '../responses/Unauthorized.yaml'
+      '403':
+        $ref: '../responses/Forbidden.yaml'
+      '404':
+        $ref: '../responses/NotFound.yaml'
+  put:
+    tags:
+      - Lessons
+    summary: Update a lesson's workshop spec (admin)
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: lessonId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              isEnabled:
+                type: boolean
+              spec:
+                $ref: '../schemas/LessonWorkshopSpec'
+    responses:
+      '200':
+        description: Workshop updated
+      '400':
+        $ref: '../responses/BadRequest.yaml'
+      '401':
+        $ref: '../responses/Unauthorized.yaml'
+      '403':
+        $ref: '../responses/Forbidden.yaml'
+      '404':
+        $ref: '../responses/NotFound.yaml'
+  delete:
+    tags:
+      - Lessons
+    summary: Delete a lesson's workshop spec (admin)
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: lessonId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    responses:
+      '200':
+        description: Workshop deleted
+      '401':
+        $ref: '../responses/Unauthorized.yaml'
+      '403':
+        $ref: '../responses/Forbidden.yaml'
+      '404':
+        $ref: '../responses/NotFound.yaml'
+
 # Get Lesson Tests
 /{id}/tests:
   get:
