@@ -282,7 +282,7 @@
                           type: boolean
                           example: true
                         spec:
-                          $ref: '../schemas/LessonWorkshopSpec'
+                          $ref: '../schemas/LessonWorkshopSpec.yaml'
                         updatedAt:
                           type: string
                           format: date-time
@@ -291,6 +291,232 @@
       '404':
         $ref: '../responses/NotFound.yaml'
 
+# Admin: Tests Management
+/admin/lessons/{lessonId}/tests:
+  post:
+    tags:
+      - Lessons
+    summary: Create a new test for a lesson (admin)
+    description: Create a test attached to the specified lesson. Optionally include initial questions.
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: lessonId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - title
+              - durationMinutes
+              - passingScore
+              - maxAttempts
+            properties:
+              title:
+                type: string
+              description:
+                type: string
+                nullable: true
+              durationMinutes:
+                type: integer
+                minimum: 1
+              passingScore:
+                type: integer
+                minimum: 0
+                maximum: 100
+              maxAttempts:
+                type: integer
+                minimum: 1
+              questions:
+                type: array
+                description: Optional list of questions to insert with the test
+                items:
+                  type: object
+                  required:
+                    - question
+                    - questionType
+                    - points
+                    - orderIndex
+                  properties:
+                    question:
+                      type: string
+                    questionType:
+                      type: string
+                      enum: [multiple_choice, true_false, short_answer]
+                    options:
+                      description: Required for multiple choice; array or JSON string
+                      oneOf:
+                        - type: array
+                          items:
+                            type: string
+                        - type: string
+                    correctAnswer:
+                      type: integer
+                      nullable: true
+                    imageUrl:
+                      type: string
+                      nullable: true
+                    points:
+                      type: integer
+                      minimum: 1
+                    orderIndex:
+                      type: integer
+                      minimum: 0
+    responses:
+      '201':
+        description: Test created successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                test:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                      format: uuid
+                    course_id:
+                      type: string
+                      format: uuid
+                    lesson_id:
+                      type: string
+                      format: uuid
+                    title:
+                      type: string
+                    description:
+                      type: string
+                      nullable: true
+                    duration_minutes:
+                      type: integer
+                    passing_score:
+                      type: integer
+                    max_attempts:
+                      type: integer
+                    order_index:
+                      type: integer
+                    is_published:
+                      type: boolean
+                    created_at:
+                      type: string
+                      format: date-time
+                    updated_at:
+                      type: string
+                      format: date-time
+                questions:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      question:
+                        type: string
+                      question_type:
+                        type: string
+                      options:
+                        type: string
+                        nullable: true
+                        description: JSON string of options or null
+                      correct_answer:
+                        type: integer
+                        nullable: true
+                      points:
+                        type: integer
+                      order_index:
+                        type: integer
+                      image_url:
+                        type: string
+                        nullable: true
+      '400':
+        $ref: '../responses/BadRequest.yaml'
+      '401':
+        $ref: '../responses/Unauthorized.yaml'
+      '404':
+        $ref: '../responses/NotFound.yaml'
+  get:
+    tags:
+      - Lessons
+    summary: List tests for a lesson (admin)
+    description: Returns tests for the lesson with basic statistics.
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: lessonId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    responses:
+      '200':
+        description: Lesson tests retrieved successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                lesson:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                      format: uuid
+                    title:
+                      type: string
+                    courseId:
+                      type: string
+                      format: uuid
+                tests:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      title:
+                        type: string
+                      description:
+                        type: string
+                        nullable: true
+                      durationMinutes:
+                        type: integer
+                      passingScore:
+                        type: integer
+                      maxAttempts:
+                        type: integer
+                      orderIndex:
+                        type: integer
+                      isPublished:
+                        type: boolean
+                      questionCount:
+                        type: integer
+                      attemptCount:
+                        type: integer
+                      averageScore:
+                        type: number
+                        nullable: true
+                      passedAttempts:
+                        type: integer
+                      createdAt:
+                        type: string
+                        format: date-time
+                      updatedAt:
+                        type: string
+                        format: date-time
+      '401':
+        $ref: '../responses/Unauthorized.yaml'
+      '404':
+        $ref: '../responses/NotFound.yaml'
 # Admin: Lesson Workshop Management
 /admin/lessons/{lessonId}/workshop:
   get:
@@ -339,7 +565,7 @@
                 type: boolean
                 default: false
               spec:
-                $ref: '../schemas/LessonWorkshopSpec'
+                $ref: '../schemas/LessonWorkshopSpec.yaml'
     responses:
       '201':
         description: Workshop upserted
@@ -374,7 +600,7 @@
               isEnabled:
                 type: boolean
               spec:
-                $ref: '../schemas/LessonWorkshopSpec'
+                $ref: '../schemas/LessonWorkshopSpec.yaml'
     responses:
       '200':
         description: Workshop updated
