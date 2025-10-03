@@ -30,3 +30,4 @@ properties:
   updatedAt:
     type: string
     format: date-time 
+  # Note: test-level flag fields removed; use per-question flags instead

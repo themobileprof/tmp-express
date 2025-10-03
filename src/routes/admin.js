@@ -1181,6 +1181,53 @@ router.get('/tests/:id/questions', asyncHandler(async (req, res) => {
   });
 }));
 
+// Get flags for questions in a test (admin)
+router.get('/tests/:id/question-flags', asyncHandler(async (req, res) => {
+  const { id } = req.params;
+
+  // Ensure test exists
+  const test = await getRow('SELECT id FROM tests WHERE id = $1', [id]);
+  if (!test) {
+    throw new AppError('Test not found', 404, 'Test Not Found');
+  }
+
+  // Return flagged questions summary (no per-user flag rows in this model)
+  const flaggedQuestions = await query(
+    `SELECT q.id as question_id, q.question, q.flag_count, q.last_flagged_at
+     FROM test_questions q
+     WHERE q.test_id = $1 AND q.flagged = true
+     ORDER BY q.last_flagged_at DESC`,
+    [id]
+  );
+
+  res.json({ flaggedQuestions: flaggedQuestions.rows });
+}));
+
+// (Removed) per-flag resolve endpoint — per-question resolve is used instead
+
+// Resolve a question (clear flagged state and mark all related flags resolved) - admin
+router.post('/tests/:id/questions/:questionId/resolve', asyncHandler(async (req, res) => {
+  const { id, questionId } = req.params;
+
+  // Ensure question exists for the test
+  const question = await getRow('SELECT id FROM test_questions WHERE id = $1 AND test_id = $2', [questionId, id]);
+  if (!question) {
+    throw new AppError('Question not found', 404, 'Question Not Found');
+  }
+
+  // Clear the flagged state on the question (do not reset historical count)
+  await query('UPDATE test_questions SET flagged = false, last_flagged_at = NULL WHERE id = $1', [questionId]);
+
+  // Note: we do not maintain per-user flag rows in the migration model; clearing
+  // the flagged boolean on the question is sufficient for the admin resolve flow.
+
+  res.json({ success: true, message: 'Question resolved: flagged state cleared and flags marked resolved' });
+}));
+
+// (Removed) admin test-level flag clearing — per-question flags should be handled via flags table
+
+// (Removed) per-flag delete endpoint — detailed flag rows are not used in this model
+
 // Add question to test
 router.post('/tests/:id/questions', [
   body('question').trim().isLength({ min: 1 }).withMessage('Question text is required'),

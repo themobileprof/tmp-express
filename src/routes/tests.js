@@ -294,9 +294,43 @@ router.get('/:id/questions', authenticateToken, asyncHandler(async (req, res) =>
       correctAnswer: q.correct_answer,
       correctAnswerText: q.correct_answer_text,
       points: q.points,
-      orderIndex: q.order_index
+      orderIndex: q.order_index,
+      flagSummary: {
+        total: q.flag_count || 0,
+        flagged: !!q.flagged,
+        lastFlaggedAt: q.last_flagged_at || null
+      }
     }))
   });
+}));
+
+// Flag a question as problematic (user-facing)
+router.post('/:id/questions/:questionId/flag', authenticateToken, asyncHandler(async (req, res) => {
+  const { id, questionId } = req.params;
+  const { reason } = req.body || {};
+
+  // Verify test and question
+  const test = await getRow('SELECT id FROM tests WHERE id = $1', [id]);
+  if (!test) {
+    throw new AppError('Test not found', 404, 'Test Not Found');
+  }
+
+  const question = await getRow('SELECT id FROM test_questions WHERE id = $1 AND test_id = $2', [questionId, id]);
+  if (!question) {
+    throw new AppError('Question not found', 404, 'Question Not Found');
+  }
+
+  // Simple anonymous flagging flow: increment counter and mark as flagged
+  await query(
+    `UPDATE test_questions
+     SET flag_count = flag_count + 1,
+         flagged = true,
+         last_flagged_at = CURRENT_TIMESTAMP
+     WHERE id = $1 AND test_id = $2`,
+    [questionId, id]
+  );
+
+  res.json({ success: true, message: 'Question flagged for review' });
 }));
 
 // Add question to test
@@ -387,6 +421,9 @@ router.put('/:id/questions/:questionId', authenticateToken, authorizeOwnerOrAdmi
          correct_answer_text = COALESCE($5, correct_answer_text),
          points = COALESCE($6, points),
          order_index = COALESCE($7, order_index),
+         -- When a question is edited by an owner/admin, clear the flagged state
+         flagged = false,
+         last_flagged_at = NULL,
          updated_at = CURRENT_TIMESTAMP
      WHERE id = $8 AND test_id = $9
      RETURNING *`,

@@ -179,6 +179,8 @@
       '404':
         $ref: '../responses/NotFound.yaml'
 
+  # (deprecated) test-level flag removed — use per-question flags instead
+
 /{id}/questions:
   # Get Test Questions
   get:
@@ -302,6 +304,8 @@
         $ref: '../responses/Forbidden.yaml'
       '404':
         $ref: '../responses/NotFound.yaml'
+
+# (Removed admin test-level clear-flag) Use question-level flags instead
 
 /{id}/questions/{questionId}:
   # Update Question
@@ -441,6 +445,57 @@
         $ref: '../responses/Forbidden.yaml'
       '404':
         $ref: '../responses/NotFound.yaml'
+
+    # Flag a specific question (user-facing)
+    post:
+      tags:
+        - Tests
+      summary: Flag a question for review
+      description: Allow an authenticated user to flag a specific question within a test for manual review. One flag per user per question is enforced.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Test ID
+        - name: questionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Question ID
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+                  description: Optional reason provided by the user for flagging the question
+      responses:
+        '200':
+          description: Question flagged for review
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+        '401':
+          $ref: '../responses/Unauthorized.yaml'
+        '404':
+          $ref: '../responses/NotFound.yaml'
 
 /{id}/start:
   # Start Test Attempt

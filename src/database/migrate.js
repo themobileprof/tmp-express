@@ -398,6 +398,8 @@ const createTables = async () => {
       )
     `);
 
+  // (No test-level flag columns) — per-question flags are tracked via columns on test_questions
+
     // Create Test_Questions table
     await query(`
       CREATE TABLE IF NOT EXISTS test_questions (
@@ -416,6 +418,20 @@ const createTables = async () => {
         FOREIGN KEY (test_id) REFERENCES tests(id) ON DELETE CASCADE
       )
     `);
+
+    // Add simple flagging columns to test_questions for a minimal anonymous flag flow
+    // - flagged: whether the question is currently flagged and needs review
+    // - flag_count: number of times the question has been flagged (simple counter)
+    // - last_flagged_at: timestamp of the most recent flag
+    await query(`
+      ALTER TABLE test_questions
+      ADD COLUMN IF NOT EXISTS flagged BOOLEAN DEFAULT false,
+      ADD COLUMN IF NOT EXISTS flag_count INTEGER DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS last_flagged_at TIMESTAMP;
+    `);
+
+  // Using simple columns on test_questions (flagged, flag_count, last_flagged_at)
+  // to represent anonymous flagging.
 
     // Create Test_Attempts table
     await query(`
