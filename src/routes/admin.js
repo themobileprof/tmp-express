@@ -275,9 +275,9 @@ router.get('/courses', asyncHandler(async (req, res) => {
   // Get courses
   const courses = await getRows(
     `SELECT c.*, u.first_name as instructor_first_name, u.last_name as instructor_last_name,
-            COUNT(e.id) as enrollment_count,
-            COUNT(l.id) as lesson_count,
-            COUNT(t.id) as test_count
+            COUNT(DISTINCT e.id) as enrollment_count,
+            COUNT(DISTINCT l.id) as lesson_count,
+            COUNT(DISTINCT t.id) as test_count
      FROM courses c
      LEFT JOIN users u ON c.instructor_id = u.id
      LEFT JOIN enrollments e ON c.id = e.course_id
@@ -660,16 +660,17 @@ router.get('/stats/courses', asyncHandler(async (req, res) => {
       c.is_published,
       u.first_name as instructor_first_name,
       u.last_name as instructor_last_name,
-      COUNT(e.id) as enrollment_count,
+      COUNT(DISTINCT e.id) as enrollment_count,
       COUNT(CASE WHEN e.status = 'completed' THEN 1 END) as completion_count,
       ROUND(AVG(ta.score), 2) as average_score,
-      COUNT(l.id) as lesson_count,
-      COUNT(t.id) as test_count
+      COUNT(DISTINCT l.id) as lesson_count,
+      COUNT(DISTINCT t.id) as test_count
     FROM courses c
     LEFT JOIN users u ON c.instructor_id = u.id
     LEFT JOIN enrollments e ON c.id = e.course_id
-    LEFT JOIN test_attempts ta ON e.user_id = ta.user_id
+    -- join tests first then test_attempts on the test id to avoid multiplying rows
     LEFT JOIN tests t ON c.id = t.course_id
+    LEFT JOIN test_attempts ta ON t.id = ta.test_id
     LEFT JOIN lessons l ON c.id = l.course_id
     GROUP BY c.id, u.first_name, u.last_name
     ORDER BY enrollment_count DESC
