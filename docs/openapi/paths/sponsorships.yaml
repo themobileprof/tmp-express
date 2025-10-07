@@ -376,6 +376,12 @@
               notes:
                 type: string
                 description: Updated notes for the sponsorship
+              courseIds:
+                type: array
+                items:
+                  type: string
+                  format: uuid
+                description: Optional new array of course IDs to replace the sponsorship's linked courses
     responses:
       '200':
         description: Sponsorship updated successfully

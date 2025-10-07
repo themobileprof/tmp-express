@@ -351,8 +351,12 @@ router.get('/verify/:reference', authenticateToken, asyncHandler(async (req, res
               discount_amount, final_price, used_at
             ) VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP)`,
             [
-              sponsorship.id, userId, payment.payment_type === 'course' ? payment.item_id || payment.course_id : null,
-              payment.metadata.originalPrice, payment.metadata.discountAmount, payment.metadata.finalPrice
+              sponsorship.id,
+              userId,
+              payment.payment_type === 'course' ? payment.item_id || payment.course_id : null,
+              payment.metadata.originalPrice,
+              payment.metadata.discountAmount,
+              payment.metadata.finalPrice
             ]
           );
           await query('UPDATE sponsorships SET students_used = students_used + 1 WHERE id = $1', [sponsorship.id]);

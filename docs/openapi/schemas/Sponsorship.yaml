@@ -9,10 +9,6 @@ properties:
     type: string
     format: uuid
     description: ID of the sponsor creating the sponsorship
-  courseId:
-    type: string
-    format: uuid
-    description: ID of the course being sponsored (legacy field for single-course sponsorships)
   courseIds:
     type: array
     items:

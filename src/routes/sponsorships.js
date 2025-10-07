@@ -403,12 +403,12 @@ router.post('/:id/use', authenticateToken, validateSponsorshipUsage, asyncHandle
     discountAmount = originalPrice;
   }
 
-  // Record usage
+  // Record usage (include which course was used)
   await query(
     `INSERT INTO sponsorship_usage (
-      sponsorship_id, student_id, original_price, discount_amount, final_price
-    ) VALUES ($1, $2, $3, $4, $5)`,
-    [id, studentId, originalPrice, discountAmount, finalPrice]
+      sponsorship_id, student_id, course_id, original_price, discount_amount, final_price
+    ) VALUES ($1, $2, $3, $4, $5, $6)`,
+    [id, studentId, courseId, originalPrice, discountAmount, finalPrice]
   );
 
   // Update sponsorship usage count
