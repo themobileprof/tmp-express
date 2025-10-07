@@ -229,33 +229,92 @@ router.get('/:id', authenticateToken, authorizeOwnerOrAdmin('sponsorships'), asy
 // Update sponsorship
 router.put('/:id', authenticateToken, authorizeOwnerOrAdmin('sponsorships'), asyncHandler(async (req, res) => {
   const { id } = req.params;
-  const { status, notes } = req.body;
+  const { status, notes, courseIds } = req.body;
 
-  // Verify sponsorship exists and belongs to user
+  // Verify sponsorship exists
   const sponsorship = await getRow('SELECT * FROM sponsorships WHERE id = $1', [id]);
   if (!sponsorship) {
     throw new AppError('Sponsorship not found', 404, 'Sponsorship Not Found');
   }
 
-  // Update sponsorship
-  const result = await query(
-    `UPDATE sponsorships 
-     SET status = COALESCE($1, status), 
-         notes = COALESCE($2, notes),
-         updated_at = CURRENT_TIMESTAMP
-     WHERE id = $3
-     RETURNING *`,
-    [status, notes, id]
-  );
+  // If courseIds provided, validate shape
+  let newCourseIds = null;
+  if (courseIds !== undefined) {
+    if (!Array.isArray(courseIds) || courseIds.length === 0) {
+      throw new AppError('courseIds must be a non-empty array of UUIDs when provided', 400, 'Validation Error');
+    }
+    newCourseIds = courseIds;
+  }
 
-  const updatedSponsorship = result.rows[0];
+  // Start transaction to update sponsorship and optional course links atomically
+  try {
+    await query('BEGIN');
 
-  res.json({
-    id: updatedSponsorship.id,
-    status: updatedSponsorship.status,
-    notes: updatedSponsorship.notes,
-    updatedAt: updatedSponsorship.updated_at
-  });
+    // Update sponsorship fields
+    const result = await query(
+      `UPDATE sponsorships 
+       SET status = COALESCE($1, status), 
+           notes = COALESCE($2, notes),
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $3
+       RETURNING *`,
+      [status, notes, id]
+    );
+
+    const updatedSponsorship = result.rows[0];
+
+    // Handle course links if provided
+    if (newCourseIds) {
+      // Ensure all provided courseIds exist
+      const courses = await getRows('SELECT id FROM courses WHERE id = ANY($1)', [newCourseIds]);
+      if (courses.length !== newCourseIds.length) {
+        throw new AppError('One or more courseIds not found', 404, 'Course Not Found');
+      }
+
+      // Get currently linked course ids
+      const existingLinks = await getRows('SELECT course_id FROM sponsorship_courses WHERE sponsorship_id = $1', [id]);
+      const existingCourseIds = existingLinks.map(r => r.course_id);
+
+      // Compute removals and additions
+      const toRemove = existingCourseIds.filter(c => !newCourseIds.includes(c));
+      const toAdd = newCourseIds.filter(c => !existingCourseIds.includes(c));
+
+      // Prevent removing courses that already have usage recorded for this sponsorship
+      if (toRemove.length > 0) {
+        const usageRow = await getRow(
+          'SELECT 1 FROM sponsorship_usage WHERE sponsorship_id = $1 AND course_id = ANY($2) LIMIT 1',
+          [id, toRemove]
+        );
+        if (usageRow) {
+          throw new AppError('Cannot remove course(s) that already have sponsorship usage recorded', 400, 'Sponsorship In Use');
+        }
+        // Safe to remove
+        await query('DELETE FROM sponsorship_courses WHERE sponsorship_id = $1 AND course_id = ANY($2)', [id, toRemove]);
+      }
+
+      // Insert new links
+      if (toAdd.length > 0) {
+        const insertPromises = toAdd.map(courseId => query(
+          'INSERT INTO sponsorship_courses (sponsorship_id, course_id) VALUES ($1, $2)',
+          [id, courseId]
+        ));
+        await Promise.all(insertPromises);
+      }
+    }
+
+    await query('COMMIT');
+
+    res.json({
+      id: updatedSponsorship.id,
+      status: updatedSponsorship.status,
+      notes: updatedSponsorship.notes,
+      updatedAt: updatedSponsorship.updated_at
+    });
+
+  } catch (error) {
+    try { await query('ROLLBACK'); } catch (e) { /* ignore rollback errors */ }
+    throw error;
+  }
 }));
 
 // Delete sponsorship
