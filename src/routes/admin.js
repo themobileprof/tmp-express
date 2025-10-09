@@ -4,6 +4,7 @@ const { query, getRow, getRows } = require('../database/config');
 const { asyncHandler, AppError } = require('../middleware/errorHandler');
 const { authenticateToken } = require('../middleware/auth');
 const { clearSettingsCache } = require('../utils/systemSettings');
+const { sendEmail } = require('../mailer');
 
 const router = express.Router();
 
@@ -255,9 +256,19 @@ router.put('/users/:id/password', [
     throw new AppError('User not found', 404, 'User Not Found');
   }
 
-  // Only allow changing password for local-auth users
+  // Only allow changing password for local-auth users by default
   if (user.auth_provider && user.auth_provider !== 'local') {
-    throw new AppError('Cannot change password for non-local auth users', 400, 'Invalid Operation');
+    // If admin explicitly requests force, convert the account to local by clearing oauth fields.
+    // This is a destructive operation (it removes the OAuth linkage). Require explicit intent.
+    if (!req.body.force) {
+      throw new AppError('Cannot change password for non-local auth users. To override, include { "force": true } in the request body', 400, 'Invalid Operation');
+    }
+
+    // Convert account to local auth: set auth_provider to 'local' and clear OAuth-specific columns
+    await query(
+      `UPDATE users SET auth_provider = $1, google_id = NULL, google_email = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = $2`,
+      ['local', id]
+    );
   }
 
   // Hash new password
@@ -270,6 +281,25 @@ router.put('/users/:id/password', [
     'UPDATE users SET password_hash = $1, password_reset_token = NULL, password_reset_expires = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
     [passwordHash, id]
   );
+
+  // Send notification email to the user informing them of the change
+  try {
+    const userInfo = await getRow('SELECT email, first_name FROM users WHERE id = $1', [id]);
+    if (userInfo && userInfo.email) {
+      await sendEmail({
+        to: userInfo.email,
+        subject: 'Your account password has been changed',
+        template: 'notification',
+        context: {
+          firstName: userInfo.first_name || 'there',
+          message: req.body.force ? 'An administrator has converted your account to local sign-in and set a new password for you.' : 'An administrator has updated your account password.'
+        }
+      });
+    }
+  } catch (err) {
+    console.error('Failed to send password change notification email:', err.message || err);
+    // Do not fail the request if email sending fails
+  }
 
   res.json({ message: 'Password updated successfully' });
 }));

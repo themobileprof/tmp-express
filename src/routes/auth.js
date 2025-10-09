@@ -16,7 +16,8 @@ const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 // Validation middleware
 const validateRegistration = [
-  body('email').isEmail().normalizeEmail().withMessage('Please provide a valid email'),
+  // Preserve Gmail dots to avoid unexpected normalization differences for addresses like "user.name@gmail.com"
+  body('email').isEmail().normalizeEmail({ gmail_remove_dots: false, gmail_convert_googlemaildotcom: false }).withMessage('Please provide a valid email'),
   body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters long'),
   body('firstName').trim().isLength({ min: 1 }).withMessage('First name is required'),
   body('lastName').trim().isLength({ min: 1 }).withMessage('Last name is required'),
@@ -24,7 +25,8 @@ const validateRegistration = [
 ];
 
 const validateLogin = [
-  body('email').isEmail().normalizeEmail().withMessage('Please provide a valid email'),
+  // Preserve Gmail dots during normalization so we match stored emails that include dots
+  body('email').isEmail().normalizeEmail({ gmail_remove_dots: false, gmail_convert_googlemaildotcom: false }).withMessage('Please provide a valid email'),
   body('password').notEmpty().withMessage('Password is required')
 ];
 
@@ -468,7 +470,7 @@ router.post('/change-password', [
 
 // Admin login (separate from regular user login)
 router.post('/admin/login', [
-  body('email').isEmail().normalizeEmail().withMessage('Please provide a valid email'),
+  body('email').isEmail().normalizeEmail({ gmail_remove_dots: false, gmail_convert_googlemaildotcom: false }).withMessage('Please provide a valid email'),
   body('password').notEmpty().withMessage('Password is required')
 ], asyncHandler(async (req, res) => {
   const errors = validationResult(req);
