@@ -235,6 +235,45 @@ router.delete('/users/:id', asyncHandler(async (req, res) => {
   });
 }));
 
+// Admin: change a user's password
+router.put('/users/:id/password', [
+  body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters long')
+], asyncHandler(async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    const validationError = new AppError('Validation failed', 400, 'VALIDATION_ERROR');
+    validationError.details = errors.array().reduce((acc, error) => { acc[error.param] = error.msg; return acc; }, {});
+    throw validationError;
+  }
+
+  const { id } = req.params;
+  const { password } = req.body;
+
+  // Ensure user exists
+  const user = await getRow('SELECT id, auth_provider FROM users WHERE id = $1', [id]);
+  if (!user) {
+    throw new AppError('User not found', 404, 'User Not Found');
+  }
+
+  // Only allow changing password for local-auth users
+  if (user.auth_provider && user.auth_provider !== 'local') {
+    throw new AppError('Cannot change password for non-local auth users', 400, 'Invalid Operation');
+  }
+
+  // Hash new password
+  const bcrypt = require('bcryptjs');
+  const saltRounds = parseInt(process.env.BCRYPT_ROUNDS) || 12;
+  const passwordHash = await bcrypt.hash(password, saltRounds);
+
+  // Update password and clear any existing reset tokens
+  await query(
+    'UPDATE users SET password_hash = $1, password_reset_token = NULL, password_reset_expires = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+    [passwordHash, id]
+  );
+
+  res.json({ message: 'Password updated successfully' });
+}));
+
 // ===== COURSE MANAGEMENT =====
 
 // Get all courses with admin details
