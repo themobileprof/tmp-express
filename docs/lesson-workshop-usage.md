@@ -2,6 +2,75 @@
 
 This document shows how to use the Lesson Workshop APIs in the backend. It includes the admin CRUD endpoints and the student read-only endpoint, example workshop `spec` JSON, sample curl requests, and Node/axios examples.
 
+## Workshop Structure
+
+Workshops are task-based learning experiences with the following structure:
+
+```json
+{
+  "title": "Workshop Title",
+  "description": "Brief description",
+  "intro": "Introduction text shown before tasks",
+  "difficulty": "beginner|intermediate|advanced",
+  "estimatedDuration": 30,
+  "prerequisites": ["Basic Linux knowledge"],
+  "tags": ["linux", "commands", "file-system"],
+  "environment": {
+    "type": "linux",
+    "image": "ubuntu:22.04",
+    "packages": ["nano"],
+    "workingDirectory": "/workspace",
+    "environmentVariables": {
+      "SHELL": "/bin/bash",
+      "EDITOR": "nano"
+    }
+  },
+  "tasks": [
+    {
+      "id": "task-1",
+      "type": "command",
+      "title": "Navigate File System",
+      "instructions": "Use pwd, ls, mkdir, cd commands...",
+      "hints": ["Use pwd to see current directory"],
+      "points": 10,
+      "timeout": 600,
+      "expectedOutput": "mydirectory",
+      "expectedCommands": ["pwd", "ls", "mkdir mydirectory", "cd mydirectory", "pwd"],
+      "validation": {
+        "checkCommand": "pwd",
+        "expectedResult": "/workspace/mydirectory"
+      },
+      "responses": {
+        "hint": "Remember the command sequence",
+        "success": "Great job!",
+        "failure": "Try again"
+      },
+      "comments": [
+        {
+          "type": "tip",
+          "content": "Use ls -l for detailed listing",
+          "trigger": "on_success"
+        }
+      ]
+    }
+  ],
+  "settings": {
+    "allowRetry": true,
+    "maxRetries": 3,
+    "autoAdvance": false,
+    "allowHintUsage": true,
+    "showExpectedOutput": true
+  },
+  "resources": [
+    {
+      "url": "https://ubuntu.com/tutorials/command-line-for-beginners",
+      "type": "documentation",
+      "title": "Linux Command Line Tutorial"
+    }
+  ]
+}
+```
+
 ## Contract
 - Inputs: `lessonId` path parameter. Admin endpoints require a Bearer JWT with admin privileges. Student endpoint requires a Bearer JWT.
 - Body (admin POST/PUT): JSON with optional `isEnabled` (boolean) and `spec` (object). On POST `spec` is required and must be a JSON object.
@@ -22,14 +91,15 @@ Notes:
 - `spec` must be a JSON object. POST enforces this via validation.
 - Admin routes require `authenticateToken` + admin check.
 - Student route returns `workshop: null` when no enabled workshop exists.
+- Backend automatically normalizes legacy `steps` or `commands` arrays to the canonical `tasks` format.
 
 ---
 
-## Terminal-driven example (copy-paste)
+## Task-based example (copy-paste)
 The following block is a single, copy-pasteable terminal script. It:
 
 - sets environment variables (provide real tokens/ids)
-- writes a workshop payload JSON file
+- writes a workshop payload JSON file based on the task-based structure
 - POSTs the workshop as admin
 - GETs the admin view
 - toggles `isEnabled` via PUT
@@ -50,17 +120,132 @@ cat > workshop-payload.json <<'JSON'
 {
   "isEnabled": true,
   "spec": {
-    "title": "Hands-on: Build a REST API",
-    "description": "Guided lab for building a Node/Express REST API.",
-    "durationMinutes": 90,
-    "steps": [
-      { "id": "init", "title": "Project init", "instructions": "Run npm init and install express" },
-      { "id": "server", "title": "Create server", "instructions": "Create src/server.js and start express app" }
+    "title": "Mastering Basic Terminal Commands",
+    "description": "Practice navigating the file system and creating/editing files using essential terminal commands.",
+    "intro": "Welcome to this hands-on workshop! You'll learn fundamental Linux commands through interactive tasks.",
+    "difficulty": "beginner",
+    "estimatedDuration": 30,
+    "prerequisites": [
+      "Basic understanding of command-line interfaces"
     ],
-    "resources": {
-      "starterRepo": "https://github.com/example/starter-api",
-      "expectedOutputs": ["Server starts on :3000", "GET /health returns 200"]
-    }
+    "tags": [
+      "terminal",
+      "commands",
+      "file system",
+      "text editor"
+    ],
+    "environment": {
+      "type": "linux",
+      "image": "ubuntu:22.04",
+      "packages": [
+        "nano"
+      ],
+      "workingDirectory": "/workspace",
+      "environmentVariables": {
+        "SHELL": "/bin/bash",
+        "EDITOR": "nano"
+      }
+    },
+    "tasks": [
+      {
+        "id": "task-1",
+        "type": "command",
+        "title": "Navigating the File System",
+        "instructions": "Use `pwd` to print the current working directory. Then, use `ls` to list the files and directories. Create a new directory named `mydirectory` using `mkdir`. Finally, change the current directory to `mydirectory` using `cd` and verify with `pwd`.",
+        "hints": [
+          "Use `pwd` to see where you are.",
+          "Use `ls` to see what's around you.",
+          "Use `mkdir mydirectory` to create a directory.",
+          "Use `cd mydirectory` to change directories.",
+          "Remember to use `pwd` again to verify your location."
+        ],
+        "points": 10,
+        "timeout": 600,
+        "expectedOutput": "mydirectory",
+        "expectedCommands": [
+          "pwd",
+          "ls",
+          "mkdir mydirectory",
+          "cd mydirectory",
+          "pwd"
+        ],
+        "validation": {
+          "checkCommand": "pwd",
+          "expectedResult": "/workspace/mydirectory"
+        },
+        "responses": {
+          "hint": "Remember the order: `pwd`, `ls`, `mkdir mydirectory`, `cd mydirectory`, `pwd`.",
+          "failure": "Not quite! Double-check the commands and their order. Ensure you're creating and changing to the correct directory.",
+          "success": "Great job! You successfully navigated the file system."
+        },
+        "comments": [
+          {
+            "type": "tip",
+            "content": "Using `ls -l` provides a more detailed listing of files and directories.",
+            "trigger": "on_success"
+          },
+          {
+            "type": "explanation",
+            "content": "`pwd` shows the absolute path of your current location. `ls` lists files and directories. `mkdir` makes a new directory. `cd` changes your current directory.",
+            "trigger": "always"
+          }
+        ]
+      },
+      {
+        "id": "task-2",
+        "type": "command",
+        "title": "Creating and Editing Files",
+        "instructions": "Use the `nano` text editor to create a new file named `myfile.txt`. Add some text to the file (e.g., 'Hello, world!'). Save the file (Ctrl+X, then Y, then Enter). Finally, use the `cat` command to display the contents of `myfile.txt`.",
+        "hints": [
+          "Use `nano myfile.txt` to open the text editor.",
+          "Type some text into the editor.",
+          "Press Ctrl+X to exit, then Y to save, then Enter.",
+          "Use `cat myfile.txt` to display the file's contents."
+        ],
+        "points": 10,
+        "timeout": 600,
+        "expectedOutput": "Hello, world!",
+        "expectedCommands": [
+          "nano myfile.txt",
+          "cat myfile.txt"
+        ],
+        "validation": {
+          "checkCommand": "cat myfile.txt",
+          "expectedResult": "Hello, world!"
+        },
+        "responses": {
+          "hint": "After typing text in nano, press Ctrl+X, then Y, then Enter to save the file.",
+          "failure": "Almost there! Make sure you save the file correctly in nano and that the content matches. Check for typos in the `cat` command.",
+          "success": "Excellent! You've created and displayed the contents of a file."
+        },
+        "comments": [
+          {
+            "type": "tip",
+            "content": "Nano is a simple text editor. Other editors like `vim` are more powerful but have a steeper learning curve.",
+            "trigger": "on_success"
+          },
+          {
+            "type": "explanation",
+            "content": "`nano` opens a text editor in the terminal. `cat` displays the contents of a file.",
+            "trigger": "always"
+          }
+        ]
+      }
+    ],
+    "settings": {
+      "allowRetry": true,
+      "maxRetries": 3,
+      "autoAdvance": false,
+      "allowHintUsage": true,
+      "showExpectedOutput": true
+    },
+    "resources": [
+      {
+        "url": "https://ubuntu.com/tutorials/command-line-for-beginners#1-overview",
+        "type": "documentation",
+        "title": "Linux Command Line Tutorial"
+      }
+    ]
   }
 }
 JSON
@@ -113,26 +298,31 @@ rm -f workshop-payload.json workshop-update.json workshop-enable.json
 
 ---
 
-## Compact spec example
-If you prefer a less-expository, compact JSON form for the frontend to consume, here is a short example. Keys are intentionally short to keep payloads small: `i` = instruction, `c` = expected command, `m` = matchType, `r` = result, `a` = accepted alternatives, `re` = regex for `m: "regex"`.
+## Testing the API
 
-```json
-{
-  "title": "REST API lab",
-  "steps": [
-    { "id": "init", "i": "Init npm", "c": "npm init -y", "m": "exact", "r": "package.json created" },
-    { "id": "install", "i": "Install express", "c": "npm i express", "m": "normalizeWhitespace", "r": "express added", "a": ["npm install express"] },
-    { "id": "server", "i": "Start server", "c": "node src/server.js", "m": "regex", "re": "node\\s+src/server\\.js|nodemon\\s+src/server\\.js", "r": "GET /health => 200" }
-  ]
-}
+After running the terminal example above, you can verify the workshop was created and normalized:
+
+```bash
+# Check that the workshop was stored with tasks (not steps)
+curl -s "$BASE_URL/api/admin/lessons/$LESSON_ID/workshop" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" | jq '.workshop.spec.tasks[0].id'
+
+# Enable the workshop for students
+curl -s -X PUT "$BASE_URL/api/admin/lessons/$LESSON_ID/workshop" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"isEnabled": true}' | jq '.workshop.isEnabled'
+
+# Test student access (should return the workshop)
+curl -s "$BASE_URL/api/lessons/$LESSON_ID/workshop" \
+  -H "Authorization: Bearer $USER_TOKEN" | jq '.workshop.spec.title'
 ```
 
-## Schema & consolidated example (canonical)
-The OpenAPI schema for a workshop spec is defined in `docs/openapi/schemas/LessonWorkshopSpec.yaml`. Below is a concise mapping and a canonical JSON example that follows that schema. Use this shape when POSTing/PUTing the workshop spec via the admin endpoints.
+## Migration Notes
 
-Key mappings (schema -> meaning):
-- `title` — workshop title shown to learners
-- `intro` — optional intro text displayed before the terminal
+- Legacy workshops using `steps` or `commands` are automatically migrated to `tasks` on read/write
+- The backend ensures `tasks` is always the canonical format stored in the database
+- Frontend should expect `spec.tasks` array with the structure documented in the OpenAPI schema
 - `environment` — optional hints (os, shell, workingDir) for a terminal emulator
 - `steps[]` — ordered list of step objects (required fields: `step`, `instruction`, `prompt`, `expect` where applicable)
   - `step` (integer) — sequential step number

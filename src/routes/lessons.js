@@ -542,16 +542,53 @@ router.get('/:id/workshop', authenticateToken, asyncHandler(async (req, res) => 
     [id]
   );
 
-  if (!workshop || workshop.is_enabled !== true) {
-    return res.json({ lesson: { id: lesson.id, title: lesson.title }, workshop: null });
-  }
-
-  res.json({
-    lesson: { id: lesson.id, title: lesson.title },
-    workshop: {
-      isEnabled: true,
-      spec: workshop.spec,
-      updatedAt: workshop.updated_at
+    if (!workshop || workshop.is_enabled !== true) {
+      return res.json({ lesson: { id: lesson.id, title: lesson.title }, workshop: null });
     }
-  });
+
+    // Normalize spec to ensure exercises is canonical
+    const spec = workshop.spec || {};
+    // If spec has legacy properties, migrate them to exercises
+    if (!Array.isArray(spec.exercises)) {
+      if (Array.isArray(spec.tasks)) {
+        // Convert tasks to exercises
+        spec.exercises = spec.tasks.map(task => ({
+          id: task.id,
+          title: task.title,
+          description: task.instructions,
+          initialMessage: task.instructions,
+          successMessage: task.responses?.success || 'Exercise completed!',
+          commands: (task.expectedCommands || []).map(cmd => ({
+            command: cmd,
+            output: task.expectedOutput || 'Command executed successfully',
+            description: `Execute: ${cmd}`
+          }))
+        }));
+      } else if (Array.isArray(spec.steps)) {
+        spec.exercises = spec.steps.map(step => ({
+          id: `step-${step.step}`,
+          title: step.title,
+          description: step.instruction,
+          initialMessage: step.instruction,
+          successMessage: 'Step completed!',
+          commands: [{
+            command: step.prompt || 'echo "Step completed"',
+            output: 'Step completed',
+            description: step.instruction
+          }]
+        }));
+      }
+      // Ensure exercises exists even if empty
+      if (!Array.isArray(spec.exercises)) {
+        spec.exercises = [];
+      }
+    }
+
+    res.json({
+      lesson: { id: lesson.id, title: lesson.title },
+      workshop: {
+        spec,
+        updatedAt: workshop.updated_at
+      }
+    });
 }));

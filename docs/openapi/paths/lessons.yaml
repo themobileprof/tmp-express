@@ -246,7 +246,7 @@
     tags:
       - Lessons
     summary: Get the enabled workshop spec for a lesson
-    description: Returns the interactive terminal workshop spec if enabled for the lesson. Returns null if no workshop or disabled.
+    description: Returns the exercise-based workshop spec if enabled for the lesson. Returns null if no workshop or disabled.
     security:
       - BearerAuth: []
     parameters:
@@ -278,9 +278,6 @@
                     - type: 'null'
                     - type: object
                       properties:
-                        isEnabled:
-                          type: boolean
-                          example: true
                         spec:
                           $ref: '../schemas/LessonWorkshopSpec.yaml'
                         updatedAt:
@@ -535,6 +532,40 @@
     responses:
       '200':
         description: Workshop returned or null
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                lesson:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                      format: uuid
+                    title:
+                      type: string
+                workshop:
+                  oneOf:
+                    - type: 'null'
+                    - type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                        lessonId:
+                          type: string
+                          format: uuid
+                        isEnabled:
+                          type: boolean
+                        spec:
+                          $ref: '../schemas/LessonWorkshopSpec.yaml'
+                        createdAt:
+                          type: string
+                          format: date-time
+                        updatedAt:
+                          type: string
+                          format: date-time
       '401':
         $ref: '../responses/Unauthorized.yaml'
       '403':
@@ -569,6 +600,30 @@
     responses:
       '201':
         description: Workshop upserted
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                workshop:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                      format: uuid
+                    lessonId:
+                      type: string
+                      format: uuid
+                    isEnabled:
+                      type: boolean
+                    spec:
+                      $ref: '../schemas/LessonWorkshopSpec.yaml'
+                    createdAt:
+                      type: string
+                      format: date-time
+                    updatedAt:
+                      type: string
+                      format: date-time
       '400':
         $ref: '../responses/BadRequest.yaml'
       '401':
@@ -604,6 +659,30 @@
     responses:
       '200':
         description: Workshop updated
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                workshop:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                      format: uuid
+                    lessonId:
+                      type: string
+                      format: uuid
+                    isEnabled:
+                      type: boolean
+                    spec:
+                      $ref: '../schemas/LessonWorkshopSpec.yaml'
+                    createdAt:
+                      type: string
+                      format: date-time
+                    updatedAt:
+                      type: string
+                      format: date-time
       '400':
         $ref: '../responses/BadRequest.yaml'
       '401':

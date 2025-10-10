@@ -1037,6 +1037,43 @@ router.post('/lessons/:lessonId/workshop', [
     throw new AppError('Lesson not found', 404, 'Lesson Not Found');
   }
 
+  // Normalize spec to ensure exercises is canonical
+  const normalizedSpec = { ...spec };
+  if (!Array.isArray(normalizedSpec.exercises)) {
+    if (Array.isArray(normalizedSpec.tasks)) {
+      // Convert tasks to exercises
+      normalizedSpec.exercises = normalizedSpec.tasks.map(task => ({
+        id: task.id,
+        title: task.title,
+        description: task.instructions,
+        initialMessage: task.instructions,
+        successMessage: task.responses?.success || 'Exercise completed!',
+        commands: (task.expectedCommands || []).map(cmd => ({
+          command: cmd,
+          output: task.expectedOutput || 'Command executed successfully',
+          description: `Execute: ${cmd}`
+        }))
+      }));
+    } else if (Array.isArray(normalizedSpec.steps)) {
+      normalizedSpec.exercises = normalizedSpec.steps.map(step => ({
+        id: `step-${step.step}`,
+        title: step.title,
+        description: step.instruction,
+        initialMessage: step.instruction,
+        successMessage: 'Step completed!',
+        commands: [{
+          command: step.prompt || 'echo "Step completed"',
+          output: 'Step completed',
+          description: step.instruction
+        }]
+      }));
+    }
+    // Ensure exercises exists
+    if (!Array.isArray(normalizedSpec.exercises)) {
+      normalizedSpec.exercises = [];
+    }
+  }
+
   // Upsert workshop
   const result = await query(
     `INSERT INTO lesson_workshops (lesson_id, is_enabled, spec)
@@ -1044,7 +1081,7 @@ router.post('/lessons/:lessonId/workshop', [
      ON CONFLICT (lesson_id)
      DO UPDATE SET is_enabled = EXCLUDED.is_enabled, spec = EXCLUDED.spec, updated_at = CURRENT_TIMESTAMP
      RETURNING id, lesson_id, is_enabled, spec, created_at, updated_at`,
-    [lessonId, isEnabled, spec]
+    [lessonId, isEnabled, normalizedSpec]
   );
 
   res.status(201).json({
@@ -1066,7 +1103,7 @@ router.put('/lessons/:lessonId/workshop', [
   const { isEnabled, spec } = req.body;
 
   // Ensure existing record
-  const existing = await getRow('SELECT id FROM lesson_workshops WHERE lesson_id = $1', [lessonId]);
+  const existing = await getRow('SELECT id, spec FROM lesson_workshops WHERE lesson_id = $1', [lessonId]);
   if (!existing) {
     throw new AppError('Workshop not found for lesson', 404, 'Workshop Not Found');
   }
@@ -1075,7 +1112,45 @@ router.put('/lessons/:lessonId/workshop', [
   const params = [];
   let p = 0;
   if (typeof isEnabled === 'boolean') { p++; updates.push(`is_enabled = $${p}`); params.push(isEnabled); }
-  if (spec !== undefined) { p++; updates.push(`spec = $${p}`); params.push(spec); }
+  if (spec !== undefined) {
+    // Normalize spec to ensure exercises is canonical
+    const normalizedSpec = { ...spec };
+    if (!Array.isArray(normalizedSpec.exercises)) {
+      if (Array.isArray(normalizedSpec.tasks)) {
+        // Convert tasks to exercises
+        normalizedSpec.exercises = normalizedSpec.tasks.map(task => ({
+          id: task.id,
+          title: task.title,
+          description: task.instructions,
+          initialMessage: task.instructions,
+          successMessage: task.responses?.success || 'Exercise completed!',
+          commands: (task.expectedCommands || []).map(cmd => ({
+            command: cmd,
+            output: task.expectedOutput || 'Command executed successfully',
+            description: `Execute: ${cmd}`
+          }))
+        }));
+      } else if (Array.isArray(normalizedSpec.steps)) {
+        normalizedSpec.exercises = normalizedSpec.steps.map(step => ({
+          id: `step-${step.step}`,
+          title: step.title,
+          description: step.instruction,
+          initialMessage: step.instruction,
+          successMessage: 'Step completed!',
+          commands: [{
+            command: step.prompt || 'echo "Step completed"',
+            output: 'Step completed',
+            description: step.instruction
+          }]
+        }));
+      }
+      // Ensure exercises exists
+      if (!Array.isArray(normalizedSpec.exercises)) {
+        normalizedSpec.exercises = [];
+      }
+    }
+    p++; updates.push(`spec = $${p}`); params.push(normalizedSpec);
+  }
   if (updates.length === 0) {
     throw new AppError('No fields to update', 400, 'No Updates');
   }
