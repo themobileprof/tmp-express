@@ -90,8 +90,43 @@ app.use(helmet({
   crossOriginResourcePolicy: { policy: "cross-origin" }
 }));
 app.use(cors({
-  origin: process.env.CORS_ORIGIN || '*',
-  credentials: true
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+
+    const allowedOrigins = [
+      'http://localhost:3000',
+      'http://localhost:8080',
+      'https://lms.themobileprof.com',
+      'https://api.themobileprof.com'
+    ];
+
+    // In development, allow localhost origins
+    if (process.env.NODE_ENV !== 'production') {
+      allowedOrigins.push('http://localhost:3000', 'http://localhost:8080');
+    }
+
+    // Check if the origin is in the allowed list
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+
+    // Allow if FRONTEND_URL environment variable is set and matches
+    if (process.env.FRONTEND_URL && process.env.FRONTEND_URL === origin) {
+      return callback(null, true);
+    }
+    
+    // Allow all origins in development or if CORS_ORIGIN is set to '*'
+    if (process.env.NODE_ENV !== 'production' || process.env.CORS_ORIGIN === '*') {
+      return callback(null, true);
+    }
+
+    // Reject the request
+    return callback(new Error('Not allowed by CORS'));
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Origin', 'X-Requested-With', 'Content-Type', 'Accept', 'Authorization']
 }));
 
 // Rate limiting
@@ -145,7 +180,8 @@ if (process.env.NODE_ENV !== 'production') {
     // Set CORS headers for static files
     res.header('Access-Control-Allow-Origin', '*');
     res.header('Access-Control-Allow-Methods', 'GET, OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+    res.header('Access-Control-Allow-Credentials', 'true');
     
     // Handle preflight requests
     if (req.method === 'OPTIONS') {
@@ -160,9 +196,10 @@ if (process.env.NODE_ENV !== 'production') {
   // In production, just handle CORS preflight for uploads
   app.use('/uploads', (req, res, next) => {
     // Set CORS headers for preflight requests only
-    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Origin', 'https://lms.themobileprof.com');
     res.header('Access-Control-Allow-Methods', 'GET, OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+    res.header('Access-Control-Allow-Credentials', 'true');
     
     // Handle preflight requests
     if (req.method === 'OPTIONS') {
