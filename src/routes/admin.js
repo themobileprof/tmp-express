@@ -1037,42 +1037,8 @@ router.post('/lessons/:lessonId/workshop', [
     throw new AppError('Lesson not found', 404, 'Lesson Not Found');
   }
 
-  // Normalize spec to ensure exercises is canonical
+  // Store spec as-is (no normalization needed with new format)
   const normalizedSpec = { ...spec };
-  if (!Array.isArray(normalizedSpec.exercises)) {
-    if (Array.isArray(normalizedSpec.tasks)) {
-      // Convert tasks to exercises
-      normalizedSpec.exercises = normalizedSpec.tasks.map(task => ({
-        id: task.id,
-        title: task.title,
-        description: task.instructions,
-        initialMessage: task.instructions,
-        successMessage: task.responses?.success || 'Exercise completed!',
-        commands: (task.expectedCommands || []).map(cmd => ({
-          command: cmd,
-          output: task.expectedOutput || 'Command executed successfully',
-          description: `Execute: ${cmd}`
-        }))
-      }));
-    } else if (Array.isArray(normalizedSpec.steps)) {
-      normalizedSpec.exercises = normalizedSpec.steps.map(step => ({
-        id: `step-${step.step}`,
-        title: step.title,
-        description: step.instruction,
-        initialMessage: step.instruction,
-        successMessage: 'Step completed!',
-        commands: [{
-          command: step.prompt || 'echo "Step completed"',
-          output: 'Step completed',
-          description: step.instruction
-        }]
-      }));
-    }
-    // Ensure exercises exists
-    if (!Array.isArray(normalizedSpec.exercises)) {
-      normalizedSpec.exercises = [];
-    }
-  }
 
   // Upsert workshop
   const result = await query(
@@ -1113,42 +1079,8 @@ router.put('/lessons/:lessonId/workshop', [
   let p = 0;
   if (typeof isEnabled === 'boolean') { p++; updates.push(`is_enabled = $${p}`); params.push(isEnabled); }
   if (spec !== undefined) {
-    // Normalize spec to ensure exercises is canonical
+    // Store spec as-is (no normalization needed with new format)
     const normalizedSpec = { ...spec };
-    if (!Array.isArray(normalizedSpec.exercises)) {
-      if (Array.isArray(normalizedSpec.tasks)) {
-        // Convert tasks to exercises
-        normalizedSpec.exercises = normalizedSpec.tasks.map(task => ({
-          id: task.id,
-          title: task.title,
-          description: task.instructions,
-          initialMessage: task.instructions,
-          successMessage: task.responses?.success || 'Exercise completed!',
-          commands: (task.expectedCommands || []).map(cmd => ({
-            command: cmd,
-            output: task.expectedOutput || 'Command executed successfully',
-            description: `Execute: ${cmd}`
-          }))
-        }));
-      } else if (Array.isArray(normalizedSpec.steps)) {
-        normalizedSpec.exercises = normalizedSpec.steps.map(step => ({
-          id: `step-${step.step}`,
-          title: step.title,
-          description: step.instruction,
-          initialMessage: step.instruction,
-          successMessage: 'Step completed!',
-          commands: [{
-            command: step.prompt || 'echo "Step completed"',
-            output: 'Step completed',
-            description: step.instruction
-          }]
-        }));
-      }
-      // Ensure exercises exists
-      if (!Array.isArray(normalizedSpec.exercises)) {
-        normalizedSpec.exercises = [];
-      }
-    }
     p++; updates.push(`spec = $${p}`); params.push(normalizedSpec);
   }
   if (updates.length === 0) {

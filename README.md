@@ -101,6 +101,8 @@ For detailed API documentation, see our comprehensive guides:
 - **[Frontend Integration](FRONTEND_INTEGRATION.md)** - Complete frontend implementation guide for Flutterwave v3 payments
 - **[Courses & Classes](docs/courses-classes.md)** - Course and class management, enrollment, and content organization
 - **[Lessons & Tests](docs/lessons-tests.md)** - Educational content, lessons, tests, and assessments
+- **[Workshop System](docs/WORKSHOP_FORMAT.md)** - Interactive workshop exercises with step-by-step terminal commands
+- **[Workshop Quick Start](docs/WORKSHOP_GUIDE.md)** - Quick guide for instructors creating workshop exercises
 - **[Sponsorships](docs/sponsorships.md)** - Sponsorship system, discount codes, and funding opportunities
 - **[Payments](docs/payments.md)** - Payment processing, Flutterwave integration, and transaction management
 

@@ -1,102 +1,54 @@
 # LessonWorkshopSpec Schema
 type: object
-description: Structured exercise-based workshop spec for a lesson
-required: [title, exercises]
+description: Structured step-based workshop exercise for a lesson
+required: [id, lessonId, isEnabled, title, steps]
 properties:
+  id:
+    type: string
+    format: uuid
+    description: Unique identifier for the workshop exercise
+  lessonId:
+    type: string
+    format: uuid
+    description: ID of the lesson this workshop belongs to
+  isEnabled:
+    type: boolean
+    description: Whether the workshop is enabled for students
   title:
     type: string
-    description: Title of the workshop
-  description:
+    description: Title of the workshop exercise
+  introduction:
     type: string
-    description: Description of the workshop
-  initialMessage:
-    type: string
-    description: Message shown when the workshop starts
-  successMessage:
-    type: string
-    description: Message shown when the workshop is completed
-  difficulty:
-    type: string
-    enum: [beginner, intermediate, advanced]
-    description: Difficulty level of the workshop
-  estimatedDuration:
-    type: integer
-    description: Estimated duration in minutes
-  prerequisites:
+    description: Introduction text shown before the workshop starts
+  steps:
     type: array
-    items:
-      type: string
-    description: List of prerequisites for the workshop
-  tags:
-    type: array
-    items:
-      type: string
-    description: Tags for categorizing the workshop
-  environment:
-    type: object
-    description: Runtime environment configuration
-    required: [type, image, workingDirectory]
-    properties:
-      type:
-        type: string
-        example: linux
-        description: Environment type
-      image:
-        type: string
-        example: ubuntu:22.04
-        description: Docker image to use
-      packages:
-        type: array
-        items:
-          type: string
-        description: Additional packages to install
-      workingDirectory:
-        type: string
-        example: /workspace
-        description: Working directory for the workshop
-      environmentVariables:
-        type: object
-        additionalProperties:
-          type: string
-        description: Environment variables to set
-  exercises:
-    type: array
-    description: Ordered list of exercises for the workshop
+    description: Sequential steps for the workshop exercise
     items:
       type: object
-      required: [id, title, commands]
+      required: [instructions, expected_commands, success_response]
       properties:
-        id:
-          type: string
-          description: Unique identifier for the exercise
-        title:
-          type: string
-          description: Title of the exercise
-        description:
-          type: string
-          description: Description of the exercise
-        initialMessage:
-          type: string
-          description: Message shown when this exercise starts
-        successMessage:
-          type: string
-          description: Message shown when this exercise is completed
-        commands:
+        instructions:
           type: array
-          description: Sequence of commands for this exercise
           items:
-            type: object
-            required: [command, output]
-            properties:
-              command:
-                type: string
-                description: The command to execute
-              output:
-                type: string
-                description: Expected output from the command
-              description:
-                type: string
-                description: Description of what this command does
+            type: string
+          description: List of instruction prompts for this step
+        expected_commands:
+          type: array
+          items:
+            type: string
+          description: Array of acceptable command variations for this step
+        success_response:
+          type: string
+          description: Expected output when the command succeeds
+        failure_response:
+          type: string
+          description: Error message with hint when the command fails
+        success:
+          type: boolean
+          description: Whether this step has been completed successfully
+  end_message:
+    type: string
+    description: Completion message shown when all steps are finished
   settings:
     type: object
     description: Workshop settings
