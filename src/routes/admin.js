@@ -603,6 +603,7 @@ router.put('/courses/:id', [
 // Delete course
 router.delete('/courses/:id', asyncHandler(async (req, res) => {
   const { id } = req.params;
+  const { force } = req.query; // Allow force deletion via query param
 
   // Check if course exists
   const existingCourse = await getRow('SELECT id FROM courses WHERE id = $1', [id]);
@@ -610,10 +611,30 @@ router.delete('/courses/:id', asyncHandler(async (req, res) => {
     throw new AppError('Course not found', 404, 'Course Not Found');
   }
 
+  // Check for enrollments
+  const enrollmentCount = await getRow(
+    'SELECT COUNT(*) as count FROM enrollments WHERE course_id = $1',
+    [id]
+  );
+
+  if (enrollmentCount.count > 0 && force !== 'true') {
+    throw new AppError(
+      `Cannot delete course with ${enrollmentCount.count} active enrollment(s). Use force=true to override.`,
+      400,
+      'Course Has Enrollments'
+    );
+  }
+
+  // If force=true, delete enrollments first
+  if (force === 'true' && enrollmentCount.count > 0) {
+    await query('DELETE FROM enrollments WHERE course_id = $1', [id]);
+  }
+
   await query('DELETE FROM courses WHERE id = $1', [id]);
 
   res.json({
-    message: 'Course deleted successfully'
+    message: 'Course deleted successfully',
+    deletedEnrollments: force === 'true' ? parseInt(enrollmentCount.count) : 0
   });
 }));
 
@@ -2130,6 +2151,7 @@ router.put('/classes/:id', [
 // Delete class
 router.delete('/classes/:id', asyncHandler(async (req, res) => {
   const { id } = req.params;
+  const { force } = req.query; // Allow force deletion via query param
 
   // Check if class exists
   const existingClass = await getRow('SELECT id FROM classes WHERE id = $1', [id]);
@@ -2137,10 +2159,30 @@ router.delete('/classes/:id', asyncHandler(async (req, res) => {
     throw new AppError('Class not found', 404, 'Class Not Found');
   }
 
+  // Check for enrollments
+  const enrollmentCount = await getRow(
+    'SELECT COUNT(*) as count FROM enrollments WHERE class_id = $1',
+    [id]
+  );
+
+  if (enrollmentCount.count > 0 && force !== 'true') {
+    throw new AppError(
+      `Cannot delete class with ${enrollmentCount.count} active enrollment(s). Use force=true to override.`,
+      400,
+      'Class Has Enrollments'
+    );
+  }
+
+  // If force=true, delete enrollments first
+  if (force === 'true' && enrollmentCount.count > 0) {
+    await query('DELETE FROM enrollments WHERE class_id = $1', [id]);
+  }
+
   await query('DELETE FROM classes WHERE id = $1', [id]);
 
   res.json({
-    message: 'Class deleted successfully'
+    message: 'Class deleted successfully',
+    deletedEnrollments: force === 'true' ? parseInt(enrollmentCount.count) : 0
   });
 }));
 

@@ -609,7 +609,10 @@
     tags:
       - Classes
     summary: Delete class
-    description: Delete a class (owner or admin only)
+    description: |
+      Delete a class (owner or admin only).
+      
+      By default, classes with enrollments cannot be deleted. Use `force=true` to override and delete the class along with all its enrollments.
     security:
       - BearerAuth: []
     parameters:
@@ -620,6 +623,14 @@
         schema:
           type: string
           format: uuid
+      - name: force
+        in: query
+        required: false
+        description: Force delete class even if it has enrollments (also deletes all enrollments)
+        schema:
+          type: boolean
+          default: false
+        example: true
     responses:
       '200':
         description: Class deleted successfully
@@ -631,19 +642,32 @@
                 message:
                   type: string
                   example: "Class deleted successfully"
+                deletedEnrollments:
+                  type: integer
+                  description: Number of enrollments deleted (only when force=true)
+                  example: 3
       '400':
-        description: Cannot delete class with enrollments
+        description: Cannot delete class with enrollments (when force is not true)
         content:
           application/json:
             schema:
               type: object
               properties:
+                success:
+                  type: boolean
+                  example: false
                 error:
-                  type: string
-                  example: "Class Has Enrollments"
-                message:
-                  type: string
-                  example: "Cannot delete class that has enrollments"
+                  type: object
+                  properties:
+                    message:
+                      type: string
+                      example: "Cannot delete class with 3 active enrollment(s). Use force=true to override."
+                    statusCode:
+                      type: integer
+                      example: 400
+                    errorCode:
+                      type: string
+                      example: "Class Has Enrollments"
       '401':
         $ref: '../responses/Unauthorized.yaml'
       '403':

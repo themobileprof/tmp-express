@@ -613,7 +613,10 @@
     tags:
       - Courses
     summary: Delete a course by its ID
-    description: Delete a course (requires authentication and owner/admin authorization)
+    description: |
+      Delete a course (requires authentication and owner/admin authorization).
+      
+      By default, courses with enrollments cannot be deleted. Use `force=true` to override and delete the course along with all its enrollments.
     security:
       - BearerAuth: []
     parameters:
@@ -624,6 +627,14 @@
         schema:
           type: string
           format: uuid
+      - name: force
+        in: query
+        required: false
+        description: Force delete course even if it has enrollments (also deletes all enrollments)
+        schema:
+          type: boolean
+          default: false
+        example: true
     responses:
       '200':
         description: Course deleted successfully
@@ -635,19 +646,32 @@
                 message:
                   type: string
                   example: "Course deleted successfully"
+                deletedEnrollments:
+                  type: integer
+                  description: Number of enrollments deleted (only when force=true)
+                  example: 5
       '400':
-        description: Cannot delete course with enrollments
+        description: Cannot delete course with enrollments (when force is not true)
         content:
           application/json:
             schema:
               type: object
               properties:
+                success:
+                  type: boolean
+                  example: false
                 error:
-                  type: string
-                  example: "Course Has Enrollments"
-                message:
-                  type: string
-                  example: "Cannot delete course that has enrollments"
+                  type: object
+                  properties:
+                    message:
+                      type: string
+                      example: "Cannot delete course with 5 active enrollment(s). Use force=true to override."
+                    statusCode:
+                      type: integer
+                      example: 400
+                    errorCode:
+                      type: string
+                      example: "Course Has Enrollments"
       '401':
         $ref: '../responses/Unauthorized.yaml'
       '403':
