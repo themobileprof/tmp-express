@@ -182,6 +182,7 @@ const createTables = async () => {
         syllabus TEXT,
         tags TEXT[],
         is_published BOOLEAN DEFAULT false,
+        deleted_at TIMESTAMP DEFAULT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (instructor_id) REFERENCES users(id) ON DELETE SET NULL
@@ -212,6 +213,7 @@ const createTables = async () => {
         created_by VARCHAR(20) DEFAULT 'sponsor',
         admin_note TEXT,
         invoice_number VARCHAR(100),
+        deleted_at TIMESTAMP DEFAULT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (sponsor_id) REFERENCES users(id) ON DELETE CASCADE
@@ -261,9 +263,12 @@ const createTables = async () => {
         demographics TEXT,
         impact_description TEXT,
         is_active BOOLEAN DEFAULT true,
+        created_by UUID,
+        deleted_at TIMESTAMP DEFAULT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE
+        FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE,
+        FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
       )
     `);
 
@@ -293,6 +298,7 @@ const createTables = async () => {
         total_slots INTEGER NOT NULL,
         location TEXT,
         is_published BOOLEAN DEFAULT false,
+        deleted_at TIMESTAMP DEFAULT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (instructor_id) REFERENCES users(id) ON DELETE CASCADE
@@ -348,6 +354,7 @@ const createTables = async () => {
         duration_minutes INTEGER DEFAULT 0,
         order_index INTEGER NOT NULL,
         is_published BOOLEAN DEFAULT false,
+        deleted_at TIMESTAMP DEFAULT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE
@@ -385,6 +392,7 @@ const createTables = async () => {
         max_attempts INTEGER DEFAULT 3,
         order_index INTEGER NOT NULL,
         is_published BOOLEAN DEFAULT false,
+        deleted_at TIMESTAMP DEFAULT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE,
@@ -468,6 +476,7 @@ const createTables = async () => {
         reply_count INTEGER DEFAULT 0,
         view_count INTEGER DEFAULT 0,
         last_activity_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        deleted_at TIMESTAMP DEFAULT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (author_id) REFERENCES users(id) ON DELETE CASCADE,
@@ -537,6 +546,7 @@ const createTables = async () => {
         prerequisites TEXT,
         price DECIMAL(10,2) DEFAULT 0,
         is_active BOOLEAN DEFAULT true,
+        deleted_at TIMESTAMP DEFAULT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
@@ -768,8 +778,61 @@ const createTables = async () => {
     `);
     await query('CREATE INDEX IF NOT EXISTS idx_lesson_workshops_enabled ON lesson_workshops(is_enabled)');
 
-    console.log('✅ Database create-only migration completed successfully!');
-    console.log('🎉 All tables created and ready!');
+    // Create soft delete indexes (partial indexes for efficiency)
+    console.log('\n📊 Creating soft delete indexes...');
+    
+    await query(`
+      CREATE INDEX IF NOT EXISTS idx_courses_deleted_at 
+      ON courses(deleted_at) WHERE deleted_at IS NULL
+    `);
+    console.log('✓ Created soft delete index on courses');
+
+    await query(`
+      CREATE INDEX IF NOT EXISTS idx_classes_deleted_at 
+      ON classes(deleted_at) WHERE deleted_at IS NULL
+    `);
+    console.log('✓ Created soft delete index on classes');
+
+    await query(`
+      CREATE INDEX IF NOT EXISTS idx_sponsorships_deleted_at 
+      ON sponsorships(deleted_at) WHERE deleted_at IS NULL
+    `);
+    console.log('✓ Created soft delete index on sponsorships');
+
+    await query(`
+      CREATE INDEX IF NOT EXISTS idx_sponsorship_opportunities_deleted_at 
+      ON sponsorship_opportunities(deleted_at) WHERE deleted_at IS NULL
+    `);
+    console.log('✓ Created soft delete index on sponsorship_opportunities');
+
+    await query(`
+      CREATE INDEX IF NOT EXISTS idx_lessons_deleted_at 
+      ON lessons(deleted_at) WHERE deleted_at IS NULL
+    `);
+    console.log('✓ Created soft delete index on lessons');
+
+    await query(`
+      CREATE INDEX IF NOT EXISTS idx_tests_deleted_at 
+      ON tests(deleted_at) WHERE deleted_at IS NULL
+    `);
+    console.log('✓ Created soft delete index on tests');
+
+    await query(`
+      CREATE INDEX IF NOT EXISTS idx_discussions_deleted_at 
+      ON discussions(deleted_at) WHERE deleted_at IS NULL
+    `);
+    console.log('✓ Created soft delete index on discussions');
+
+    await query(`
+      CREATE INDEX IF NOT EXISTS idx_certification_programs_deleted_at 
+      ON certification_programs(deleted_at) WHERE deleted_at IS NULL
+    `);
+    console.log('✓ Created soft delete index on certification_programs');
+
+    console.log('\n✅ Database create-only migration completed successfully!');
+    console.log('🎉 All tables created with soft delete support!');
+    console.log('📝 Soft delete enabled for: courses, classes, sponsorships, sponsorship_opportunities,');
+    console.log('   lessons, tests, discussions, certification_programs');
     console.log('⏰ Migration completed at:', new Date().toISOString());
 
     // Seed default discussion categories
