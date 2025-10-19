@@ -20,12 +20,12 @@ const validateOpportunity = [
 router.get('/', asyncHandler(async (req, res) => {
   const { isActive, urgency, limit = 20, offset = 0 } = req.query;
 
-  let whereClause = 'WHERE so.is_active = true';
+  let whereClause = 'WHERE so.is_active = true AND so.deleted_at IS NULL';
   let params = [];
   let paramIndex = 1;
 
   if (isActive !== undefined) {
-    whereClause = `WHERE so.is_active = $${paramIndex}`;
+    whereClause = `WHERE so.is_active = $${paramIndex} AND so.deleted_at IS NULL`;
     params.push(isActive === 'true');
     paramIndex++;
   }
@@ -96,7 +96,7 @@ router.post('/', authenticateToken, authorizeInstructor, validateOpportunity, as
 
   // Check if opportunity already exists for this course
   const existingOpportunity = await getRow(
-    'SELECT * FROM sponsorship_opportunities WHERE course_id = $1 AND is_active = true',
+    'SELECT * FROM sponsorship_opportunities WHERE course_id = $1 AND is_active = true AND deleted_at IS NULL',
     [courseId]
   );
 
@@ -141,7 +141,7 @@ router.get('/:id', asyncHandler(async (req, res) => {
      FROM sponsorship_opportunities so
      JOIN courses c ON so.course_id = c.id
      LEFT JOIN users u ON c.instructor_id = u.id
-     WHERE so.id = $1`,
+     WHERE so.id = $1 AND so.deleted_at IS NULL`,
     [id]
   );
 
@@ -185,7 +185,7 @@ router.put('/:id', authenticateToken, authorizeOwnerOrAdmin('sponsorship_opportu
   const { targetStudents, fundingGoal, urgency, demographics, impactDescription, isActive } = req.body;
 
   // Verify opportunity exists
-  const opportunity = await getRow('SELECT * FROM sponsorship_opportunities WHERE id = $1', [id]);
+  const opportunity = await getRow('SELECT * FROM sponsorship_opportunities WHERE id = $1 AND deleted_at IS NULL', [id]);
   if (!opportunity) {
     throw new AppError('Sponsorship opportunity not found', 404, 'Opportunity Not Found');
   }
@@ -223,17 +223,84 @@ router.put('/:id', authenticateToken, authorizeOwnerOrAdmin('sponsorship_opportu
 // Delete opportunity
 router.delete('/:id', authenticateToken, authorizeOwnerOrAdmin('sponsorship_opportunities', 'id'), asyncHandler(async (req, res) => {
   const { id } = req.params;
+  const { permanent } = req.query;
 
   // Verify opportunity exists
-  const opportunity = await getRow('SELECT * FROM sponsorship_opportunities WHERE id = $1', [id]);
+  const opportunity = await getRow('SELECT id, title, deleted_at FROM sponsorship_opportunities WHERE id = $1', [id]);
   if (!opportunity) {
     throw new AppError('Sponsorship opportunity not found', 404, 'Opportunity Not Found');
+  }
+
+  // Soft delete (default)
+  if (permanent !== 'true') {
+    await query(
+      'UPDATE sponsorship_opportunities SET deleted_at = CURRENT_TIMESTAMP WHERE id = $1',
+      [id]
+    );
+    return res.json({
+      message: 'Sponsorship opportunity soft deleted successfully',
+      note: 'Opportunity is hidden but contributions are preserved. Use restore endpoint to recover.',
+      deletedAt: new Date().toISOString()
+    });
+  }
+
+  // Check dependencies before permanent delete
+  const contributionCount = await getRow(
+    'SELECT COUNT(*)::int as count FROM sponsorship_contributions WHERE opportunity_id = $1',
+    [id]
+  );
+
+  if (contributionCount.count > 0) {
+    throw new AppError(
+      `Cannot permanently delete opportunity with ${contributionCount.count} contribution(s).`,
+      400,
+      'Opportunity Has Dependencies'
+    );
   }
 
   await query('DELETE FROM sponsorship_opportunities WHERE id = $1', [id]);
 
   res.json({
-    message: 'Sponsorship opportunity deleted successfully'
+    message: 'Sponsorship opportunity permanently deleted',
+    warning: 'This action cannot be undone'
+  });
+}));
+
+// Restore soft-deleted opportunity
+router.post('/:id/restore', authenticateToken, authorizeOwnerOrAdmin('sponsorship_opportunities', 'id'), asyncHandler(async (req, res) => {
+  const { id } = req.params;
+
+  const opportunity = await getRow('SELECT id, title, deleted_at FROM sponsorship_opportunities WHERE id = $1', [id]);
+  if (!opportunity) {
+    throw new AppError('Sponsorship opportunity not found', 404);
+  }
+
+  if (!opportunity.deleted_at) {
+    throw new AppError('Opportunity is not deleted', 400, 'Not Deleted');
+  }
+
+  await query('UPDATE sponsorship_opportunities SET deleted_at = NULL WHERE id = $1', [id]);
+
+  res.json({
+    message: 'Sponsorship opportunity restored successfully',
+    opportunityId: id,
+    opportunityTitle: opportunity.title
+  });
+}));
+
+// List deleted opportunities
+router.get('/deleted/list', authenticateToken, asyncHandler(async (req, res) => {
+  const deletedOpportunities = await query(`
+    SELECT o.id, o.title, o.created_by, u.first_name, u.last_name, o.deleted_at, o.created_at
+    FROM sponsorship_opportunities o
+    LEFT JOIN users u ON o.created_by = u.id
+    WHERE o.deleted_at IS NOT NULL
+    ORDER BY o.deleted_at DESC
+  `);
+
+  res.json({
+    deletedOpportunities: deletedOpportunities.rows,
+    count: deletedOpportunities.rows.length
   });
 }));
 
@@ -253,7 +320,7 @@ router.post('/:id/contribute', authenticateToken, [
 
   // Verify opportunity exists and is active
   const opportunity = await getRow(
-    'SELECT * FROM sponsorship_opportunities WHERE id = $1 AND is_active = true',
+    'SELECT * FROM sponsorship_opportunities WHERE id = $1 AND is_active = true AND deleted_at IS NULL',
     [id]
   );
 

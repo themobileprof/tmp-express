@@ -311,7 +311,7 @@ router.get('/courses', asyncHandler(async (req, res) => {
   const { page = 1, limit = 20, status, instructor, search } = req.query;
   const offset = (page - 1) * limit;
 
-  let whereClause = 'WHERE 1=1';
+  let whereClause = 'WHERE c.deleted_at IS NULL'; // Exclude soft-deleted courses
   const params = [];
   let paramCount = 0;
 
@@ -323,7 +323,7 @@ router.get('/courses', asyncHandler(async (req, res) => {
 
   if (instructor) {
     paramCount++;
-    whereClause += ` AND u.first_name ILIKE $${paramCount} OR u.last_name ILIKE $${paramCount}`;
+    whereClause += ` AND (u.first_name ILIKE $${paramCount} OR u.last_name ILIKE $${paramCount})`;
     params.push(`%${instructor}%`);
   }
 
@@ -600,41 +600,127 @@ router.put('/courses/:id', [
   });
 }));
 
-// Delete course
+// Delete course (soft delete)
 router.delete('/courses/:id', asyncHandler(async (req, res) => {
   const { id } = req.params;
-  const { force } = req.query; // Allow force deletion via query param
+  const { permanent } = req.query; // Allow permanent deletion via query param (dangerous!)
 
-  // Check if course exists
-  const existingCourse = await getRow('SELECT id FROM courses WHERE id = $1', [id]);
+  // Check if course exists and is not already deleted
+  const existingCourse = await getRow(
+    'SELECT id, title, deleted_at FROM courses WHERE id = $1', 
+    [id]
+  );
+  
   if (!existingCourse) {
     throw new AppError('Course not found', 404, 'Course Not Found');
   }
 
-  // Check for enrollments
+  if (existingCourse.deleted_at && permanent !== 'true') {
+    throw new AppError('Course is already deleted', 400, 'Already Deleted');
+  }
+
+  // Soft delete (default - safe)
+  if (permanent !== 'true') {
+    await query(
+      'UPDATE courses SET deleted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = $1',
+      [id]
+    );
+
+    res.json({
+      message: 'Course soft deleted successfully',
+      note: 'Course is hidden but data is preserved. Use restore endpoint to recover.',
+      deletedAt: new Date().toISOString()
+    });
+    return;
+  }
+
+  // Permanent deletion (requires explicit permanent=true)
+  // Check for dependencies
   const enrollmentCount = await getRow(
     'SELECT COUNT(*) as count FROM enrollments WHERE course_id = $1',
     [id]
   );
 
-  if (enrollmentCount.count > 0 && force !== 'true') {
+  const paymentCount = await getRow(
+    'SELECT COUNT(*) as count FROM payments WHERE course_id = $1',
+    [id]
+  );
+
+  // Build error message for related records
+  const issues = [];
+  if (enrollmentCount.count > 0) {
+    issues.push(`${enrollmentCount.count} enrollment(s)`);
+  }
+  if (paymentCount.count > 0) {
+    issues.push(`${paymentCount.count} payment record(s)`);
+  }
+
+  if (issues.length > 0) {
     throw new AppError(
-      `Cannot delete course with ${enrollmentCount.count} active enrollment(s). Use force=true to override.`,
+      `Cannot permanently delete course with ${issues.join(' and ')}. These records will be orphaned.`,
       400,
-      'Course Has Enrollments'
+      'Course Has Dependencies'
     );
   }
 
-  // If force=true, delete enrollments first
-  if (force === 'true' && enrollmentCount.count > 0) {
-    await query('DELETE FROM enrollments WHERE course_id = $1', [id]);
-  }
-
+  // Permanent delete
   await query('DELETE FROM courses WHERE id = $1', [id]);
 
   res.json({
-    message: 'Course deleted successfully',
-    deletedEnrollments: force === 'true' ? parseInt(enrollmentCount.count) : 0
+    message: 'Course permanently deleted',
+    warning: 'This action cannot be undone'
+  });
+}));
+
+// Restore soft-deleted course
+router.post('/courses/:id/restore', asyncHandler(async (req, res) => {
+  const { id } = req.params;
+
+  // Check if course exists and is deleted
+  const course = await getRow(
+    'SELECT id, title, deleted_at FROM courses WHERE id = $1',
+    [id]
+  );
+
+  if (!course) {
+    throw new AppError('Course not found', 404, 'Course Not Found');
+  }
+
+  if (!course.deleted_at) {
+    throw new AppError('Course is not deleted', 400, 'Not Deleted');
+  }
+
+  // Restore the course
+  await query(
+    'UPDATE courses SET deleted_at = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = $1',
+    [id]
+  );
+
+  res.json({
+    message: 'Course restored successfully',
+    courseId: id,
+    courseTitle: course.title
+  });
+}));
+
+// List deleted courses
+router.get('/courses/deleted/list', asyncHandler(async (req, res) => {
+  const deletedCourses = await query(`
+    SELECT 
+      id, 
+      title, 
+      topic,
+      instructor_id,
+      deleted_at,
+      created_at
+    FROM courses
+    WHERE deleted_at IS NOT NULL
+    ORDER BY deleted_at DESC
+  `);
+
+  res.json({
+    deletedCourses: deletedCourses.rows,
+    count: deletedCourses.rows.length
   });
 }));
 
@@ -833,7 +919,7 @@ router.get('/courses/:courseId/lessons', asyncHandler(async (req, res) => {
   const { page = 1, limit = 20, status } = req.query;
   const offset = (page - 1) * limit;
 
-  let whereClause = 'WHERE l.course_id = $1';
+  let whereClause = 'WHERE l.course_id = $1 AND l.deleted_at IS NULL';
   const params = [courseId];
   let paramCount = 1;
 
@@ -999,17 +1085,84 @@ router.put('/lessons/:id', [
 // Delete lesson
 router.delete('/lessons/:id', asyncHandler(async (req, res) => {
   const { id } = req.params;
+  const { permanent } = req.query;
 
   // Check if lesson exists
-  const existingLesson = await getRow('SELECT id FROM lessons WHERE id = $1', [id]);
-  if (!existingLesson) {
+  const lesson = await getRow('SELECT id, title, course_id FROM lessons WHERE id = $1', [id]);
+  if (!lesson) {
     throw new AppError('Lesson not found', 404, 'Lesson Not Found');
   }
 
+  // Soft delete (default)
+  if (permanent !== 'true') {
+    await query(
+      'UPDATE lessons SET deleted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = $1',
+      [id]
+    );
+    return res.json({
+      message: 'Lesson soft deleted successfully',
+      note: 'Lesson is hidden but data is preserved. Use restore endpoint to recover.',
+      deletedAt: new Date().toISOString()
+    });
+  }
+
+  // Check dependencies before permanent delete
+  const progressCount = await getRow('SELECT COUNT(*)::int as count FROM lesson_progress WHERE lesson_id = $1', [id]);
+  const workshopCount = await getRow('SELECT COUNT(*)::int as count FROM lesson_workshops WHERE lesson_id = $1', [id]);
+  const testCount = await getRow('SELECT COUNT(*)::int as count FROM tests WHERE lesson_id = $1 AND deleted_at IS NULL', [id]);
+
+  const totalDeps = progressCount.count + workshopCount.count + testCount.count;
+
+  if (totalDeps > 0) {
+    throw new AppError(
+      `Cannot permanently delete lesson with ${progressCount.count} progress record(s), ${workshopCount.count} workshop(s), and ${testCount.count} test(s).`,
+      400,
+      'Lesson Has Dependencies'
+    );
+  }
+
   await query('DELETE FROM lessons WHERE id = $1', [id]);
+  res.json({
+    message: 'Lesson permanently deleted',
+    warning: 'This action cannot be undone'
+  });
+}));
+
+// Restore soft-deleted lesson
+router.post('/lessons/:id/restore', asyncHandler(async (req, res) => {
+  const { id } = req.params;
+
+  const lesson = await getRow('SELECT id, title, deleted_at FROM lessons WHERE id = $1', [id]);
+  if (!lesson) {
+    throw new AppError('Lesson not found', 404);
+  }
+
+  if (!lesson.deleted_at) {
+    throw new AppError('Lesson is not deleted', 400, 'Not Deleted');
+  }
+
+  await query('UPDATE lessons SET deleted_at = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = $1', [id]);
 
   res.json({
-    message: 'Lesson deleted successfully'
+    message: 'Lesson restored successfully',
+    lessonId: id,
+    lessonTitle: lesson.title
+  });
+}));
+
+// List deleted lessons
+router.get('/lessons/deleted/list', asyncHandler(async (req, res) => {
+  const deletedLessons = await query(`
+    SELECT l.id, l.title, l.course_id, c.title as course_title, l.deleted_at, l.created_at
+    FROM lessons l
+    LEFT JOIN courses c ON l.course_id = c.id
+    WHERE l.deleted_at IS NOT NULL
+    ORDER BY l.deleted_at DESC
+  `);
+
+  res.json({
+    deletedLessons: deletedLessons.rows,
+    count: deletedLessons.rows.length
   });
 }));
 
@@ -1140,7 +1293,7 @@ router.get('/tests/:id', asyncHandler(async (req, res) => {
      FROM tests t
      LEFT JOIN courses c ON t.course_id = c.id
      LEFT JOIN lessons l ON t.lesson_id = l.id
-     WHERE t.id = $1`,
+     WHERE t.id = $1 AND t.deleted_at IS NULL`,
     [id]
   );
 
@@ -1251,17 +1404,81 @@ router.put('/tests/:id', [
 // Delete test
 router.delete('/tests/:id', asyncHandler(async (req, res) => {
   const { id } = req.params;
+  const { permanent } = req.query;
 
   // Check if test exists
-  const existingTest = await getRow('SELECT id FROM tests WHERE id = $1', [id]);
-  if (!existingTest) {
+  const test = await getRow('SELECT id, title FROM tests WHERE id = $1', [id]);
+  if (!test) {
     throw new AppError('Test not found', 404, 'Test Not Found');
   }
 
+  // Soft delete (default)
+  if (permanent !== 'true') {
+    await query(
+      'UPDATE tests SET deleted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = $1',
+      [id]
+    );
+    return res.json({
+      message: 'Test soft deleted successfully',
+      note: 'Test is hidden but student attempts are preserved. Use restore endpoint to recover.',
+      deletedAt: new Date().toISOString()
+    });
+  }
+
+  // Check dependencies before permanent delete
+  const attemptCount = await getRow('SELECT COUNT(*)::int as count FROM test_attempts WHERE test_id = $1', [id]);
+  const questionCount = await getRow('SELECT COUNT(*)::int as count FROM test_questions WHERE test_id = $1', [id]);
+
+  if (attemptCount.count > 0 || questionCount.count > 0) {
+    throw new AppError(
+      `Cannot permanently delete test with ${attemptCount.count} attempt(s) and ${questionCount.count} question(s).`,
+      400,
+      'Test Has Dependencies'
+    );
+  }
+
   await query('DELETE FROM tests WHERE id = $1', [id]);
+  res.json({
+    message: 'Test permanently deleted',
+    warning: 'This action cannot be undone'
+  });
+}));
+
+// Restore soft-deleted test
+router.post('/tests/:id/restore', asyncHandler(async (req, res) => {
+  const { id } = req.params;
+
+  const test = await getRow('SELECT id, title, deleted_at FROM tests WHERE id = $1', [id]);
+  if (!test) {
+    throw new AppError('Test not found', 404);
+  }
+
+  if (!test.deleted_at) {
+    throw new AppError('Test is not deleted', 400, 'Not Deleted');
+  }
+
+  await query('UPDATE tests SET deleted_at = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = $1', [id]);
 
   res.json({
-    message: 'Test deleted successfully'
+    message: 'Test restored successfully',
+    testId: id,
+    testTitle: test.title
+  });
+}));
+
+// List deleted tests
+router.get('/tests/deleted/list', asyncHandler(async (req, res) => {
+  const deletedTests = await query(`
+    SELECT t.id, t.title, t.course_id, c.title as course_title, t.deleted_at, t.created_at
+    FROM tests t
+    LEFT JOIN courses c ON t.course_id = c.id
+    WHERE t.deleted_at IS NOT NULL
+    ORDER BY t.deleted_at DESC
+  `);
+
+  res.json({
+    deletedTests: deletedTests.rows,
+    count: deletedTests.rows.length
   });
 }));
 
@@ -1602,7 +1819,7 @@ router.get('/sponsorships', asyncHandler(async (req, res) => {
   const { page = 1, limit = 20, status, sponsor, search } = req.query;
   const offset = (page - 1) * limit;
 
-  let whereClause = 'WHERE 1=1';
+  let whereClause = 'WHERE s.deleted_at IS NULL';
   const params = [];
   let paramCount = 0;
 
@@ -1879,17 +2096,84 @@ router.put('/sponsorships/:id/status', [
 // Delete sponsorship
 router.delete('/sponsorships/:id', asyncHandler(async (req, res) => {
   const { id } = req.params;
+  const { permanent } = req.query;
 
   // Check if sponsorship exists
-  const existingSponsorship = await getRow('SELECT id FROM sponsorships WHERE id = $1', [id]);
-  if (!existingSponsorship) {
+  const sponsorship = await getRow('SELECT id, discount_code FROM sponsorships WHERE id = $1', [id]);
+  if (!sponsorship) {
     throw new AppError('Sponsorship not found', 404, 'Sponsorship Not Found');
   }
 
+  // Soft delete (STRONGLY RECOMMENDED for financial records)
+  if (permanent !== 'true') {
+    await query(
+      'UPDATE sponsorships SET deleted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = $1',
+      [id]
+    );
+    return res.json({
+      message: 'Sponsorship soft deleted successfully',
+      note: 'Sponsorship is hidden but financial records are preserved for audit compliance.',
+      deletedAt: new Date().toISOString(),
+      warning: 'Permanent deletion of financial records is not recommended.'
+    });
+  }
+
+  // Permanent delete - check dependencies
+  const usageCount = await getRow('SELECT COUNT(*)::int as count FROM sponsorship_usage WHERE sponsorship_id = $1', [id]);
+  const paymentCount = await getRow('SELECT COUNT(*)::int as count FROM payments WHERE sponsorship_id = $1', [id]);
+  const courseCount = await getRow('SELECT COUNT(*)::int as count FROM sponsorship_courses WHERE sponsorship_id = $1', [id]);
+
+  const totalDeps = usageCount.count + paymentCount.count + courseCount.count;
+
+  if (totalDeps > 0) {
+    throw new AppError(
+      `Cannot permanently delete sponsorship with ${usageCount.count} usage record(s), ${paymentCount.count} payment(s), and ${courseCount.count} linked course(s). Financial records must be retained for audit purposes.`,
+      400,
+      'Sponsorship Has Dependencies'
+    );
+  }
+
   await query('DELETE FROM sponsorships WHERE id = $1', [id]);
+  res.json({
+    message: 'Sponsorship permanently deleted',
+    warning: 'This action cannot be undone. Ensure this complies with financial record retention policies.'
+  });
+}));
+
+// Restore soft-deleted sponsorship
+router.post('/sponsorships/:id/restore', asyncHandler(async (req, res) => {
+  const { id } = req.params;
+
+  const sponsorship = await getRow('SELECT id, discount_code, deleted_at FROM sponsorships WHERE id = $1', [id]);
+  if (!sponsorship) {
+    throw new AppError('Sponsorship not found', 404);
+  }
+
+  if (!sponsorship.deleted_at) {
+    throw new AppError('Sponsorship is not deleted', 400, 'Not Deleted');
+  }
+
+  await query('UPDATE sponsorships SET deleted_at = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = $1', [id]);
 
   res.json({
-    message: 'Sponsorship deleted successfully'
+    message: 'Sponsorship restored successfully',
+    sponsorshipId: id,
+    discountCode: sponsorship.discount_code
+  });
+}));
+
+// List deleted sponsorships
+router.get('/sponsorships/deleted/list', asyncHandler(async (req, res) => {
+  const deletedSponsorships = await query(`
+    SELECT id, discount_code, sponsor_id, deleted_at, created_at
+    FROM sponsorships
+    WHERE deleted_at IS NOT NULL
+    ORDER BY deleted_at DESC
+  `);
+
+  res.json({
+    deletedSponsorships: deletedSponsorships.rows,
+    count: deletedSponsorships.rows.length
   });
 }));
 
@@ -1924,7 +2208,7 @@ router.get('/classes', asyncHandler(async (req, res) => {
   const { page = 1, limit = 20, status, instructor, search } = req.query;
   const offset = (page - 1) * limit;
 
-  let whereClause = 'WHERE 1=1';
+  let whereClause = 'WHERE c.deleted_at IS NULL'; // Exclude soft-deleted classes
   const params = [];
   let paramCount = 0;
 
@@ -2148,41 +2432,127 @@ router.put('/classes/:id', [
   });
 }));
 
-// Delete class
+// Delete class (soft delete)
 router.delete('/classes/:id', asyncHandler(async (req, res) => {
   const { id } = req.params;
-  const { force } = req.query; // Allow force deletion via query param
+  const { permanent } = req.query; // Allow permanent deletion via query param (dangerous!)
 
-  // Check if class exists
-  const existingClass = await getRow('SELECT id FROM classes WHERE id = $1', [id]);
+  // Check if class exists and is not already deleted
+  const existingClass = await getRow(
+    'SELECT id, title, deleted_at FROM classes WHERE id = $1',
+    [id]
+  );
+
   if (!existingClass) {
     throw new AppError('Class not found', 404, 'Class Not Found');
   }
 
-  // Check for enrollments
+  if (existingClass.deleted_at && permanent !== 'true') {
+    throw new AppError('Class is already deleted', 400, 'Already Deleted');
+  }
+
+  // Soft delete (default - safe)
+  if (permanent !== 'true') {
+    await query(
+      'UPDATE classes SET deleted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = $1',
+      [id]
+    );
+
+    res.json({
+      message: 'Class soft deleted successfully',
+      note: 'Class is hidden but data is preserved. Use restore endpoint to recover.',
+      deletedAt: new Date().toISOString()
+    });
+    return;
+  }
+
+  // Permanent deletion (requires explicit permanent=true)
+  // Check for dependencies
   const enrollmentCount = await getRow(
     'SELECT COUNT(*) as count FROM enrollments WHERE class_id = $1',
     [id]
   );
 
-  if (enrollmentCount.count > 0 && force !== 'true') {
+  const paymentCount = await getRow(
+    'SELECT COUNT(*) as count FROM payments WHERE class_id = $1',
+    [id]
+  );
+
+  // Build error message for related records
+  const issues = [];
+  if (enrollmentCount.count > 0) {
+    issues.push(`${enrollmentCount.count} enrollment(s)`);
+  }
+  if (paymentCount.count > 0) {
+    issues.push(`${paymentCount.count} payment record(s)`);
+  }
+
+  if (issues.length > 0) {
     throw new AppError(
-      `Cannot delete class with ${enrollmentCount.count} active enrollment(s). Use force=true to override.`,
+      `Cannot permanently delete class with ${issues.join(' and ')}. These records will be orphaned.`,
       400,
-      'Class Has Enrollments'
+      'Class Has Dependencies'
     );
   }
 
-  // If force=true, delete enrollments first
-  if (force === 'true' && enrollmentCount.count > 0) {
-    await query('DELETE FROM enrollments WHERE class_id = $1', [id]);
-  }
-
+  // Permanent delete
   await query('DELETE FROM classes WHERE id = $1', [id]);
 
   res.json({
-    message: 'Class deleted successfully',
-    deletedEnrollments: force === 'true' ? parseInt(enrollmentCount.count) : 0
+    message: 'Class permanently deleted',
+    warning: 'This action cannot be undone'
+  });
+}));
+
+// Restore soft-deleted class
+router.post('/classes/:id/restore', asyncHandler(async (req, res) => {
+  const { id } = req.params;
+
+  // Check if class exists and is deleted
+  const classItem = await getRow(
+    'SELECT id, title, deleted_at FROM classes WHERE id = $1',
+    [id]
+  );
+
+  if (!classItem) {
+    throw new AppError('Class not found', 404, 'Class Not Found');
+  }
+
+  if (!classItem.deleted_at) {
+    throw new AppError('Class is not deleted', 400, 'Not Deleted');
+  }
+
+  // Restore the class
+  await query(
+    'UPDATE classes SET deleted_at = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = $1',
+    [id]
+  );
+
+  res.json({
+    message: 'Class restored successfully',
+    classId: id,
+    classTitle: classItem.title
+  });
+}));
+
+// List deleted classes
+router.get('/classes/deleted/list', asyncHandler(async (req, res) => {
+  const deletedClasses = await query(`
+    SELECT 
+      id, 
+      title, 
+      topic,
+      instructor_id,
+      deleted_at,
+      created_at
+    FROM classes
+    WHERE deleted_at IS NOT NULL
+    ORDER BY deleted_at DESC
+  `);
+
+  res.json({
+    deletedClasses: deletedClasses.rows,
+    count: deletedClasses.rows.length
   });
 }));
 
@@ -2217,7 +2587,7 @@ router.get('/discussions', asyncHandler(async (req, res) => {
   const { page = 1, limit = 20, type, author, search } = req.query;
   const offset = (page - 1) * limit;
 
-  let whereClause = 'WHERE 1=1';
+  let whereClause = 'WHERE d.deleted_at IS NULL';
   const params = [];
   let paramCount = 0;
 
@@ -2348,17 +2718,81 @@ router.put('/discussions/:id', [
 // Delete discussion
 router.delete('/discussions/:id', asyncHandler(async (req, res) => {
   const { id } = req.params;
+  const { permanent } = req.query;
 
   // Check if discussion exists
-  const existingDiscussion = await getRow('SELECT id FROM discussions WHERE id = $1', [id]);
-  if (!existingDiscussion) {
+  const discussion = await getRow('SELECT id, title FROM discussions WHERE id = $1', [id]);
+  if (!discussion) {
     throw new AppError('Discussion not found', 404, 'Discussion Not Found');
   }
 
+  // Soft delete (default)
+  if (permanent !== 'true') {
+    await query(
+      'UPDATE discussions SET deleted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = $1',
+      [id]
+    );
+    return res.json({
+      message: 'Discussion soft deleted successfully',
+      note: 'Discussion is hidden but replies are preserved. Use restore endpoint to recover.',
+      deletedAt: new Date().toISOString()
+    });
+  }
+
+  // Check dependencies before permanent delete
+  const replyCount = await getRow('SELECT COUNT(*)::int as count FROM discussion_replies WHERE discussion_id = $1', [id]);
+  const likeCount = await getRow('SELECT COUNT(*)::int as count FROM discussion_likes WHERE discussion_id = $1', [id]);
+
+  if (replyCount.count > 0 || likeCount.count > 0) {
+    throw new AppError(
+      `Cannot permanently delete discussion with ${replyCount.count} reply(ies) and ${likeCount.count} like(s).`,
+      400,
+      'Discussion Has Dependencies'
+    );
+  }
+
   await query('DELETE FROM discussions WHERE id = $1', [id]);
+  res.json({
+    message: 'Discussion permanently deleted',
+    warning: 'This action cannot be undone'
+  });
+}));
+
+// Restore soft-deleted discussion
+router.post('/discussions/:id/restore', asyncHandler(async (req, res) => {
+  const { id } = req.params;
+
+  const discussion = await getRow('SELECT id, title, deleted_at FROM discussions WHERE id = $1', [id]);
+  if (!discussion) {
+    throw new AppError('Discussion not found', 404);
+  }
+
+  if (!discussion.deleted_at) {
+    throw new AppError('Discussion is not deleted', 400, 'Not Deleted');
+  }
+
+  await query('UPDATE discussions SET deleted_at = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = $1', [id]);
 
   res.json({
-    message: 'Discussion deleted successfully'
+    message: 'Discussion restored successfully',
+    discussionId: id,
+    discussionTitle: discussion.title
+  });
+}));
+
+// List deleted discussions
+router.get('/discussions/deleted/list', asyncHandler(async (req, res) => {
+  const deletedDiscussions = await query(`
+    SELECT d.id, d.title, d.author_id, u.name as author_name, d.deleted_at, d.created_at
+    FROM discussions d
+    LEFT JOIN users u ON d.author_id = u.id
+    WHERE d.deleted_at IS NOT NULL
+    ORDER BY d.deleted_at DESC
+  `);
+
+  res.json({
+    deletedDiscussions: deletedDiscussions.rows,
+    count: deletedDiscussions.rows.length
   });
 }));
 

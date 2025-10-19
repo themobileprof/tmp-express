@@ -612,11 +612,21 @@
   delete:
     tags:
       - Courses
-    summary: Delete a course by its ID
+    summary: Delete a course (soft delete by default)
     description: |
-      Delete a course (requires authentication and owner/admin authorization).
+      Soft delete a course by default, which marks it as deleted without removing data.
       
-      By default, courses with enrollments cannot be deleted. Use `force=true` to override and delete the course along with all its enrollments.
+      **Soft Delete (Default):**
+      - Sets `deleted_at` timestamp
+      - Hides course from normal listings
+      - Preserves all data (enrollments, payments, lessons)
+      - Can be restored using the restore endpoint
+      
+      **Permanent Delete (permanent=true):**
+      - Permanently removes course from database
+      - Requires NO enrollments and NO payments
+      - Cannot be undone
+      - Should only be used for test data cleanup
     security:
       - BearerAuth: []
     parameters:
@@ -627,31 +637,45 @@
         schema:
           type: string
           format: uuid
-      - name: force
+      - name: permanent
         in: query
         required: false
-        description: Force delete course even if it has enrollments (also deletes all enrollments)
+        description: Permanently delete course (dangerous - requires no enrollments/payments)
         schema:
           type: boolean
           default: false
-        example: true
+        example: false
     responses:
       '200':
         description: Course deleted successfully
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                message:
-                  type: string
-                  example: "Course deleted successfully"
-                deletedEnrollments:
-                  type: integer
-                  description: Number of enrollments deleted (only when force=true)
-                  example: 5
+              oneOf:
+                - type: object
+                  description: Soft delete response
+                  properties:
+                    message:
+                      type: string
+                      example: "Course soft deleted successfully"
+                    note:
+                      type: string
+                      example: "Course is hidden but data is preserved. Use restore endpoint to recover."
+                    deletedAt:
+                      type: string
+                      format: date-time
+                      example: "2025-10-19T10:30:00.000Z"
+                - type: object
+                  description: Permanent delete response
+                  properties:
+                    message:
+                      type: string
+                      example: "Course permanently deleted"
+                    warning:
+                      type: string
+                      example: "This action cannot be undone"
       '400':
-        description: Cannot delete course with enrollments (when force is not true)
+        description: Cannot delete course
         content:
           application/json:
             schema:
@@ -665,13 +689,13 @@
                   properties:
                     message:
                       type: string
-                      example: "Cannot delete course with 5 active enrollment(s). Use force=true to override."
+                      example: "Cannot permanently delete course with 5 enrollment(s) and 3 payment record(s). These records will be orphaned."
                     statusCode:
                       type: integer
                       example: 400
                     errorCode:
                       type: string
-                      example: "Course Has Enrollments"
+                      example: "Course Has Dependencies"
       '401':
         $ref: '../responses/Unauthorized.yaml'
       '403':
@@ -1410,4 +1434,139 @@
                     pages:
                       type: integer
       '404':
-        $ref: '../responses/NotFound.yaml' 
+        $ref: '../responses/NotFound.yaml'
+
+# Restore Deleted Course
+/{id}/restore:
+  post:
+    tags:
+      - Courses
+    summary: Restore a soft-deleted course
+    description: |
+      Restore a course that was soft-deleted (sets deleted_at back to NULL).
+      
+      **Requirements:**
+      - Course must have been soft-deleted (deleted_at IS NOT NULL)
+      - Only accessible to admin users
+      
+      **Effect:**
+      - Makes course visible in normal listings again
+      - All related data (enrollments, payments, lessons) remain intact
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Course ID to restore
+        schema:
+          type: string
+          format: uuid
+    responses:
+      '200':
+        description: Course restored successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+                  example: "Course restored successfully"
+                courseId:
+                  type: string
+                  format: uuid
+                  example: "550e8400-e29b-41d4-a716-446655440000"
+                courseTitle:
+                  type: string
+                  example: "Introduction to Python"
+      '400':
+        description: Course is not deleted
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                  example: false
+                error:
+                  type: object
+                  properties:
+                    message:
+                      type: string
+                      example: "Course is not deleted"
+                    statusCode:
+                      type: integer
+                      example: 400
+                    errorCode:
+                      type: string
+                      example: "Not Deleted"
+      '401':
+        $ref: '../responses/Unauthorized.yaml'
+      '403':
+        $ref: '../responses/Forbidden.yaml'
+      '404':
+        $ref: '../responses/NotFound.yaml'
+
+# List Deleted Courses
+/deleted/list:
+  get:
+    tags:
+      - Courses
+    summary: List all soft-deleted courses
+    description: |
+      Get a list of all courses that have been soft-deleted.
+      
+      **Requirements:**
+      - Admin access only
+      
+      **Use Cases:**
+      - View deleted courses for potential restoration
+      - Audit trail of deleted content
+      - Identify courses for permanent deletion
+    security:
+      - BearerAuth: []
+    responses:
+      '200':
+        description: List of deleted courses
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                deletedCourses:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                        example: "550e8400-e29b-41d4-a716-446655440000"
+                      title:
+                        type: string
+                        example: "Introduction to Python"
+                      topic:
+                        type: string
+                        example: "Programming"
+                      instructor_id:
+                        type: string
+                        format: uuid
+                        nullable: true
+                      deleted_at:
+                        type: string
+                        format: date-time
+                        example: "2025-10-19T10:30:00.000Z"
+                      created_at:
+                        type: string
+                        format: date-time
+                        example: "2025-01-15T08:00:00.000Z"
+                count:
+                  type: integer
+                  example: 5
+                  description: Total number of deleted courses
+      '401':
+        $ref: '../responses/Unauthorized.yaml'
+      '403':
+        $ref: '../responses/Forbidden.yaml' 

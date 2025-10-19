@@ -228,6 +228,10 @@ paths:
       $ref: './paths/courses.yaml#/~1{id}~1analytics'
     /courses/{id}/discussions:
       $ref: './paths/courses.yaml#/~1{id}~1discussions'
+    /courses/{id}/restore:
+      $ref: './paths/courses.yaml#/~1{id}~1restore'
+    /courses/deleted/list:
+      $ref: './paths/courses.yaml#/~1deleted~1list'
 
     # Classes
     /classes/upcoming:
@@ -238,6 +242,10 @@ paths:
       $ref: './paths/classes.yaml#/~1'
     /classes/{id}:
       $ref: './paths/classes.yaml#/~1{id}'
+    /classes/{id}/restore:
+      $ref: './paths/classes.yaml#/~1{id}~1restore'
+    /classes/deleted/list:
+      $ref: './paths/classes.yaml#/~1deleted~1list'
 
     # Uploads
     /uploads:

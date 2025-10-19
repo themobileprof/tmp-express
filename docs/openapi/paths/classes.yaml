@@ -608,11 +608,21 @@
   delete:
     tags:
       - Classes
-    summary: Delete class
+    summary: Delete a class (soft delete by default)
     description: |
-      Delete a class (owner or admin only).
+      Soft delete a class by default, which marks it as deleted without removing data.
       
-      By default, classes with enrollments cannot be deleted. Use `force=true` to override and delete the class along with all its enrollments.
+      **Soft Delete (Default):**
+      - Sets `deleted_at` timestamp
+      - Hides class from normal listings
+      - Preserves all data (enrollments, payments)
+      - Can be restored using the restore endpoint
+      
+      **Permanent Delete (permanent=true):**
+      - Permanently removes class from database
+      - Requires NO enrollments and NO payments
+      - Cannot be undone
+      - Should only be used for test data cleanup
     security:
       - BearerAuth: []
     parameters:
@@ -623,31 +633,45 @@
         schema:
           type: string
           format: uuid
-      - name: force
+      - name: permanent
         in: query
         required: false
-        description: Force delete class even if it has enrollments (also deletes all enrollments)
+        description: Permanently delete class (dangerous - requires no enrollments/payments)
         schema:
           type: boolean
           default: false
-        example: true
+        example: false
     responses:
       '200':
         description: Class deleted successfully
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                message:
-                  type: string
-                  example: "Class deleted successfully"
-                deletedEnrollments:
-                  type: integer
-                  description: Number of enrollments deleted (only when force=true)
-                  example: 3
+              oneOf:
+                - type: object
+                  description: Soft delete response
+                  properties:
+                    message:
+                      type: string
+                      example: "Class soft deleted successfully"
+                    note:
+                      type: string
+                      example: "Class is hidden but data is preserved. Use restore endpoint to recover."
+                    deletedAt:
+                      type: string
+                      format: date-time
+                      example: "2025-10-19T10:30:00.000Z"
+                - type: object
+                  description: Permanent delete response
+                  properties:
+                    message:
+                      type: string
+                      example: "Class permanently deleted"
+                    warning:
+                      type: string
+                      example: "This action cannot be undone"
       '400':
-        description: Cannot delete class with enrollments (when force is not true)
+        description: Cannot delete class
         content:
           application/json:
             schema:
@@ -661,13 +685,13 @@
                   properties:
                     message:
                       type: string
-                      example: "Cannot delete class with 3 active enrollment(s). Use force=true to override."
+                      example: "Cannot permanently delete class with 3 enrollment(s) and 2 payment record(s). These records will be orphaned."
                     statusCode:
                       type: integer
                       example: 400
                     errorCode:
                       type: string
-                      example: "Class Has Enrollments"
+                      example: "Class Has Dependencies"
       '401':
         $ref: '../responses/Unauthorized.yaml'
       '403':
@@ -810,4 +834,140 @@
         $ref: '../responses/Unauthorized.yaml'
       '404':
         $ref: '../responses/NotFound.yaml' 
+
+# Restore Deleted Class
+/{id}/restore:
+  post:
+    tags:
+      - Classes
+    summary: Restore a soft-deleted class
+    description: |
+      Restore a class that was soft-deleted (sets deleted_at back to NULL).
+      
+      **Requirements:**
+      - Class must have been soft-deleted (deleted_at IS NOT NULL)
+      - Only accessible to admin users
+      
+      **Effect:**
+      - Makes class visible in normal listings again
+      - All related data (enrollments, payments) remain intact
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Class ID to restore
+        schema:
+          type: string
+          format: uuid
+    responses:
+      '200':
+        description: Class restored successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+                  example: "Class restored successfully"
+                classId:
+                  type: string
+                  format: uuid
+                  example: "550e8400-e29b-41d4-a716-446655440000"
+                classTitle:
+                  type: string
+                  example: "Python Basics - Fall 2025"
+      '400':
+        description: Class is not deleted
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                  example: false
+                error:
+                  type: object
+                  properties:
+                    message:
+                      type: string
+                      example: "Class is not deleted"
+                    statusCode:
+                      type: integer
+                      example: 400
+                    errorCode:
+                      type: string
+                      example: "Not Deleted"
+      '401':
+        $ref: '../responses/Unauthorized.yaml'
+      '403':
+        $ref: '../responses/Forbidden.yaml'
+      '404':
+        $ref: '../responses/NotFound.yaml'
+
+# List Deleted Classes
+/deleted/list:
+  get:
+    tags:
+      - Classes
+    summary: List all soft-deleted classes
+    description: |
+      Get a list of all classes that have been soft-deleted.
+      
+      **Requirements:**
+      - Admin access only
+      
+      **Use Cases:**
+      - View deleted classes for potential restoration
+      - Audit trail of deleted content
+      - Identify classes for permanent deletion
+    security:
+      - BearerAuth: []
+    responses:
+      '200':
+        description: List of deleted classes
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                deletedClasses:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                        example: "550e8400-e29b-41d4-a716-446655440000"
+                      title:
+                        type: string
+                        example: "Python Basics - Fall 2025"
+                      course_id:
+                        type: string
+                        format: uuid
+                        example: "660e8400-e29b-41d4-a716-446655440001"
+                      instructor_id:
+                        type: string
+                        format: uuid
+                        nullable: true
+                      deleted_at:
+                        type: string
+                        format: date-time
+                        example: "2025-10-19T10:30:00.000Z"
+                      created_at:
+                        type: string
+                        format: date-time
+                        example: "2025-08-15T08:00:00.000Z"
+                count:
+                  type: integer
+                  example: 3
+                  description: Total number of deleted classes
+      '401':
+        $ref: '../responses/Unauthorized.yaml'
+      '403':
+        $ref: '../responses/Forbidden.yaml'
         
