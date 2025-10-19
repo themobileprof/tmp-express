@@ -1,6 +1,10 @@
 const { getRow, getRows, query } = require('./config');
 
-(async () => {
+/**
+ * Seed certification programs and modules
+ * This function is idempotent - safe to run multiple times
+ */
+const seedCertificationPrograms = async () => {
 	try {
 		console.log('🌱 Seeding certification programs...');
 
@@ -47,10 +51,22 @@ const { getRow, getRows, query } = require('./config');
 			console.log('ℹ️ Modules already exist for program');
 		}
 
+		console.log('✅ Certification programs seeded successfully!');
+	} catch (err) {
+		console.error('❌ Seeding certification programs failed:', err);
+		// Don't throw - allow migration to continue even if seeding fails
+	}
+};
+
+// Run seeding if this file is executed directly
+if (require.main === module) {
+	seedCertificationPrograms().then(() => {
 		console.log('🌱 Seeding complete.');
 		process.exit(0);
-	} catch (err) {
+	}).catch((err) => {
 		console.error('❌ Seeding failed:', err);
 		process.exit(1);
-	}
-})(); 
+	});
+}
+
+module.exports = { seedCertificationPrograms }; 

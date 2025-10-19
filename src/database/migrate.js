@@ -136,7 +136,7 @@ const createTables = async () => {
       END $$;
     `);
 
-    // Create Users table
+    // Create Users table (create-only - includes verification/reset columns)
     await query(`
       CREATE TABLE IF NOT EXISTS users (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -151,19 +151,14 @@ const createTables = async () => {
         google_email VARCHAR(255),
         auth_provider VARCHAR(20) DEFAULT 'local',
         email_verified BOOLEAN DEFAULT false,
+        verification_token VARCHAR(255),
+        verification_token_expires TIMESTAMP,
+        password_reset_token VARCHAR(255),
+        password_reset_expires TIMESTAMP,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         is_active BOOLEAN DEFAULT true
       )
-    `);
-
-    // Add verification/reset columns if they do not exist
-    await query(`
-      ALTER TABLE users
-      ADD COLUMN IF NOT EXISTS verification_token VARCHAR(255),
-      ADD COLUMN IF NOT EXISTS verification_token_expires TIMESTAMP,
-      ADD COLUMN IF NOT EXISTS password_reset_token VARCHAR(255),
-      ADD COLUMN IF NOT EXISTS password_reset_expires TIMESTAMP;
     `);
 
     // Create Courses table
@@ -187,13 +182,14 @@ const createTables = async () => {
         syllabus TEXT,
         tags TEXT[],
         is_published BOOLEAN DEFAULT false,
+        deleted_at TIMESTAMP DEFAULT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (instructor_id) REFERENCES users(id) ON DELETE SET NULL
       )
     `);
 
-    // Create Sponsorships table (updated for multi-course support)
+    // Create Sponsorships table (multi-course model)
     await query(`
       CREATE TABLE IF NOT EXISTS sponsorships (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -217,13 +213,12 @@ const createTables = async () => {
         created_by VARCHAR(20) DEFAULT 'sponsor',
         admin_note TEXT,
         invoice_number VARCHAR(100),
+        deleted_at TIMESTAMP DEFAULT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (sponsor_id) REFERENCES users(id) ON DELETE CASCADE
       )
     `);
-
-      // (Legacy migration moved below - will populate sponsorship_courses from sponsorships.course_id if present)
 
     // Create Sponsorship_Courses table for multi-course sponsorships
     await query(`
@@ -237,30 +232,6 @@ const createTables = async () => {
         UNIQUE(sponsorship_id, course_id)
       )
     `);
-    console.log('✅ Created sponsorship_courses table for multi-course sponsorships');
-
-    // Migrate legacy single-course sponsorships into sponsorship_courses, if the old column exists
-      // Migrate legacy single-course sponsorships into sponsorship_courses, if the old column exists
-      const legacyCol = await query(
-        `SELECT column_name FROM information_schema.columns WHERE table_name = $1 AND column_name = $2`,
-        ['sponsorships', 'course_id']
-      );
-      if (legacyCol.rowCount > 0) {
-        await query(`
-          INSERT INTO sponsorship_courses (sponsorship_id, course_id)
-          SELECT id, course_id FROM sponsorships WHERE course_id IS NOT NULL
-          ON CONFLICT (sponsorship_id, course_id) DO NOTHING;
-        `);
-
-        // Now drop legacy column
-        await query(`
-          ALTER TABLE sponsorships
-          DROP COLUMN IF EXISTS course_id;
-        `);
-        console.log('✅ Migrated legacy sponsorships.course_id values into sponsorship_courses and dropped legacy column');
-      } else {
-        console.log('ℹ️ No legacy sponsorships.course_id column detected, skipping migration step');
-      }
 
     // Create Sponsorship_Usage table
     await query(`
@@ -292,9 +263,12 @@ const createTables = async () => {
         demographics TEXT,
         impact_description TEXT,
         is_active BOOLEAN DEFAULT true,
+        created_by UUID,
+        deleted_at TIMESTAMP DEFAULT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE
+        FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE,
+        FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
       )
     `);
 
@@ -324,6 +298,7 @@ const createTables = async () => {
         total_slots INTEGER NOT NULL,
         location TEXT,
         is_published BOOLEAN DEFAULT false,
+        deleted_at TIMESTAMP DEFAULT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (instructor_id) REFERENCES users(id) ON DELETE CASCADE
@@ -379,13 +354,14 @@ const createTables = async () => {
         duration_minutes INTEGER DEFAULT 0,
         order_index INTEGER NOT NULL,
         is_published BOOLEAN DEFAULT false,
+        deleted_at TIMESTAMP DEFAULT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE
       )
     `);
 
-    // Create Lesson_Progress table to track user progress through lessons
+    // Create Lesson_Progress table
     await query(`
       CREATE TABLE IF NOT EXISTS lesson_progress (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -416,6 +392,7 @@ const createTables = async () => {
         max_attempts INTEGER DEFAULT 3,
         order_index INTEGER NOT NULL,
         is_published BOOLEAN DEFAULT false,
+        deleted_at TIMESTAMP DEFAULT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE,
@@ -423,9 +400,7 @@ const createTables = async () => {
       )
     `);
 
-  // (No test-level flag columns) — per-question flags are tracked via columns on test_questions
-
-    // Create Test_Questions table
+    // Create Test_Questions table (includes flagging columns)
     await query(`
       CREATE TABLE IF NOT EXISTS test_questions (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -438,25 +413,14 @@ const createTables = async () => {
         points INTEGER DEFAULT 1,
         order_index INTEGER NOT NULL,
         image_url TEXT,
+        flagged BOOLEAN DEFAULT false,
+        flag_count INTEGER DEFAULT 0,
+        last_flagged_at TIMESTAMP,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (test_id) REFERENCES tests(id) ON DELETE CASCADE
       )
     `);
-
-    // Add simple flagging columns to test_questions for a minimal anonymous flag flow
-    // - flagged: whether the question is currently flagged and needs review
-    // - flag_count: number of times the question has been flagged (simple counter)
-    // - last_flagged_at: timestamp of the most recent flag
-    await query(`
-      ALTER TABLE test_questions
-      ADD COLUMN IF NOT EXISTS flagged BOOLEAN DEFAULT false,
-      ADD COLUMN IF NOT EXISTS flag_count INTEGER DEFAULT 0,
-      ADD COLUMN IF NOT EXISTS last_flagged_at TIMESTAMP;
-    `);
-
-  // Using simple columns on test_questions (flagged, flag_count, last_flagged_at)
-  // to represent anonymous flagging.
 
     // Create Test_Attempts table
     await query(`
@@ -512,6 +476,7 @@ const createTables = async () => {
         reply_count INTEGER DEFAULT 0,
         view_count INTEGER DEFAULT 0,
         last_activity_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        deleted_at TIMESTAMP DEFAULT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (author_id) REFERENCES users(id) ON DELETE CASCADE,
@@ -581,6 +546,7 @@ const createTables = async () => {
         prerequisites TEXT,
         price DECIMAL(10,2) DEFAULT 0,
         is_active BOOLEAN DEFAULT true,
+        deleted_at TIMESTAMP DEFAULT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
@@ -677,7 +643,7 @@ const createTables = async () => {
       )
     `);
 
-    // Create Payment_Webhooks table for webhook logging
+    // Create Payment_Webhooks table
     await query(`
       CREATE TABLE IF NOT EXISTS payment_webhooks (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -689,7 +655,7 @@ const createTables = async () => {
       )
     `);
 
-    // Create Scraped_URLs table for tracking scraping progress
+    // Create Scraped_URLs table
     await query(`
       CREATE TABLE IF NOT EXISTS scraped_urls (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -742,7 +708,7 @@ const createTables = async () => {
       )
     `);
 
-    // Create Email Logs table for tracking email sends
+    // Create Email Logs table
     await query(`
       CREATE TABLE IF NOT EXISTS email_logs (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -759,7 +725,7 @@ const createTables = async () => {
       )
     `);
 
-    // Create indexes for better performance
+    // Create indexes
     await query('CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)');
     await query('CREATE INDEX IF NOT EXISTS idx_users_role ON users(role)');
     await query('CREATE INDEX IF NOT EXISTS idx_courses_instructor ON courses(instructor_id)');
@@ -771,19 +737,6 @@ const createTables = async () => {
     await query('CREATE INDEX IF NOT EXISTS idx_lessons_course ON lessons(course_id)');
     await query('CREATE INDEX IF NOT EXISTS idx_tests_course ON tests(course_id)');
     await query('CREATE INDEX IF NOT EXISTS idx_tests_lesson ON tests(lesson_id)');
-    // Workshops support
-    await query(`
-      CREATE TABLE IF NOT EXISTS lesson_workshops (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        lesson_id UUID NOT NULL UNIQUE,
-        is_enabled BOOLEAN DEFAULT false,
-        spec JSONB NOT NULL DEFAULT '{}'::jsonb, -- Structured steps and checks for the interactive terminal
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (lesson_id) REFERENCES lessons(id) ON DELETE CASCADE
-      )
-    `);
-    await query('CREATE INDEX IF NOT EXISTS idx_lesson_workshops_enabled ON lesson_workshops(is_enabled)');
     await query('CREATE INDEX IF NOT EXISTS idx_test_attempts_user ON test_attempts(user_id)');
     await query('CREATE INDEX IF NOT EXISTS idx_discussions_author ON discussions(author_id)');
     await query('CREATE INDEX IF NOT EXISTS idx_discussions_course ON discussions(course_id)');
@@ -804,29 +757,87 @@ const createTables = async () => {
     await query('CREATE INDEX IF NOT EXISTS idx_cert_program_modules_program ON certification_program_modules(program_id)');
     await query('CREATE INDEX IF NOT EXISTS idx_cert_program_enrollments_user ON certification_program_enrollments(user_id)');
     await query('CREATE INDEX IF NOT EXISTS idx_cert_program_enrollments_program ON certification_program_enrollments(program_id)');
-    		await query('CREATE INDEX IF NOT EXISTS idx_cert_program_progress_enrollment ON certification_program_progress(enrollment_id)');
-		    await query('CREATE INDEX IF NOT EXISTS idx_discussion_categories_key ON discussion_categories(key)');
+    await query('CREATE INDEX IF NOT EXISTS idx_cert_program_progress_enrollment ON certification_program_progress(enrollment_id)');
+    await query('CREATE INDEX IF NOT EXISTS idx_discussion_categories_key ON discussion_categories(key)');
     await query('CREATE INDEX IF NOT EXISTS idx_discussion_categories_active ON discussion_categories(is_active)');
     await query('CREATE INDEX IF NOT EXISTS idx_email_logs_recipient ON email_logs(recipient_email)');
     await query('CREATE INDEX IF NOT EXISTS idx_email_logs_status ON email_logs(status)');
     await query('CREATE INDEX IF NOT EXISTS idx_email_logs_created ON email_logs(created_at)');
 
-		console.log('✅ Database migration completed successfully!');
-    console.log('🎉 All tables created and ready!');
+    // Workshops support
+    await query(`
+      CREATE TABLE IF NOT EXISTS lesson_workshops (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        lesson_id UUID NOT NULL UNIQUE,
+        is_enabled BOOLEAN DEFAULT false,
+        spec JSONB NOT NULL DEFAULT '{}'::jsonb,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (lesson_id) REFERENCES lessons(id) ON DELETE CASCADE
+      )
+    `);
+    await query('CREATE INDEX IF NOT EXISTS idx_lesson_workshops_enabled ON lesson_workshops(is_enabled)');
+
+    // Create soft delete indexes (partial indexes for efficiency)
+    console.log('\n📊 Creating soft delete indexes...');
+    
+    await query(`
+      CREATE INDEX IF NOT EXISTS idx_courses_deleted_at 
+      ON courses(deleted_at) WHERE deleted_at IS NULL
+    `);
+    console.log('✓ Created soft delete index on courses');
+
+    await query(`
+      CREATE INDEX IF NOT EXISTS idx_classes_deleted_at 
+      ON classes(deleted_at) WHERE deleted_at IS NULL
+    `);
+    console.log('✓ Created soft delete index on classes');
+
+    await query(`
+      CREATE INDEX IF NOT EXISTS idx_sponsorships_deleted_at 
+      ON sponsorships(deleted_at) WHERE deleted_at IS NULL
+    `);
+    console.log('✓ Created soft delete index on sponsorships');
+
+    await query(`
+      CREATE INDEX IF NOT EXISTS idx_sponsorship_opportunities_deleted_at 
+      ON sponsorship_opportunities(deleted_at) WHERE deleted_at IS NULL
+    `);
+    console.log('✓ Created soft delete index on sponsorship_opportunities');
+
+    await query(`
+      CREATE INDEX IF NOT EXISTS idx_lessons_deleted_at 
+      ON lessons(deleted_at) WHERE deleted_at IS NULL
+    `);
+    console.log('✓ Created soft delete index on lessons');
+
+    await query(`
+      CREATE INDEX IF NOT EXISTS idx_tests_deleted_at 
+      ON tests(deleted_at) WHERE deleted_at IS NULL
+    `);
+    console.log('✓ Created soft delete index on tests');
+
+    await query(`
+      CREATE INDEX IF NOT EXISTS idx_discussions_deleted_at 
+      ON discussions(deleted_at) WHERE deleted_at IS NULL
+    `);
+    console.log('✓ Created soft delete index on discussions');
+
+    await query(`
+      CREATE INDEX IF NOT EXISTS idx_certification_programs_deleted_at 
+      ON certification_programs(deleted_at) WHERE deleted_at IS NULL
+    `);
+    console.log('✓ Created soft delete index on certification_programs');
+
+    console.log('\n✅ Database migration completed successfully!');
+    console.log('🎉 All tables created with soft delete support!');
+    console.log('📝 Soft delete enabled for: courses, classes, sponsorships, sponsorship_opportunities,');
+    console.log('   lessons, tests, discussions, certification_programs');
     console.log('⏰ Migration completed at:', new Date().toISOString());
-    
-    // Migrate existing courses table to add new fields
-    await migrateCoursesTable();
-    
-    		// Migrate existing discussions table to add new fields
-		await migrateDiscussionsTable();
-		
-		// Migrate existing user_settings table to add missing columns
-		await migrateUserSettingsTable();
-		
-		// Seed default discussion categories
-		await seedDiscussionCategories();
-    
+
+    // Seed default discussion categories
+    await seedDiscussionCategories();
+
   } catch (error) {
     console.error('❌ Migration failed:', error);
     console.error('💥 Error details:', error.message);
@@ -834,124 +845,10 @@ const createTables = async () => {
   }
 };
 
-// Function to migrate existing courses table
-const migrateCoursesTable = async () => {
-  try {
-    console.log('🔄 Migrating courses table to add new fields...');
-    
-    // Add new columns to existing courses table
-    const newColumns = [
-      'difficulty VARCHAR(50)',
-      'objectives TEXT',
-      'prerequisites TEXT', 
-      'syllabus TEXT',
-      'tags TEXT[]'
-    ];
-    
-    for (const column of newColumns) {
-      try {
-        const columnName = column.split(' ')[0];
-        await query(`ALTER TABLE courses ADD COLUMN IF NOT EXISTS ${columnName} ${column.split(' ').slice(1).join(' ')}`);
-        console.log(`✅ Added column: ${columnName}`);
-      } catch (error) {
-        console.log(`⚠️  Column might already exist: ${column.split(' ')[0]}`);
-      }
-    }
-    
-    console.log('✅ Courses table migration completed!');
-  } catch (error) {
-    console.error('❌ Courses table migration failed:', error);
-    throw error;
-  }
-};
-
-// Function to migrate existing discussions table
-const migrateDiscussionsTable = async () => {
-  try {
-    console.log('🔄 Migrating discussions table to add new fields...');
-    
-    // Add new columns to existing discussions table
-    const newColumns = [
-      'lesson_id UUID',
-      'tags TEXT[] DEFAULT \'{}\''
-    ];
-    
-    for (const column of newColumns) {
-      try {
-        const columnName = column.split(' ')[0];
-        await query(`ALTER TABLE discussions ADD COLUMN IF NOT EXISTS ${columnName} ${column.split(' ').slice(1).join(' ')}`);
-        console.log(`✅ Added column: ${columnName}`);
-      } catch (error) {
-        console.log(`⚠️  Column might already exist: ${column.split(' ')[0]}`);
-      }
-    }
-    
-    // Add foreign key constraint for lesson_id if it doesn't exist
-    try {
-      await query(`
-        ALTER TABLE discussions 
-        ADD CONSTRAINT IF NOT EXISTS fk_discussions_lesson 
-        FOREIGN KEY (lesson_id) REFERENCES lessons(id) ON DELETE SET NULL
-      `);
-      console.log('✅ Added lesson_id foreign key constraint');
-    } catch (error) {
-      console.log('⚠️  Lesson foreign key constraint might already exist');
-    }
-    
-    // Create indexes for the new fields
-    try {
-      await query('CREATE INDEX IF NOT EXISTS idx_discussions_lesson ON discussions(lesson_id)');
-      await query('CREATE INDEX IF NOT EXISTS idx_discussions_tags ON discussions USING GIN(tags)');
-      console.log('✅ Added indexes for new discussion fields');
-    } catch (error) {
-      console.log('⚠️  Some indexes might already exist');
-    }
-    
-    	console.log('✅ Discussions table migration completed!');
-  } catch (error) {
-    console.error('❌ Discussions table migration failed:', error);
-    throw error;
-  }
-};
-
-// Function to migrate existing user_settings table
-const migrateUserSettingsTable = async () => {
-  try {
-    console.log('🔄 Migrating user_settings table to add missing columns...');
-    
-    // Add new columns to existing user_settings table
-    const newColumns = [
-      'course_notifications BOOLEAN DEFAULT true',
-      'class_notifications BOOLEAN DEFAULT true',
-      'discussion_notifications BOOLEAN DEFAULT true',
-      'test_notifications BOOLEAN DEFAULT true',
-      'certification_notifications BOOLEAN DEFAULT true',
-      'payment_notifications BOOLEAN DEFAULT true',
-      'system_notifications BOOLEAN DEFAULT true'
-    ];
-    
-    for (const column of newColumns) {
-      try {
-        const columnName = column.split(' ')[0];
-        await query(`ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS ${columnName} ${column.split(' ').slice(1).join(' ')}`);
-        console.log(`✅ Added column: ${columnName}`);
-      } catch (error) {
-        console.log(`⚠️  Column might already exist: ${column.split(' ')[0]}`);
-      }
-    }
-    
-    console.log('✅ User settings table migration completed!');
-  } catch (error) {
-    console.error('❌ User settings table migration failed:', error);
-    throw error;
-  }
-};
-
-// Function to seed default discussion categories
+// Function to seed default discussion categories (same as in the original migrate script)
 const seedDiscussionCategories = async () => {
   try {
     console.log('🌱 Seeding discussion categories...');
-    
     const defaultCategories = [
       { key: 'general', name: 'General', description: 'Platform-wide discussions and announcements', icon: '💬', color: '#3B82F6', sort_order: 1 },
       { key: 'course', name: 'Course', description: 'Course-specific discussions and announcements', icon: '📚', color: '#10B981', sort_order: 2 },
@@ -961,7 +858,7 @@ const seedDiscussionCategories = async () => {
       { key: 'help', name: 'Help', description: 'Help requests and support', icon: '🛟', color: '#06B6D4', sort_order: 6 },
       { key: 'feedback', name: 'Feedback', description: 'Feedback and suggestions', icon: '💭', color: '#84CC16', sort_order: 7 }
     ];
-    
+
     for (const category of defaultCategories) {
       try {
         await query(
@@ -980,7 +877,7 @@ const seedDiscussionCategories = async () => {
         console.log(`⚠️  Could not insert category ${category.key}:`, error.message);
       }
     }
-    
+
     console.log('✅ Discussion categories seeded successfully!');
   } catch (error) {
     console.error('❌ Failed to seed discussion categories:', error);
@@ -997,6 +894,7 @@ if (require.main === module) {
     console.error('💥 Database setup failed:', error);
     process.exit(1);
   });
+
 }
 
-module.exports = { createTables }; 
+module.exports = { createTables };
