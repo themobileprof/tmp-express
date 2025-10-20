@@ -129,15 +129,43 @@ app.use(cors({
   allowedHeaders: ['Origin', 'X-Requested-With', 'Content-Type', 'Accept', 'Authorization']
 }));
 
-// Rate limiting
-const limiter = rateLimit({
-  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes
-  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100, // limit each IP to 100 requests per windowMs
+// Rate limiting configuration
+// General API rate limiter - generous for normal application usage
+const generalLimiter = rateLimit({
+  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 60 * 1000, // 1 minute default
+  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 500, // 500 requests per minute default
   message: {
     error: 'Too many requests from this IP, please try again later.'
-  }
+  },
+  standardHeaders: true, // Return rate limit info in `RateLimit-*` headers
+  legacyHeaders: false, // Disable `X-RateLimit-*` headers
 });
-app.use('/api/', limiter);
+
+// Strict rate limiter for authentication endpoints (prevent brute force)
+const authLimiter = rateLimit({
+  windowMs: parseInt(process.env.AUTH_RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes default
+  max: parseInt(process.env.AUTH_RATE_LIMIT_MAX_REQUESTS) || 10, // 10 requests per 15 minutes default
+  message: {
+    error: 'Too many authentication attempts from this IP, please try again later.'
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: true, // Don't count successful requests
+});
+
+// Moderate rate limiter for payment endpoints
+const paymentLimiter = rateLimit({
+  windowMs: parseInt(process.env.PAYMENT_RATE_LIMIT_WINDOW_MS) || 60 * 1000, // 1 minute default
+  max: parseInt(process.env.PAYMENT_RATE_LIMIT_MAX_REQUESTS) || 20, // 20 requests per minute default
+  message: {
+    error: 'Too many payment requests from this IP, please try again later.'
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Apply general rate limiter to all API routes
+app.use('/api/', generalLimiter);
 
 // Upload routes (must come before JSON parser to handle multipart data)
 app.use('/api/uploads', uploadRoutes); // Standard upload endpoint
@@ -398,7 +426,7 @@ app.get('/', (req, res) => {
 });
 
 // API routes
-app.use('/api/auth', authRoutes);
+app.use('/api/auth', authLimiter, authRoutes);
 app.use('/api/users', authenticateToken, userRoutes);
 app.use('/api/courses', courseRoutes);
 app.use('/api/sponsorships', sponsorshipRoutes);
@@ -409,7 +437,7 @@ app.use('/api/tests', authenticateToken, testRoutes);
 app.use('/api/discussions', discussionRoutes);
 app.use('/api/certifications', authenticateToken, certificationRoutes);
 app.use('/api/settings', authenticateToken, settingsRoutes);
-app.use('/api/payments', paymentRoutes);
+app.use('/api/payments', paymentLimiter, paymentRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/scraping', scrapingRoutes);
 app.use('/api/notifications', notificationRoutes);
