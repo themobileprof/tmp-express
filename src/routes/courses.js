@@ -297,7 +297,7 @@ router.get('/:id', authenticateToken, asyncHandler(async (req, res) => {
     courseProgress = await getRow(
       `SELECT 
          COUNT(DISTINCT l.id) as total_lessons,
-         COUNT(DISTINCT CASE WHEN lp.status = 'completed' THEN l.id END) as completed_lessons,
+         COUNT(DISTINCT CASE WHEN lp.is_completed = true THEN l.id END) as completed_lessons,
          COUNT(DISTINCT t.id) as total_tests,
          COUNT(DISTINCT CASE WHEN ta.status = 'completed' AND ta.score >= t.passing_score THEN t.id END) as passed_tests
        FROM courses c
@@ -684,7 +684,7 @@ router.get('/:id/lessons', authenticateToken, asyncHandler(async (req, res) => {
 	// Get all lessons with their unlock and completion status
 	const lessons = await getRows(
 		`SELECT l.*, 
-				CASE WHEN lp.status = 'completed' THEN true ELSE false END as is_completed,
+				COALESCE(lp.is_completed, false) as is_completed,
 				lp.progress_percentage,
 				lp.time_spent_minutes,
 				lp.completed_at,
@@ -771,7 +771,7 @@ router.get('/:id/progression', authenticateToken, asyncHandler(async (req, res) 
   // Get all lessons with their unlock status
   const lessons = await getRows(
     `SELECT l.*, 
-            CASE WHEN lp.status = 'completed' THEN true ELSE false END as is_completed,
+            COALESCE(lp.is_completed, false) as is_completed,
             lp.progress_percentage,
             lp.time_spent_minutes,
             lp.completed_at,
@@ -837,7 +837,7 @@ router.get('/:id/progression', authenticateToken, asyncHandler(async (req, res) 
   const courseStats = await getRow(
     `SELECT 
        COUNT(DISTINCT l.id) as total_lessons,
-       COUNT(DISTINCT CASE WHEN lp.status = 'completed' THEN l.id END) as completed_lessons,
+       COUNT(DISTINCT CASE WHEN lp.is_completed = true THEN l.id END) as completed_lessons,
        COUNT(DISTINCT CASE WHEN ta.status = 'completed' AND ta.score >= t.passing_score THEN t.id END) as passed_tests
      FROM courses c
      LEFT JOIN lessons l ON c.id = l.course_id AND l.is_published = true

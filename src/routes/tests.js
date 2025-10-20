@@ -56,7 +56,7 @@ async function updateProgressFromTest(testId, userId, passed, forcedProceed = fa
     const courseProgress = await getRow(
       `SELECT 
          COUNT(DISTINCT l.id) as total_lessons,
-         COUNT(DISTINCT CASE WHEN lp.status = 'completed' THEN l.id END) as completed_lessons,
+         COUNT(DISTINCT CASE WHEN lp.is_completed = true THEN l.id END) as completed_lessons,
          COUNT(DISTINCT t.id) as total_tests,
          COUNT(DISTINCT CASE WHEN ta.status = 'completed' AND ta.score >= t.passing_score THEN t.id END) as passed_tests
        FROM courses c

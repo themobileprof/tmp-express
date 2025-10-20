@@ -106,7 +106,7 @@ router.get('/dashboard-stats', authenticateToken, asyncHandler(async (req, res) 
   const lessonStats = await getRow(
     `SELECT 
        COUNT(DISTINCT l.id) as total_lessons,
-       COUNT(DISTINCT CASE WHEN lp.status = 'completed' THEN l.id END) as completed_lessons
+       COUNT(DISTINCT CASE WHEN lp.is_completed = true THEN l.id END) as completed_lessons
      FROM lessons l
      JOIN courses c ON l.course_id = c.id
      JOIN enrollments e ON c.id = e.course_id
@@ -437,7 +437,7 @@ router.get('/:id/dashboard-stats', authenticateToken, asyncHandler(async (req, r
   const lessonStats = await getRow(
     `SELECT 
        COUNT(DISTINCT l.id) as total_lessons,
-       COUNT(DISTINCT CASE WHEN lp.status = 'completed' THEN l.id END) as completed_lessons
+       COUNT(DISTINCT CASE WHEN lp.is_completed = true THEN l.id END) as completed_lessons
      FROM lessons l
      JOIN courses c ON l.course_id = c.id
      JOIN enrollments e ON c.id = e.course_id
