@@ -963,8 +963,8 @@ router.get('/courses/:courseId/lessons', asyncHandler(async (req, res) => {
 // Create lesson
 router.post('/courses/:courseId/lessons', [
   body('title').trim().isLength({ min: 1 }).withMessage('Title is required and must not be empty'),
-  body('description').trim().isLength({ min: 1 }).withMessage('Description is required and must not be empty'),
-  body('content').trim().isLength({ min: 1 }).withMessage('Content is required and must not be empty'),
+  body('description').optional({ values: 'falsy' }).trim().isLength({ min: 1 }).withMessage('Description must be a non-empty string if provided'),
+  body('content').optional({ values: 'falsy' }).trim().isLength({ min: 1 }).withMessage('Content must be a non-empty string if provided'),
   body('durationMinutes').isInt({ min: 1 }).withMessage('Duration must be a positive integer')
 ], asyncHandler(async (req, res) => {
   const errors = validationResult(req);
@@ -1550,10 +1550,10 @@ router.post('/tests/:id/questions', [
   body('questionType').isIn(['multiple_choice', 'true_false', 'short_answer']).withMessage('Invalid question type'),
   body('options').optional().isArray().withMessage('Options must be an array if provided'),
   body('correctAnswer').optional().isInt({ min: 0 }).withMessage('Correct answer must be a non-negative integer if provided'),
-  body('correctAnswerText').optional().isLength({ min: 1 }).withMessage('Correct answer text must be a non-empty string if provided'),
+  body('correctAnswerText').optional({ values: 'falsy' }).trim().isLength({ min: 1 }).withMessage('Correct answer text must be a non-empty string if provided'),
   body('points').optional().isInt({ min: 1 }).withMessage('Points must be at least 1 if provided'),
   body('orderIndex').optional().isInt({ min: 0 }).withMessage('Order index must be a non-negative integer if provided'),
-  body('imageUrl').optional().trim().isLength({ min: 1 }).withMessage('Image URL must be a non-empty string if provided')
+  body('imageUrl').optional({ values: 'falsy' }).trim().isLength({ min: 1 }).withMessage('Image URL must be a non-empty string if provided')
 ], asyncHandler(async (req, res) => {
   console.log('Request body for question creation:', JSON.stringify(req.body, null, 2));
   const errors = validationResult(req);
@@ -1624,9 +1624,9 @@ router.put('/tests/:id/questions/:questionId', [
   body('questionType').optional().isIn(['multiple_choice', 'true_false', 'short_answer']),
   body('options').optional().isArray(),
   body('correctAnswer').optional().isInt({ min: 0 }),
-  body('correctAnswerText').optional().isLength({ min: 1 }).withMessage('Correct answer text must be a non-empty string if provided'),
+  body('correctAnswerText').optional({ values: 'falsy' }).trim().isLength({ min: 1 }).withMessage('Correct answer text must be a non-empty string if provided'),
   body('points').optional().isInt({ min: 1 }),
-  body('imageUrl').optional().trim().isLength({ min: 1 }).withMessage('Image URL must be a non-empty string if provided')
+  body('imageUrl').optional({ values: 'falsy' }).trim().isLength({ min: 1 }).withMessage('Image URL must be a non-empty string if provided')
 ], asyncHandler(async (req, res) => {
   console.log('Request body for question update:', JSON.stringify(req.body, null, 2));
   const errors = validationResult(req);
