@@ -34,11 +34,11 @@ async function updateProgressFromTest(testId, userId, passed, forcedProceed = fa
     if (test.lesson_id) {
       try {
         await query(
-          `INSERT INTO lesson_progress (user_id, lesson_id, status, completed_at, progress_percentage)
-           VALUES ($1, $2, 'completed', CURRENT_TIMESTAMP, 100)
+          `INSERT INTO lesson_progress (user_id, lesson_id, is_completed, completed_at, progress_percentage)
+           VALUES ($1, $2, true, CURRENT_TIMESTAMP, 100)
            ON CONFLICT (user_id, lesson_id) 
            DO UPDATE SET 
-             status = 'completed',
+             is_completed = true,
              completed_at = CURRENT_TIMESTAMP,
              progress_percentage = 100,
              updated_at = CURRENT_TIMESTAMP`,

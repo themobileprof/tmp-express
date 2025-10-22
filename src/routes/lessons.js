@@ -83,8 +83,8 @@ async function isLessonUnlocked(lessonId, userId) {
 
     // Unlock when previous lesson is completed (either by passing test or forced proceed)
     const prevCompleted = await getRow(
-      'SELECT 1 FROM lesson_progress WHERE user_id = $1 AND lesson_id = $2 AND status = $3 LIMIT 1',
-      [userId, previousLesson.id, 'completed']
+      'SELECT 1 FROM lesson_progress WHERE user_id = $1 AND lesson_id = $2 AND is_completed = true LIMIT 1',
+      [userId, previousLesson.id]
     );
 
     return !!prevCompleted;
@@ -228,7 +228,7 @@ router.get('/:id', authenticateToken, asyncHandler(async (req, res) => {
     createdAt: lesson.created_at,
     updatedAt: lesson.updated_at,
     progress: progress ? {
-      isCompleted: progress.status === 'completed',
+      isCompleted: progress.is_completed,
       progressPercentage: progress.progress_percentage,
       timeSpentMinutes: progress.time_spent_minutes,
       completedAt: progress.completed_at
@@ -384,11 +384,11 @@ router.post('/:id/complete', authenticateToken, asyncHandler(async (req, res) =>
 
   // Update or insert lesson progress
   await query(
-    `INSERT INTO lesson_progress (user_id, lesson_id, status, completed_at, progress_percentage, time_spent_minutes)
-     VALUES ($1, $2, 'completed', CURRENT_TIMESTAMP, 100, $3)
+    `INSERT INTO lesson_progress (user_id, lesson_id, is_completed, completed_at, progress_percentage, time_spent_minutes)
+     VALUES ($1, $2, true, CURRENT_TIMESTAMP, 100, $3)
      ON CONFLICT (user_id, lesson_id) 
      DO UPDATE SET 
-       status = 'completed',
+       is_completed = true,
        completed_at = CURRENT_TIMESTAMP,
        progress_percentage = 100,
        time_spent_minutes = $3,
@@ -433,7 +433,7 @@ router.get('/:id/progress', authenticateToken, asyncHandler(async (req, res) => 
 
   res.json({
     lessonId: id,
-    isCompleted: progress ? progress.status === 'completed' : false,
+    isCompleted: progress ? progress.is_completed : false,
     progressPercentage: progress ? progress.progress_percentage : 0,
     timeSpentMinutes: progress ? progress.time_spent_minutes : 0,
     completedAt: progress ? progress.completed_at : null
