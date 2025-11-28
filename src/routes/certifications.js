@@ -4,6 +4,15 @@ const { query, getRow, getRows } = require('../database/config');
 const { asyncHandler, AppError } = require('../middleware/errorHandler');
 const { authenticateToken, authorizeInstructor, authorizeOwnerOrAdmin } = require('../middleware/auth');
 const { v4: uuidv4 } = require('uuid');
+const certificateService = require('../utils/certificateService');
+
+// Admin middleware - ensure user is admin
+const requireAdmin = (req, res, next) => {
+  if (req.user.role !== 'admin') {
+    throw new AppError('Admin access required', 403, 'Forbidden');
+  }
+  next();
+};
 
 const router = express.Router();
 
@@ -101,7 +110,7 @@ router.get('/', authenticateToken, asyncHandler(async (req, res) => {
 }));
 
 // Create new certification
-router.post('/', authenticateToken, authorizeInstructor, validateCertification, asyncHandler(async (req, res) => {
+router.post('/', authenticateToken, requireAdmin, validateCertification, asyncHandler(async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
     throw new AppError('Validation failed', 400, 'Validation Error');
@@ -357,6 +366,56 @@ router.get('/:id/download', authenticateToken, asyncHandler(async (req, res) => 
 	throw new AppError('Certificate file not available', 404, 'File Not Found');
 }));
 
+// View certificate page (HTML template with print functionality)
+router.get('/:id/view', authenticateToken, asyncHandler(async (req, res) => {
+	const { id } = req.params;
+	const userId = req.user.id;
+
+	const certification = await getRow(
+		`SELECT cert.*, u.first_name, u.last_name, u.email,
+				c.title as course_title, cl.title as class_title
+		 FROM certifications cert
+		 JOIN users u ON cert.user_id = u.id
+		 LEFT JOIN courses c ON cert.course_id = c.id
+		 LEFT JOIN classes cl ON cert.class_id = cl.id
+		 WHERE cert.id = $1`,
+		[id]
+	);
+
+	if (!certification) {
+		throw new AppError('Certificate not found', 404, 'Certificate Not Found');
+	}
+
+	// Authorization: owner or admin
+	if (certification.user_id !== userId && req.user.role !== 'admin') {
+		throw new AppError('Access denied', 403, 'Access Denied');
+	}
+
+	// Read the HTML template
+	const fs = require('fs');
+	const path = require('path');
+	const templatePath = path.join(__dirname, '../../docs/certificate-template.html');
+
+	if (!fs.existsSync(templatePath)) {
+		throw new AppError('Certificate template not found', 500, 'Template Not Found');
+	}
+
+	let html = fs.readFileSync(templatePath, 'utf8');
+
+	// Replace placeholders with actual data
+	html = html.replace(/{{CERTIFICATE_IMAGE}}/g, certification.certificate_url || '');
+	html = html.replace(/{{STUDENT_NAME}}/g, `${certification.first_name} ${certification.last_name}`);
+	html = html.replace(/{{CERTIFICATION_NAME}}/g, certification.certification_name);
+	html = html.replace(/{{ISSUER}}/g, certification.issuer);
+	html = html.replace(/{{ISSUED_DATE}}/g, new Date(certification.issued_date).toLocaleDateString());
+	html = html.replace(/{{VERIFICATION_CODE}}/g, certification.verification_code);
+	html = html.replace(/{{COURSE_TITLE}}/g, certification.course_title || 'N/A');
+	html = html.replace(/{{CLASS_TITLE}}/g, certification.class_title || 'N/A');
+
+	res.setHeader('Content-Type', 'text/html');
+	res.send(html);
+}));
+
 // In-progress certification programs (student-facing)
 router.get('/progress', authenticateToken, asyncHandler(async (req, res) => {
 	const userId = req.user.id;
@@ -412,6 +471,121 @@ router.get('/progress', authenticateToken, asyncHandler(async (req, res) => {
 	}
 
 	res.json({ programs: results });
+}));
+
+// Get certificate statistics (admin only)
+router.get('/stats', authenticateToken, requireAdmin, asyncHandler(async (req, res) => {
+  const stats = await certificateService.getCertificateStats();
+  res.json({
+    success: true,
+    data: stats
+  });
+}));
+
+// Manually award certificate (admin only)
+router.post('/award', authenticateToken, requireAdmin, [
+  body('userId').isUUID().withMessage('Valid user ID is required'),
+  body('courseId').optional().isUUID().withMessage('Valid course ID is required'),
+  body('classId').optional().isUUID().withMessage('Valid class ID is required'),
+  body('certificationName').trim().isLength({ min: 1 }).withMessage('Certification name is required'),
+  body('issuer').optional().trim().isLength({ min: 1 }).withMessage('Issuer must be a non-empty string if provided'),
+  body('issuedDate').optional().isISO8601().withMessage('Valid issued date is required'),
+  body('expiryDate').optional().isISO8601().withMessage('Valid expiry date is required'),
+  body('certificateUrl').optional().isURL().withMessage('Certificate URL must be a valid URL')
+], asyncHandler(async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    throw new AppError('Validation failed', 400, 'Validation Error');
+  }
+
+  const certificateData = req.body;
+  const result = await certificateService.manuallyAwardCertificate(certificateData);
+
+  res.status(201).json({
+    success: true,
+    data: result,
+    message: 'Certificate awarded successfully'
+  });
+}));
+
+// Check certificate eligibility for a user and course/class
+router.get('/eligibility/:userId', authenticateToken, requireAdmin, asyncHandler(async (req, res) => {
+  const { userId } = req.params;
+  const { courseId, classId } = req.query;
+
+  if (!courseId && !classId) {
+    throw new AppError('Either courseId or classId must be provided', 400, 'Missing Parameter');
+  }
+
+  let result = null;
+
+  if (courseId) {
+    result = await certificateService.checkAndAwardCourseCertificate(userId, courseId);
+  } else if (classId) {
+    result = await certificateService.checkAndAwardClassCertificate(userId, classId);
+  }
+
+  if (result) {
+    res.json({
+      success: true,
+      eligible: true,
+      certificate: result,
+      message: 'Certificate awarded successfully'
+    });
+  } else {
+    res.json({
+      success: true,
+      eligible: false,
+      message: 'User is not eligible for certificate or already has one'
+    });
+  }
+}));
+
+// Bulk certificate operations (admin only)
+router.post('/bulk-award', authenticateToken, requireAdmin, [
+  body('certificates').isArray({ min: 1 }).withMessage('Certificates array is required'),
+  body('certificates.*.userId').isUUID().withMessage('Valid user ID is required for each certificate'),
+  body('certificates.*.certificationName').trim().isLength({ min: 1 }).withMessage('Certification name is required for each certificate')
+], asyncHandler(async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    throw new AppError('Validation failed', 400, 'Validation Error');
+  }
+
+  const { certificates } = req.body;
+  const results = [];
+  const processingErrors = [];
+
+  for (const certData of certificates) {
+    try {
+      const result = await certificateService.manuallyAwardCertificate(certData);
+      results.push({
+        userId: certData.userId,
+        certificationName: certData.certificationName,
+        certificateId: result.certificateId,
+        verificationCode: result.verificationCode
+      });
+    } catch (error) {
+      processingErrors.push({
+        userId: certData.userId,
+        certificationName: certData.certificationName,
+        error: error.message
+      });
+    }
+  }
+
+  res.json({
+    success: true,
+    data: {
+      awarded: results,
+      errors: processingErrors,
+      summary: {
+        total: certificates.length,
+        successful: results.length,
+        failed: processingErrors.length
+      }
+    }
+  });
 }));
 
 module.exports = router; 

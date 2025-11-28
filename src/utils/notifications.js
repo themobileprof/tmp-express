@@ -266,6 +266,21 @@ async function notifyCertificationEarned(userId, certificationId, title, credent
 }
 
 /**
+ * Create certificate awarded notification (for course/class completion)
+ */
+async function notifyCertificateAwarded(userId, title, certificateId) {
+  return createNotification({
+    userId,
+    type: NOTIFICATION_TYPES.CERTIFICATION_EARNED,
+    title: 'Certificate Awarded! 🎉',
+    message: `Congratulations! You have been awarded a certificate for completing "${title}". Check your profile to download it.`,
+    data: { certificateId, title },
+    priority: NOTIFICATION_PRIORITIES.HIGH,
+    sendEmail: true
+  });
+}
+
+/**
  * Create payment success notification
  */
 async function notifyPaymentSuccess(userId, paymentId, amount, description) {
@@ -358,6 +373,7 @@ module.exports = {
   notifyDiscussionReply,
   notifyTestResult,
   notifyCertificationEarned,
+  notifyCertificateAwarded,
   notifyPaymentSuccess,
   notifySystemMaintenance,
   markNotificationAsRead,

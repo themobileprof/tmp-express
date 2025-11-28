@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Certificate of Completion</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+            background-color: #f5f5f5;
+        }
+
+        .certificate-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .certificate-image {
+            width: 100%;
+            height: auto;
+            border-radius: 4px;
+        }
+
+        .actions {
+            margin-top: 20px;
+            text-align: center;
+        }
+
+        .print-btn {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            font-size: 16px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+
+        .print-btn:hover {
+            background: #0056b3;
+        }
+
+        .download-btn {
+            background: #28a745;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+
+        .download-btn:hover {
+            background: #218838;
+        }
+
+        .verification-info {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 4px;
+            border-left: 4px solid #007bff;
+        }
+
+        .verification-code {
+            font-family: monospace;
+            font-weight: bold;
+            color: #007bff;
+            font-size: 18px;
+        }
+
+        /* Print styles */
+        @media print {
+            body {
+                background: white;
+                padding: 0;
+            }
+
+            .certificate-container {
+                box-shadow: none;
+                border-radius: 0;
+                padding: 0;
+                max-width: none;
+            }
+
+            .actions,
+            .verification-info {
+                display: none;
+            }
+
+            .certificate-image {
+                width: 100%;
+                height: auto;
+                page-break-inside: avoid;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="certificate-container">
+        <img src="{{CERTIFICATE_IMAGE}}" alt="Certificate of Completion" class="certificate-image">
+
+        <div class="actions">
+            <button onclick="window.print()" class="print-btn">🖨️ Print Certificate</button>
+            <button onclick="downloadImage()" class="download-btn">📥 Download Image</button>
+        </div>
+
+        <div class="verification-info">
+            <h3>Certificate Details</h3>
+            <p><strong>Student:</strong> {{STUDENT_NAME}}</p>
+            <p><strong>Certification:</strong> {{CERTIFICATION_NAME}}</p>
+            <p><strong>Issuer:</strong> {{ISSUER}}</p>
+            <p><strong>Issued Date:</strong> {{ISSUED_DATE}}</p>
+            <p><strong>Course:</strong> {{COURSE_TITLE}}</p>
+            <p><strong>Class:</strong> {{CLASS_TITLE}}</p>
+            <p><strong>Verification Code:</strong> <span class="verification-code">{{VERIFICATION_CODE}}</span></p>
+            <p>This code can be used to verify the authenticity of this certificate.</p>
+        </div>
+    </div>
+
+    <script>
+        function downloadImage() {
+            const link = document.createElement('a');
+            link.href = '{{CERTIFICATE_IMAGE}}';
+            link.download = 'certificate-{{VERIFICATION_CODE}}.png';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+    </script>
+</body>
+</html>

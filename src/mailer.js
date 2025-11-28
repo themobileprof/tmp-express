@@ -451,6 +451,65 @@ const generateEmailHTML = (emailData) => {
     `;
   }
 
+  // Certificate Awarded Template
+  if (emailData.template === 'certificate-awarded') {
+    return `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Certificate Awarded - TheMobileProf</title>
+        <style>${baseStyles}</style>
+      </head>
+      <body>
+        <div class="email-container">
+          <div class="header">
+            <h1>🎉 Certificate Awarded!</h1>
+          </div>
+          <div class="content">
+            <h2>Congratulations ${emailData.context?.firstName || 'there'}!</h2>
+            <p>You have successfully completed your learning journey and earned an official certificate. This is a significant achievement that demonstrates your commitment to professional development.</p>
+            
+            <div style="background-color: #f0f9ff; border: 2px solid #3b82f6; border-radius: 8px; padding: 20px; margin: 20px 0;">
+              <h3 style="color: #1e40af; margin-top: 0;">🏆 Certificate Details</h3>
+              <p style="margin: 5px 0;"><strong>Course/Class:</strong> ${emailData.context?.data?.courseTitle || 'Your Completed Course'}</p>
+              <p style="margin: 5px 0;"><strong>Verification Code:</strong> <code style="background: #e0f2fe; padding: 2px 6px; border-radius: 3px;">${emailData.context?.data?.verificationCode}</code></p>
+              <p style="margin: 5px 0;"><strong>Issued:</strong> ${new Date().toLocaleDateString()}</p>
+            </div>
+            
+            <div style="text-align: center;">
+              <a href="${emailData.context?.data?.certificateUrl}" class="button" style="margin-right: 10px;">📄 Download Certificate</a>
+              <a href="${emailData.context?.data?.verifyUrl}" class="button" style="background: #10b981; margin-left: 10px;">✅ Verify Certificate</a>
+            </div>
+            
+            <div class="security-note">
+              <strong>🔒 Certificate Security:</strong> Your certificate includes a unique verification code that can be used to confirm its authenticity. Keep this code safe as it serves as proof of your achievement.
+            </div>
+            
+            <div class="divider"></div>
+            
+            <p><strong>What can you do with your certificate?</strong></p>
+            <ul style="padding-left: 20px;">
+              <li>Add it to your professional portfolio or resume</li>
+              <li>Share it on LinkedIn and other professional networks</li>
+              <li>Use it to demonstrate your skills to employers</li>
+              <li>Verify its authenticity using the verification code</li>
+            </ul>
+            
+            <p>We commend your dedication to learning and wish you continued success in your professional journey!</p>
+          </div>
+          <div class="footer">
+            <p><strong>TheMobileProf Learning Platform</strong></p>
+            <p>Empowering mobile developers worldwide through quality education</p>
+            <p>Questions about your certificate? Contact our support team.</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+  }
+
   // Generic Notification Template (fallback)
   if (emailData.template === 'notification') {
     return `

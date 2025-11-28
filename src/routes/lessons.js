@@ -3,6 +3,7 @@ const { body, validationResult } = require('express-validator');
 const { query, getRow, getRows } = require('../database/config');
 const { asyncHandler, AppError } = require('../middleware/errorHandler');
 const { authenticateToken, authorizeOwnerOrAdmin } = require('../middleware/auth');
+const certificateService = require('../utils/certificateService');
 
 const router = express.Router();
 
@@ -53,6 +54,16 @@ async function updateCourseProgressFromLesson(lessonId, userId) {
        WHERE user_id = $2 AND course_id = $3`,
       [totalProgress, userId, lesson.course_id]
     );
+
+    // Check for certificate awarding if course is now completed
+    if (totalProgress >= 100) {
+      try {
+        await certificateService.checkAndAwardCourseCertificate(userId, lesson.course_id);
+      } catch (error) {
+        console.error('Error checking certificate eligibility:', error);
+        // Don't throw error to prevent lesson completion from failing
+      }
+    }
   } catch (error) {
     console.error('Error updating course progress from lesson:', error);
     // Don't throw error to prevent lesson completion from failing
