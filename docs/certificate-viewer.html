@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Certificate of Completion</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: 'Arial', sans-serif;
+            background-color: #f5f5f5;
+            color: #333;
+        }
+
+        .certificate-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 40px;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            position: relative;
+        }
+
+        .certificate-canvas {
+            width: 100%;
+            height: auto;
+            border-radius: 4px;
+            display: block;
+            margin: 0 auto;
+        }
+
+        .actions {
+            margin-top: 30px;
+            text-align: center;
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            border: none;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .print-btn {
+            background: #007bff;
+            color: white;
+        }
+
+        .print-btn:hover {
+            background: #0056b3;
+            transform: translateY(-2px);
+        }
+
+        .download-btn {
+            background: #28a745;
+            color: white;
+        }
+
+        .download-btn:hover {
+            background: #218838;
+            transform: translateY(-2px);
+        }
+
+        .share-btn {
+            background: #6f42c1;
+            color: white;
+        }
+
+        .share-btn:hover {
+            background: #5a359a;
+            transform: translateY(-2px);
+        }
+
+        .verification-info {
+            margin-top: 30px;
+            padding: 20px;
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            border-radius: 8px;
+            border-left: 4px solid #007bff;
+        }
+
+        .verification-code {
+            font-family: 'Courier New', monospace;
+            font-weight: bold;
+            color: #007bff;
+            font-size: 18px;
+            background: rgba(0, 123, 255, 0.1);
+            padding: 4px 8px;
+            border-radius: 4px;
+            letter-spacing: 1px;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+
+        .error {
+            text-align: center;
+            padding: 40px;
+            color: #dc3545;
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            border-radius: 8px;
+        }
+
+        /* Print styles */
+        @media print {
+            body {
+                background: white !important;
+                padding: 0 !important;
+            }
+
+            .certificate-container {
+                box-shadow: none !important;
+                border-radius: 0 !important;
+                padding: 20px !important;
+                max-width: none !important;
+                margin: 0 !important;
+            }
+
+            .actions,
+            .verification-info {
+                display: none !important;
+            }
+
+            .certificate-canvas {
+                width: 100% !important;
+                height: auto !important;
+                page-break-inside: avoid !important;
+                max-height: none !important;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .certificate-container {
+                padding: 20px;
+            }
+
+            .actions {
+                flex-direction: column;
+                align-items: center;
+            }
+
+            .btn {
+                width: 100%;
+                max-width: 300px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="loading" class="loading">
+        <h2>Generating Certificate...</h2>
+        <p>Please wait while we create your certificate.</p>
+    </div>
+
+    <div id="error" class="error" style="display: none;">
+        <h2>Certificate Generation Failed</h2>
+        <p id="error-message">Unable to generate certificate. Please try again.</p>
+    </div>
+
+    <div id="certificate-content" style="display: none;">
+        <div class="certificate-container">
+            <canvas id="certificate-canvas" class="certificate-canvas"></canvas>
+
+            <div class="actions">
+                <button onclick="window.print()" class="btn print-btn">
+                    🖨️ Print Certificate
+                </button>
+                <button onclick="downloadCertificate()" class="btn download-btn">
+                    📥 Download PNG
+                </button>
+                <button onclick="shareCertificate()" class="btn share-btn">
+                    📤 Share Certificate
+                </button>
+            </div>
+
+            <div class="verification-info">
+                <h3>Certificate Details</h3>
+                <p><strong>Student:</strong> <span id="student-name"></span></p>
+                <p><strong>Certification:</strong> <span id="certification-name"></span></p>
+                <p><strong>Issuer:</strong> <span id="issuer"></span></p>
+                <p><strong>Issued Date:</strong> <span id="issued-date"></span></p>
+                <p><strong>Course:</strong> <span id="course-title"></span></p>
+                <p><strong>Class:</strong> <span id="class-title"></span></p>
+                <p><strong>Verification Code:</strong> <span id="verification-code" class="verification-code"></span></p>
+                <p>This code can be used to verify the authenticity of this certificate at <span id="verification-url"></span></p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Get certificate data from URL parameters or API
+        async function loadCertificate() {
+            try {
+                // Get certificate ID from URL path (e.g., /api/certifications/123/view -> 123)
+                const pathParts = window.location.pathname.split('/');
+                const certId = pathParts[pathParts.length - 2]; // Get the ID before '/view'
+
+                if (!certId) {
+                    throw new Error('Certificate ID not found in URL');
+                }
+
+                // Fetch certificate data from API
+                const response = await fetch(`/api/certifications/${certId}`);
+                if (!response.ok) {
+                    throw new Error('Certificate not found');
+                }
+
+                const certificateData = await response.json();
+
+                // Generate and display certificate
+                await generateCertificate(certificateData);
+
+            } catch (error) {
+                console.error('Error loading certificate:', error);
+                showError(error.message);
+            }
+        }
+
+        async function generateCertificate(data) {
+            const canvas = document.getElementById('certificate-canvas');
+            const ctx = canvas.getContext('2d');
+
+            // Set canvas size (A4 aspect ratio: 210mm x 297mm at 96 DPI)
+            const canvasWidth = 794;  // ~210mm at 96 DPI
+            const canvasHeight = 1123; // ~297mm at 96 DPI
+
+            canvas.width = canvasWidth;
+            canvas.height = canvasHeight;
+
+            // Draw background
+            await drawCertificateBackground(ctx, canvas, data);
+
+            // Draw certificate content
+            drawCertificateContent(ctx, canvas, data);
+
+            // Update certificate details
+            updateCertificateDetails(data);
+
+            // Show certificate
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('certificate-content').style.display = 'block';
+        }
+
+        async function drawCertificateBackground(ctx, canvas, data) {
+            const { width, height } = canvas;
+
+            // White background
+            ctx.fillStyle = '#FFFFFF';
+            ctx.fillRect(0, 0, width, height);
+
+            // Try to load template image if available
+            if (data.data.templateImageUrl) {
+                try {
+                    const img = new Image();
+                    img.crossOrigin = 'anonymous';
+                    await new Promise((resolve, reject) => {
+                        img.onload = resolve;
+                        img.onerror = reject;
+                        img.src = data.data.templateImageUrl;
+                    });
+                    ctx.drawImage(img, 0, 0, width, height);
+                } catch (error) {
+                    console.warn('Could not load template image, using default design');
+                    drawDefaultBackground(ctx, canvas);
+                }
+            } else {
+                drawDefaultBackground(ctx, canvas);
+            }
+        }
+
+        function drawDefaultBackground(ctx, canvas) {
+            const { width, height } = canvas;
+
+            // Decorative border
+            ctx.strokeStyle = '#2D3748';
+            ctx.lineWidth = 6;
+            ctx.strokeRect(30, 30, width - 60, height - 60);
+
+            // Inner border
+            ctx.strokeStyle = '#4A5568';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(45, 45, width - 90, height - 90);
+
+            // Background gradient
+            const gradient = ctx.createLinearGradient(0, 0, width, height);
+            gradient.addColorStop(0, 'rgba(102, 126, 234, 0.05)');
+            gradient.addColorStop(0.5, 'rgba(118, 75, 162, 0.08)');
+            gradient.addColorStop(1, 'rgba(102, 126, 234, 0.05)');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(45, 45, width - 90, height - 90);
+        }
+
+        function drawCertificateContent(ctx, canvas, data) {
+            const { width, height } = canvas;
+
+            // Set text properties
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+
+            // Title
+            ctx.fillStyle = '#1a365d';
+            ctx.font = 'bold 42px "Times New Roman", serif';
+            ctx.fillText('CERTIFICATE OF COMPLETION', width / 2, height * 0.15);
+
+            // Subtitle
+            ctx.fillStyle = '#4a5568';
+            ctx.font = '24px "Times New Roman", serif';
+            ctx.fillText('This certifies that', width / 2, height * 0.25);
+
+            // Student name (large and prominent)
+            ctx.fillStyle = '#2d3748';
+            ctx.font = 'bold 48px "Times New Roman", serif';
+            ctx.fillText(data.data.userName, width / 2, height * 0.35);
+
+            // Completion text
+            ctx.fillStyle = '#4a5568';
+            ctx.font = '24px "Times New Roman", serif';
+            ctx.fillText('has successfully completed the course', width / 2, height * 0.45);
+
+            // Course title
+            ctx.fillStyle = '#2d3748';
+            ctx.font = 'bold 36px "Times New Roman", serif';
+            const maxWidth = width * 0.8;
+            const words = data.data.courseTitle.split(' ');
+            let lines = [];
+            let currentLine = '';
+
+            for (let word of words) {
+                const testLine = currentLine + (currentLine ? ' ' : '') + word;
+                const metrics = ctx.measureText(testLine);
+                if (metrics.width > maxWidth && currentLine) {
+                    lines.push(currentLine);
+                    currentLine = word;
+                } else {
+                    currentLine = testLine;
+                }
+            }
+            lines.push(currentLine);
+
+            lines.forEach((line, index) => {
+                ctx.fillText(line, width / 2, height * 0.55 + (index * 45));
+            });
+
+            // Completion date
+            ctx.fillStyle = '#4a5568';
+            ctx.font = '20px "Times New Roman", serif';
+            ctx.fillText(`Completed on ${data.data.completionDate}`, width / 2, height * 0.75);
+
+            // Verification code
+            ctx.fillStyle = '#718096';
+            ctx.font = '16px monospace';
+            ctx.fillText(`Verification: ${data.data.verificationCode}`, width / 2, height * 0.85);
+        }
+
+        function updateCertificateDetails(data) {
+            document.getElementById('student-name').textContent = data.data.userName;
+            document.getElementById('certification-name').textContent = 'Course Completion';
+            document.getElementById('issuer').textContent = 'TheMobileProf Learning Platform';
+            document.getElementById('issued-date').textContent = data.data.completionDate;
+            document.getElementById('course-title').textContent = data.data.courseTitle;
+            document.getElementById('class-title').textContent = data.data.classTitle || 'N/A';
+            document.getElementById('verification-code').textContent = data.data.verificationCode;
+            document.getElementById('verification-url').textContent = window.location.origin + data.verificationUrl;
+        }
+
+        function downloadCertificate() {
+            const canvas = document.getElementById('certificate-canvas');
+            const link = document.createElement('a');
+            link.download = `certificate-${Date.now()}.png`;
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+        }
+
+        function shareCertificate() {
+            const canvas = document.getElementById('certificate-canvas');
+
+            if (navigator.share && navigator.canShare) {
+                canvas.toBlob(async (blob) => {
+                    const file = new File([blob], 'certificate.png', { type: 'image/png' });
+                    try {
+                        await navigator.share({
+                            title: 'My Certificate',
+                            text: 'Check out my course completion certificate!',
+                            files: [file]
+                        });
+                    } catch (error) {
+                        console.log('Share cancelled or failed:', error);
+                        // Fallback to download
+                        downloadCertificate();
+                    }
+                });
+            } else {
+                // Fallback for browsers that don't support Web Share API
+                downloadCertificate();
+            }
+        }
+
+        function showError(message) {
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('error').style.display = 'block';
+            document.getElementById('error-message').textContent = message;
+        }
+
+        // Load certificate when page loads
+        window.addEventListener('load', loadCertificate);
+    </script>
+</body>
+</html>

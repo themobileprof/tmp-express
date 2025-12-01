@@ -13,11 +13,7 @@ const loginThrottling = slowDown({
   },
   skipSuccessfulRequests: true, // Don't slow down successful logins
   skipFailedRequests: false, // Slow down failed attempts
-  keyGenerator: (req) => {
-    // Use IP + email combination for throttling
-    const email = req.body?.email || req.params?.email || 'unknown';
-    return `${req.ip}-${email}`;
-  }
+  // Use the built-in key generator that handles IPv6 properly
 });
 
 // CAPTCHA middleware - require CAPTCHA after failed attempts
@@ -71,8 +67,8 @@ const requireCaptchaAfterFailures = (maxFailures = 3) => {
   };
 };
 
-// Generate CAPTCHA
-const generateCaptcha = (req, res) => {
+// Generate CAPTCHA and return data
+const generateCaptcha = () => {
   const captcha = svgCaptcha.create({
     size: 6,
     noise: 3,
@@ -80,12 +76,56 @@ const generateCaptcha = (req, res) => {
     background: '#f0f0f0'
   });
 
-  // Store CAPTCHA text in session (in production, use Redis or similar)
-  if (!req.session) req.session = {};
-  req.session.captchaText = captcha.text;
+  const id = Date.now().toString() + Math.random().toString(36).substr(2, 9);
+  
+  // Store CAPTCHA in memory (in production, use Redis)
+  if (!global.captchaStore) global.captchaStore = new Map();
+  global.captchaStore.set(id, {
+    text: captcha.text,
+    expires: Date.now() + 5 * 60 * 1000 // 5 minutes
+  });
 
-  res.type('svg');
-  res.status(200).send(captcha.data);
+  return {
+    id,
+    data: captcha.data
+  };
+};
+
+// Validate CAPTCHA
+const validateCaptcha = (id, text) => {
+  if (!global.captchaStore) return false;
+  
+  const captcha = global.captchaStore.get(id);
+  if (!captcha) return false;
+  
+  // Check if expired
+  if (Date.now() > captcha.expires) {
+    global.captchaStore.delete(id);
+    return false;
+  }
+  
+  // Check text
+  const isValid = captcha.text.toLowerCase() === text.toLowerCase();
+  
+  // Clean up used CAPTCHA
+  if (isValid) {
+    global.captchaStore.delete(id);
+  }
+  
+  return isValid;
+};
+
+// Track failed login attempts
+const trackFailedLogin = async (email, success, ip, userAgent) => {
+  try {
+    await query(
+      `INSERT INTO login_attempts (email, success, ip_address, user_agent, attempted_at)
+       VALUES ($1, $2, $3, $4, NOW())`,
+      [email, success, ip, userAgent]
+    );
+  } catch (error) {
+    console.error('Failed to track login attempt:', error);
+  }
 };
 
 // Log login attempts
@@ -149,6 +189,8 @@ module.exports = {
   loginThrottling,
   requireCaptchaAfterFailures,
   generateCaptcha,
+  validateCaptcha,
+  trackFailedLogin,
   logLoginAttempt,
   createAuthRateLimiter
 };

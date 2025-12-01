@@ -206,7 +206,7 @@
     tags:
       - Certifications
     summary: Get certification by ID
-    description: Retrieve a specific certification by its ID
+    description: Retrieve a specific certification by its ID. Returns certificate data in format optimized for client-side rendering.
     security:
       - BearerAuth: []
     parameters:
@@ -228,39 +228,69 @@
                 id:
                   type: string
                   format: uuid
+                type:
+                  type: string
+                  enum: [course_completion, class_completion]
+                  description: Type of certificate
+                data:
+                  type: object
+                  properties:
+                    userName:
+                      type: string
+                      description: Full name of the certificate recipient
+                    courseTitle:
+                      type: string
+                      description: Title of the completed course (if applicable)
+                    classTitle:
+                      type: string
+                      description: Title of the completed class (if applicable)
+                    completionDate:
+                      type: string
+                      description: Formatted completion date (e.g., "December 1, 2025")
+                    verificationCode:
+                      type: string
+                      description: Unique verification code for certificate authenticity
+                    templateImageUrl:
+                      type: string
+                      nullable: true
+                      description: URL to certificate template image (optional)
+                  required:
+                    - userName
+                    - completionDate
+                    - verificationCode
+                verificationUrl:
+                  type: string
+                  description: URL for certificate verification
+                issuedAt:
+                  type: string
+                  format: date-time
+                  description: ISO timestamp when certificate was issued
+                # Additional metadata for compatibility
                 userId:
                   type: string
                   format: uuid
-                userName:
-                  type: string
                 userEmail:
                   type: string
+                  format: email
                 certificationName:
                   type: string
                 issuer:
                   type: string
-                issuedDate:
-                  type: string
-                  format: date-time
                 expiryDate:
                   type: string
                   format: date-time
-                certificateUrl:
-                  type: string
-                verificationCode:
-                  type: string
+                  nullable: true
                 status:
                   type: string
+                  enum: [issued, expired, revoked]
                 courseId:
                   type: string
                   format: uuid
-                courseTitle:
-                  type: string
+                  nullable: true
                 classId:
                   type: string
                   format: uuid
-                classTitle:
-                  type: string
+                  nullable: true
                 createdAt:
                   type: string
                   format: date-time
@@ -507,7 +537,9 @@
     tags:
       - Certifications
     summary: Download certificate file or return signed URL
-    description: Get a download link or signed URL for a specific certificate
+    description: |
+      Get a download link or signed URL for a specific certificate. Note: For client-side generated
+      certificates, this may return the template image URL if available.
     security:
       - BearerAuth: []
     parameters:
@@ -528,7 +560,39 @@
               properties:
                 url:
                   type: string
-                  description: Certificate URL
+                  description: Certificate URL (may be template image or download link)
+      '401':
+        $ref: '../responses/Unauthorized.yaml'
+      '403':
+        $ref: '../responses/Forbidden.yaml'
+      '404':
+        $ref: '../responses/NotFound.yaml'
+
+# View Certificate (HTML Viewer)
+/{id}/view:
+  get:
+    tags:
+      - Certifications
+    summary: View certificate in HTML viewer
+    description: Returns an HTML page with client-side certificate rendering using HTML5 Canvas. The certificate is generated dynamically in the browser.
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Certification ID
+        schema:
+          type: string
+          format: uuid
+    responses:
+      '200':
+        description: HTML certificate viewer page
+        content:
+          text/html:
+            schema:
+              type: string
+              description: HTML page containing the certificate viewer with embedded JavaScript for client-side rendering
       '401':
         $ref: '../responses/Unauthorized.yaml'
       '403':

@@ -8,6 +8,7 @@ const { OAuth2Client } = require('google-auth-library');
 const { authenticateToken } = require('../middleware/auth');
 const crypto = require('crypto');
 const { sendEmail } = require('../mailer');
+const { generateCaptcha, validateCaptcha, trackFailedLogin } = require('../middleware/security');
 
 const router = express.Router();
 
@@ -27,7 +28,9 @@ const validateRegistration = [
 const validateLogin = [
   // Preserve Gmail dots during normalization so we match stored emails that include dots
   body('email').isEmail().normalizeEmail({ gmail_remove_dots: false, gmail_convert_googlemaildotcom: false }).withMessage('Please provide a valid email'),
-  body('password').notEmpty().withMessage('Password is required')
+  body('password').notEmpty().withMessage('Password is required'),
+  body('captchaText').optional().isLength({ min: 1 }).withMessage('CAPTCHA text is required'),
+  body('captchaId').optional().isLength({ min: 1 }).withMessage('CAPTCHA ID is required')
 ];
 
 const validateGoogleAuth = [
@@ -117,7 +120,40 @@ router.post('/login', validateLogin, asyncHandler(async (req, res) => {
     throw new AppError('Validation failed', 400, 'Validation Error');
   }
 
-  const { email, password } = req.body;
+  const { email, password, captchaText, captchaId } = req.body;
+  const clientIP = req.ip || req.connection.remoteAddress || req.socket.remoteAddress || 'unknown';
+
+  // Check for recent failed login attempts (last 15 minutes)
+  const recentFailedAttempts = await query(
+    `SELECT COUNT(*) as count FROM login_attempts 
+     WHERE email = $1 AND success = false AND attempted_at > NOW() - INTERVAL '15 minutes'`,
+    [email]
+  );
+
+  const failedCount = parseInt(recentFailedAttempts.rows[0].count);
+
+  // Require CAPTCHA after 3 failed attempts
+  if (failedCount >= 3) {
+    if (!captchaText || !captchaId) {
+      // Generate CAPTCHA for the user
+      const captcha = generateCaptcha();
+      return res.status(429).json({
+        error: 'CAPTCHA_REQUIRED',
+        message: 'Too many failed login attempts. Please solve the CAPTCHA.',
+        captcha: {
+          id: captcha.id,
+          data: captcha.data // This is the SVG data URL
+        }
+      });
+    }
+
+    // Validate CAPTCHA
+    const isValidCaptcha = validateCaptcha(captchaId, captchaText);
+    if (!isValidCaptcha) {
+      await trackFailedLogin(email, false, clientIP, req.get('User-Agent'));
+      throw new AppError('Invalid CAPTCHA', 400, 'Invalid CAPTCHA');
+    }
+  }
 
   // Find user
   const user = await getRow(
@@ -126,19 +162,25 @@ router.post('/login', validateLogin, asyncHandler(async (req, res) => {
   );
 
   if (!user || !user.is_active) {
+    await trackFailedLogin(email, false, clientIP, req.get('User-Agent'));
     throw new AppError('Invalid email or password', 401, 'Authentication Failed');
   }
 
   // Check if user is using Google OAuth
   if (user.auth_provider === 'google') {
+    await trackFailedLogin(email, false, clientIP, req.get('User-Agent'));
     throw new AppError('Please use Google login for this account', 401, 'Authentication Failed');
   }
 
   // Check password
   const isValidPassword = await bcrypt.compare(password, user.password_hash);
   if (!isValidPassword) {
+    await trackFailedLogin(email, false, clientIP, req.get('User-Agent'));
     throw new AppError('Invalid email or password', 401, 'Authentication Failed');
   }
+
+  // Track successful login
+  await trackFailedLogin(email, true, clientIP, req.get('User-Agent'));
 
   // Enforce email verification if required by system setting
   const { getSystemSetting } = require('../utils/systemSettings');
@@ -471,14 +513,49 @@ router.post('/change-password', [
 // Admin login (separate from regular user login)
 router.post('/admin/login', [
   body('email').isEmail().normalizeEmail({ gmail_remove_dots: false, gmail_convert_googlemaildotcom: false }).withMessage('Please provide a valid email'),
-  body('password').notEmpty().withMessage('Password is required')
+  body('password').notEmpty().withMessage('Password is required'),
+  body('captchaText').optional().isLength({ min: 1 }).withMessage('CAPTCHA text is required'),
+  body('captchaId').optional().isLength({ min: 1 }).withMessage('CAPTCHA ID is required')
 ], asyncHandler(async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
     throw new AppError('Validation failed', 400, 'Validation Error');
   }
 
-  const { email, password } = req.body;
+  const { email, password, captchaText, captchaId } = req.body;
+  const clientIP = req.ip || req.connection.remoteAddress || req.socket.remoteAddress || 'unknown';
+
+  // Check for recent failed login attempts (last 15 minutes)
+  const recentFailedAttempts = await query(
+    `SELECT COUNT(*) as count FROM login_attempts 
+     WHERE email = $1 AND success = false AND attempted_at > NOW() - INTERVAL '15 minutes'`,
+    [email]
+  );
+
+  const failedCount = parseInt(recentFailedAttempts.rows[0].count);
+
+  // Require CAPTCHA after 3 failed attempts
+  if (failedCount >= 3) {
+    if (!captchaText || !captchaId) {
+      // Generate CAPTCHA for the user
+      const captcha = generateCaptcha();
+      return res.status(429).json({
+        error: 'CAPTCHA_REQUIRED',
+        message: 'Too many failed login attempts. Please solve the CAPTCHA.',
+        captcha: {
+          id: captcha.id,
+          data: captcha.data // This is the SVG data URL
+        }
+      });
+    }
+
+    // Validate CAPTCHA
+    const isValidCaptcha = validateCaptcha(captchaId, captchaText);
+    if (!isValidCaptcha) {
+      await trackFailedLogin(email, false, clientIP, req.get('User-Agent'));
+      throw new AppError('Invalid CAPTCHA', 400, 'Invalid CAPTCHA');
+    }
+  }
 
   // Find admin user
   const user = await getRow(
@@ -487,19 +564,25 @@ router.post('/admin/login', [
   );
 
   if (!user || !user.is_active) {
+    await trackFailedLogin(email, false, clientIP, req.get('User-Agent'));
     throw new AppError('Invalid admin credentials', 401, 'Authentication Failed');
   }
 
   // Check if user is using Google OAuth
   if (user.auth_provider === 'google') {
+    await trackFailedLogin(email, false, clientIP, req.get('User-Agent'));
     throw new AppError('Please use Google login for this admin account', 401, 'Authentication Failed');
   }
 
   // Check password
   const isValidPassword = await bcrypt.compare(password, user.password_hash);
   if (!isValidPassword) {
+    await trackFailedLogin(email, false, clientIP, req.get('User-Agent'));
     throw new AppError('Invalid admin credentials', 401, 'Authentication Failed');
   }
+
+  // Track successful login
+  await trackFailedLogin(email, true, clientIP, req.get('User-Agent'));
 
   // Generate admin token
   const token = generateToken(user.id, user.email, user.role);

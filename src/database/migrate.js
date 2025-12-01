@@ -708,20 +708,15 @@ const createTables = async () => {
       )
     `);
 
-    // Create Email Logs table
+    // Create Login Attempts table for security
     await query(`
-      CREATE TABLE IF NOT EXISTS email_logs (
+      CREATE TABLE IF NOT EXISTS login_attempts (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        email_id VARCHAR(50) NOT NULL,
-        recipient_email VARCHAR(255) NOT NULL,
-        subject VARCHAR(255) NOT NULL,
-        template VARCHAR(100),
-        message_id VARCHAR(255),
-        status VARCHAR(20) DEFAULT 'sent',
-        error_message TEXT,
-        duration_ms INTEGER,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        email VARCHAR(255) NOT NULL,
+        success BOOLEAN NOT NULL,
+        ip_address INET NOT NULL,
+        user_agent TEXT,
+        attempted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
 

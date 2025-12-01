@@ -191,22 +191,37 @@ router.get('/:id', authenticateToken, asyncHandler(async (req, res) => {
     throw new AppError('Certification not found', 404, 'Certification Not Found');
   }
 
+  // Format completion date
+  const completionDateObj = new Date(certification.issued_date);
+  const formattedDate = completionDateObj.toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
+  });
+
+  // Return data in format expected by certificate-viewer.html
   res.json({
     id: certification.id,
+    type: 'course_completion',
+    data: {
+      userName: `${certification.first_name} ${certification.last_name}`,
+      courseTitle: certification.course_title || 'Course',
+      classTitle: certification.class_title,
+      completionDate: formattedDate,
+      verificationCode: certification.verification_code,
+      templateImageUrl: certification.certificate_url // May be null for generated certificates
+    },
+    verificationUrl: `/api/certifications/verify/${certification.verification_code}`,
+    issuedAt: certification.issued_date,
+    // Include additional metadata for compatibility
     userId: certification.user_id,
-    userName: `${certification.first_name} ${certification.last_name}`,
     userEmail: certification.email,
     certificationName: certification.certification_name,
     issuer: certification.issuer,
-    issuedDate: certification.issued_date,
     expiryDate: certification.expiry_date,
-    certificateUrl: certification.certificate_url,
-    verificationCode: certification.verification_code,
     status: certification.status,
     courseId: certification.course_id,
-    courseTitle: certification.course_title,
     classId: certification.class_id,
-    classTitle: certification.class_title,
     createdAt: certification.created_at
   });
 }));
@@ -366,7 +381,7 @@ router.get('/:id/download', authenticateToken, asyncHandler(async (req, res) => 
 	throw new AppError('Certificate file not available', 404, 'File Not Found');
 }));
 
-// View certificate page (HTML template with print functionality)
+// View certificate page (client-side HTML5 Canvas rendering)
 router.get('/:id/view', authenticateToken, asyncHandler(async (req, res) => {
 	const { id } = req.params;
 	const userId = req.user.id;
@@ -394,23 +409,13 @@ router.get('/:id/view', authenticateToken, asyncHandler(async (req, res) => {
 	// Read the HTML template
 	const fs = require('fs');
 	const path = require('path');
-	const templatePath = path.join(__dirname, '../../docs/certificate-template.html');
+	const templatePath = path.join(__dirname, '../../docs/certificate-viewer.html');
 
 	if (!fs.existsSync(templatePath)) {
-		throw new AppError('Certificate template not found', 500, 'Template Not Found');
+		throw new AppError('Certificate viewer not found', 500, 'Viewer Not Found');
 	}
 
 	let html = fs.readFileSync(templatePath, 'utf8');
-
-	// Replace placeholders with actual data
-	html = html.replace(/{{CERTIFICATE_IMAGE}}/g, certification.certificate_url || '');
-	html = html.replace(/{{STUDENT_NAME}}/g, `${certification.first_name} ${certification.last_name}`);
-	html = html.replace(/{{CERTIFICATION_NAME}}/g, certification.certification_name);
-	html = html.replace(/{{ISSUER}}/g, certification.issuer);
-	html = html.replace(/{{ISSUED_DATE}}/g, new Date(certification.issued_date).toLocaleDateString());
-	html = html.replace(/{{VERIFICATION_CODE}}/g, certification.verification_code);
-	html = html.replace(/{{COURSE_TITLE}}/g, certification.course_title || 'N/A');
-	html = html.replace(/{{CLASS_TITLE}}/g, certification.class_title || 'N/A');
 
 	res.setHeader('Content-Type', 'text/html');
 	res.send(html);
