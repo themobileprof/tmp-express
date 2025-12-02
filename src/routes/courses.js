@@ -1067,4 +1067,97 @@ router.get('/:id/discussions', asyncHandler(async (req, res) => {
   });
 }));
 
+// Get user's test attempts for all tests in a course
+router.get('/:id/test-attempts', authenticateToken, asyncHandler(async (req, res) => {
+  const { id: courseId } = req.params;
+  const userId = req.user.id;
+
+  // Verify course exists
+  const course = await getRow('SELECT * FROM courses WHERE id = $1', [courseId]);
+  if (!course) {
+    throw new AppError('Course not found', 404, 'Course Not Found');
+  }
+
+  // Get all test IDs for this course (course-level and lesson-level tests)
+  const testRows = await getRows(
+    `SELECT t.id, t.title, t.passing_score, t.max_attempts, t.course_id, t.lesson_id
+     FROM tests t
+     LEFT JOIN lessons l ON t.lesson_id = l.id
+     WHERE t.course_id = $1 OR l.course_id = $1`,
+    [courseId]
+  );
+
+  if (testRows.length === 0) {
+    return res.json({
+      courseId: courseId,
+      testAttempts: {}
+    });
+  }
+
+  const testIds = testRows.map(t => t.id);
+  const testInfo = Object.fromEntries(testRows.map(t => [t.id, {
+    title: t.title,
+    passingScore: t.passing_score,
+    maxAttempts: t.max_attempts,
+    courseId: t.course_id,
+    lessonId: t.lesson_id
+  }]));
+
+  // Get all attempts for these tests by the user
+  const attempts = await getRows(
+    `SELECT ta.*, t.title as test_title, t.passing_score, t.max_attempts
+     FROM test_attempts ta
+     JOIN tests t ON ta.test_id = t.id
+     WHERE ta.test_id = ANY($1) AND ta.user_id = $2
+     ORDER BY ta.test_id, ta.started_at DESC`,
+    [testIds, userId]
+  );
+
+  // Group attempts by test_id
+  const testAttempts = {};
+  testRows.forEach(test => {
+    testAttempts[test.id] = {
+      test: {
+        id: test.id,
+        title: test.title,
+        passingScore: test.passing_score,
+        maxAttempts: test.max_attempts,
+        courseId: test.course_id,
+        lessonId: test.lesson_id
+      },
+      attempts: [],
+      currentAttempts: 0,
+      canStartNew: false
+    };
+  });
+
+  attempts.forEach(ta => {
+    const testId = ta.test_id;
+    testAttempts[testId].attempts.push({
+      id: ta.id,
+      attemptNumber: ta.attempt_number,
+      score: ta.score,
+      totalQuestions: ta.total_questions,
+      correctAnswers: ta.correct_answers,
+      status: ta.status,
+      startedAt: ta.started_at,
+      completedAt: ta.completed_at,
+      timeTakenMinutes: ta.time_taken_minutes,
+      passed: ta.score ? ta.score >= ta.passing_score : null
+    });
+    testAttempts[testId].currentAttempts = testAttempts[testId].attempts.length;
+  });
+
+  // Calculate canStartNew for each test
+  Object.values(testAttempts).forEach(testData => {
+    testData.canStartNew = testData.currentAttempts < testData.test.maxAttempts;
+  });
+
+  res.json({
+    courseId: courseId,
+    courseTitle: course.title,
+    testAttempts: testAttempts
+  });
+}));
+
 module.exports = router; 
