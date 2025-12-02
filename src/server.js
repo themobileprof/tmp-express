@@ -99,7 +99,8 @@ app.use(cors({
       'http://localhost:3000',
       'http://localhost:8080',
       'https://lms.themobileprof.com',
-      'https://api.themobileprof.com'
+      'https://api.themobileprof.com',
+      'https://themobileprof.com'
     ];
 
     // In development, allow localhost origins
@@ -112,6 +113,11 @@ app.use(cors({
       return callback(null, true);
     }
 
+    // Allow any subdomain of themobileprof.com
+    if (origin && origin.includes('themobileprof.com')) {
+      return callback(null, true);
+    }
+
     // Allow if FRONTEND_URL environment variable is set and matches
     if (process.env.FRONTEND_URL && process.env.FRONTEND_URL === origin) {
       return callback(null, true);
@@ -119,6 +125,11 @@ app.use(cors({
     
     // Allow all origins in development or if CORS_ORIGIN is set to '*'
     if (process.env.NODE_ENV !== 'production' || process.env.CORS_ORIGIN === '*') {
+      return callback(null, true);
+    }
+
+    // For production, also allow common development origins
+    if (process.env.NODE_ENV === 'production' && origin.match(/^https?:\/\/localhost(:\d+)?$/)) {
       return callback(null, true);
     }
 
@@ -275,6 +286,14 @@ app.use((req, res, next) => {
       userId: req.user?.id
     });
   }
+  
+  // Add cache control headers to prevent caching of API responses
+  if (req.url.startsWith('/api/')) {
+    res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
+  }
+  
   next();
 });
 
