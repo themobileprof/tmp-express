@@ -991,7 +991,22 @@
     tags:
       - Courses
     summary: Get all lessons for a course with their unlock and completion status
-    description: Retrieve all lessons for a course with unlock status based on test completion
+    description: |
+      Retrieve all lessons for a course with unlock status based on sequential progression.
+      
+      **Unlock Logic:**
+      - First lesson is always unlocked
+      - Subsequent lessons unlock when the previous lesson's test is passed OR force progression occurs
+      
+      **Completion:**
+      - Lessons are marked complete (`isCompleted=true`) ONLY when:
+        1. User passes the lesson test (score >= passing score), OR
+        2. User is force-progressed after exhausting all test attempts
+      - Manual lesson completion is not supported - tests must be passed
+      
+      **Performance:**
+      - Optimized single query with no N+1 problems
+      - Uses `is_completed` as single source of truth for lesson completion
     security:
       - BearerAuth: []
     parameters:
@@ -1028,24 +1043,27 @@
                         type: integer
                       isUnlocked:
                         type: boolean
-                        description: Whether the lesson is unlocked
+                        description: Whether the lesson is unlocked (based on previous lesson completion)
                       isCompleted:
                         type: boolean
-                        description: Whether the lesson is completed
+                        description: Whether the lesson is completed (test passed or force-progressed)
                       testPassed:
                         type: boolean
-                        description: Whether the test was passed
+                        description: Same as isCompleted - single source of truth for completion
                       progress:
                         type: integer
                         minimum: 0
                         maximum: 100
+                        description: Progress percentage (tracking time spent, not completion)
                       timeSpentMinutes:
                         type: integer
                         minimum: 0
+                        description: Time spent on the lesson
                       completedAt:
                         type: string
                         format: date-time
                         nullable: true
+                        description: When the lesson was completed (test passed/force-progressed)
                       test:
                         type: object
                         nullable: true
@@ -1092,7 +1110,23 @@
     tags:
       - Courses
     summary: Get detailed progression status for a course
-    description: Retrieve detailed progression showing which lessons are locked/unlocked and overall progress
+    description: |
+      Retrieve detailed progression showing which lessons are locked/unlocked and overall progress.
+      
+      **Unlock Logic:**
+      - First lesson is always unlocked
+      - Subsequent lessons unlock when the previous lesson's test is passed OR force progression occurs
+      
+      **Completion:**
+      - Lessons are marked complete (`isCompleted=true`) ONLY when:
+        1. User passes the lesson test (score >= passing score), OR
+        2. User is force-progressed after exhausting all test attempts
+      - `testPassed` and `isCompleted` are equivalent - single source of truth
+      
+      **Performance:**
+      - Optimized single query with no N+1 problems
+      - Eliminates 20+ subqueries for courses with many lessons
+      - Expected response time: <500ms (previously ~7 seconds)
     security:
       - BearerAuth: []
     parameters:
@@ -1103,6 +1137,19 @@
         schema:
           type: string
           format: uuid
+      - name: limit
+        in: query
+        description: Limit number of lessons returned (for pagination)
+        schema:
+          type: integer
+          minimum: 1
+      - name: includeTests
+        in: query
+        description: Include test IDs in response
+        schema:
+          type: string
+          enum: ['true', 'false']
+          default: 'false'
     responses:
       '200':
         description: Course progression status retrieved successfully
@@ -1126,16 +1173,22 @@
                         type: string
                       orderIndex:
                         type: integer
+                      durationMinutes:
+                        type: integer
                       isUnlocked:
                         type: boolean
+                        description: Whether the lesson is unlocked
                       isCompleted:
                         type: boolean
+                        description: Whether the lesson is completed (test passed or force-progressed)
                       testPassed:
                         type: boolean
+                        description: Same as isCompleted - single source of truth
                       progress:
                         type: integer
                         minimum: 0
                         maximum: 100
+                        description: Progress percentage (tracks time spent, not completion)
                       timeSpentMinutes:
                         type: integer
                         minimum: 0
@@ -1143,21 +1196,13 @@
                         type: string
                         format: date-time
                         nullable: true
-                      test:
-                        type: object
-                        nullable: true
-                        properties:
-                          id:
-                            type: string
-                            format: uuid
-                          title:
-                            type: string
-                          passingScore:
-                            type: integer
-                          maxAttempts:
-                            type: integer
-                      nextUnlocked:
+                      hasTest:
                         type: boolean
+                        description: Whether the lesson has an associated test
+                      testId:
+                        type: string
+                        format: uuid
+                        description: Only included if includeTests=true
                 courseStats:
                   type: object
                   properties:
@@ -1167,30 +1212,75 @@
                       type: integer
                     completedLessons:
                       type: integer
+                      description: Number of lessons where test was passed or force-progressed
                     passedTests:
                       type: integer
+                      description: Same as completedLessons
                     totalProgress:
                       type: integer
                       minimum: 0
                       maximum: 100
+                      description: Overall course completion percentage
                 currentLesson:
                   type: object
                   nullable: true
+                  description: First unlocked but incomplete lesson
                   properties:
                     id:
                       type: string
                       format: uuid
                     title:
                       type: string
+                    orderIndex:
+                      type: integer
+                    durationMinutes:
+                      type: integer
+                    isUnlocked:
+                      type: boolean
+                    isCompleted:
+                      type: boolean
+                    testPassed:
+                      type: boolean
+                    progress:
+                      type: integer
+                    timeSpentMinutes:
+                      type: integer
+                    completedAt:
+                      type: string
+                      format: date-time
+                      nullable: true
+                    hasTest:
+                      type: boolean
                 nextUnlockedLesson:
                   type: object
                   nullable: true
+                  description: First lesson that is still locked
                   properties:
                     id:
                       type: string
                       format: uuid
                     title:
                       type: string
+                    orderIndex:
+                      type: integer
+                    durationMinutes:
+                      type: integer
+                    isUnlocked:
+                      type: boolean
+                    isCompleted:
+                      type: boolean
+                    testPassed:
+                      type: boolean
+                    progress:
+                      type: integer
+                    timeSpentMinutes:
+                      type: integer
+                    completedAt:
+                      type: string
+                      format: date-time
+                      nullable: true
+                    hasTest:
+                      type: boolean
       '401':
         $ref: '../responses/Unauthorized.yaml'
       '403':

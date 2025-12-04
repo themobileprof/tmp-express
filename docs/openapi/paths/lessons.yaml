@@ -790,13 +790,34 @@
       '404':
         $ref: '../responses/NotFound.yaml'
 
-# Mark Lesson as Completed
+# Update Lesson Progress
 /{id}/complete:
   post:
     tags:
       - Lessons
-    summary: Mark a lesson as completed for the authenticated user
-    description: Mark a lesson as completed, automatically updating course progress
+    summary: Update lesson progress tracking
+    description: |
+      Update progress tracking for a lesson (time spent, progress percentage).
+      
+      **Important:** This endpoint does NOT mark the lesson as complete.
+      
+      **Lesson Completion Rules:**
+      - Lessons are marked complete ONLY when:
+        1. User passes the lesson test (score >= passing score), OR
+        2. User is force-progressed after exhausting all test attempts
+      - Manual completion is not supported
+      - To unlock the next lesson, users must pass the test
+      
+      **What This Endpoint Does:**
+      - Updates `progress_percentage` to 100
+      - Tracks time spent on the lesson
+      - Does NOT set `is_completed` or `completed_at`
+      - Does NOT unlock the next lesson
+      
+      **Use this endpoint to:**
+      - Track learning activity
+      - Record time spent on lessons
+      - Update UI progress indicators
     security:
       - BearerAuth: []
     parameters:
@@ -820,7 +841,7 @@
                 description: Time spent on the lesson in minutes
     responses:
       '200':
-        description: Lesson marked as completed
+        description: Lesson progress updated
         content:
           application/json:
             schema:
@@ -828,13 +849,10 @@
               properties:
                 message:
                   type: string
-                  example: "Lesson marked as completed"
+                  example: "Lesson progress updated. Complete the test to unlock the next lesson."
                 lessonId:
                   type: string
                   format: uuid
-                completedAt:
-                  type: string
-                  format: date-time
       '400':
         $ref: '../responses/BadRequest.yaml'
       '401':
