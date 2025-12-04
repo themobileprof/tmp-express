@@ -681,17 +681,20 @@ router.get('/:id/lessons', authenticateToken, asyncHandler(async (req, res) => {
 		}
 	}
 
-	// Get all lessons with their unlock and completion status
+	// Get all lessons with their unlock and completion status - OPTIMIZED QUERY
 	const lessons = await getRows(
-		`SELECT l.*, 
+		`SELECT l.id, l.title, l.description, l.order_index, l.duration_minutes,
 				COALESCE(lp.is_completed, false) as is_completed,
-				lp.progress_percentage,
-				lp.time_spent_minutes,
+				COALESCE(lp.progress_percentage, 0) as progress_percentage,
+				COALESCE(lp.time_spent_minutes, 0) as time_spent_minutes,
 				lp.completed_at,
 				t.id as test_id,
 				t.title as test_title,
 				t.passing_score,
-				t.max_attempts
+				t.max_attempts,
+				-- Lesson completion is the single source of truth
+				-- It's only set when test is passed OR force progression occurs
+				COALESCE(lp.is_completed, false) as test_passed
 		 FROM lessons l
 		 LEFT JOIN lesson_progress lp ON l.id = lp.lesson_id AND lp.user_id = $1
 		 LEFT JOIN tests t ON l.id = t.lesson_id
@@ -706,19 +709,13 @@ router.get('/:id/lessons', authenticateToken, asyncHandler(async (req, res) => {
 
 	for (let i = 0; i < lessons.length; i++) {
 		const lesson = lessons[i];
-		const isUnlocked = i === 0 || (i > 0 && lessonsWithStatus[i - 1].isUnlocked && (lessonsWithStatus[i - 1].testPassed || lessonsWithStatus[i - 1].isCompleted));
+		const testPassed = lesson.test_passed || false;
 		
-		// Check if test was passed
-		let testPassed = false;
-		if (lesson.test_id) {
-			const testResult = await getRow(
-				`SELECT ta.id FROM test_attempts ta
-				 WHERE ta.test_id = $1 AND ta.user_id = $2 AND ta.status = 'completed' AND ta.score >= $3
-				 LIMIT 1`,
-				[lesson.test_id, userId, lesson.passing_score]
-			);
-			testPassed = !!testResult;
-		}
+		// A lesson is unlocked if:
+		// 1. It's the first lesson (i === 0), OR
+		// 2. The previous lesson's test was passed (including forced progression after max attempts)
+		// Note: Lesson completion alone is NOT sufficient - the test must be passed
+		const isUnlocked = i === 0 || (i > 0 && lessonsWithStatus[i - 1].testPassed);
 
 		const lessonData = {
 			id: lesson.id,
@@ -727,10 +724,10 @@ router.get('/:id/lessons', authenticateToken, asyncHandler(async (req, res) => {
 			orderIndex: lesson.order_index,
 			durationMinutes: lesson.duration_minutes,
 			isUnlocked: isUnlocked,
-			isCompleted: lesson.is_completed || false,
+			isCompleted: lesson.is_completed,
 			testPassed: testPassed,
-			progress: lesson.progress_percentage || 0,
-			timeSpentMinutes: lesson.time_spent_minutes || 0,
+			progress: lesson.progress_percentage,
+			timeSpentMinutes: lesson.time_spent_minutes,
 			completedAt: lesson.completed_at,
 			test: lesson.test_id ? {
 				id: lesson.test_id,
@@ -757,6 +754,7 @@ router.get('/:id/lessons', authenticateToken, asyncHandler(async (req, res) => {
 router.get('/:id/progression', authenticateToken, asyncHandler(async (req, res) => {
   const { id } = req.params;
   const userId = req.user.id;
+  const { limit, includeTests = 'false' } = req.query;
 
   // Verify enrollment
   const enrollment = await getRow(
@@ -768,102 +766,91 @@ router.get('/:id/progression', authenticateToken, asyncHandler(async (req, res) 
     throw new AppError('You must be enrolled in this course to view progression', 403, 'Not Enrolled');
   }
 
-  // Get all lessons with their unlock status
+  // Optimized query: Get all lessons with progress in one query
   const lessons = await getRows(
-    `SELECT l.*, 
+    `SELECT l.id, l.title, l.order_index, l.duration_minutes,
             COALESCE(lp.is_completed, false) as is_completed,
-            lp.progress_percentage,
-            lp.time_spent_minutes,
+            COALESCE(lp.progress_percentage, 0) as progress_percentage,
+            COALESCE(lp.time_spent_minutes, 0) as time_spent_minutes,
             lp.completed_at,
             t.id as test_id,
-            t.title as test_title,
-            t.passing_score,
-            t.max_attempts
+            -- Lesson completion is the single source of truth
+            -- It's only set when test is passed OR force progression occurs
+            COALESCE(lp.is_completed, false) as test_passed
      FROM lessons l
      LEFT JOIN lesson_progress lp ON l.id = lp.lesson_id AND lp.user_id = $1
      LEFT JOIN tests t ON l.id = t.lesson_id
-     WHERE l.course_id = $1 AND l.is_published = true
+     WHERE l.course_id = $2 AND l.is_published = true
      ORDER BY l.order_index`,
-    [id]
+    [userId, id]
   );
 
-  // Calculate unlock status for each lesson
+  // Calculate unlock status for each lesson (in-memory, fast)
   const progressionData = [];
   let unlockedCount = 0;
   let completedCount = 0;
+  let passedTestsCount = 0;
 
   for (let i = 0; i < lessons.length; i++) {
     const lesson = lessons[i];
-    const isUnlocked = i === 0 || (i > 0 && progressionData[i - 1].isUnlocked && (progressionData[i - 1].testPassed || progressionData[i - 1].isCompleted));
+    const testPassed = lesson.test_passed || false;
     
-    // Check if test was passed
-    let testPassed = false;
-    if (lesson.test_id) {
-      const testResult = await getRow(
-        `SELECT ta.id FROM test_attempts ta
-         WHERE ta.test_id = $1 AND ta.user_id = $2 AND ta.status = 'completed' AND ta.score >= $3
-         LIMIT 1`,
-        [lesson.test_id, userId, lesson.passing_score]
-      );
-      testPassed = !!testResult;
-    }
+    // A lesson is unlocked if:
+    // 1. It's the first lesson (i === 0), OR
+    // 2. The previous lesson's test was passed (including forced progression after max attempts)
+    // Note: Lesson completion alone is NOT sufficient - the test must be passed
+    const isUnlocked = i === 0 || (i > 0 && progressionData[i - 1].testPassed);
 
     const lessonData = {
       id: lesson.id,
       title: lesson.title,
       orderIndex: lesson.order_index,
+      durationMinutes: lesson.duration_minutes,
       isUnlocked: isUnlocked,
-      isCompleted: lesson.is_completed || false,
+      isCompleted: lesson.is_completed,
       testPassed: testPassed,
-      progress: lesson.progress_percentage || 0,
-      timeSpentMinutes: lesson.time_spent_minutes || 0,
+      progress: lesson.progress_percentage,
+      timeSpentMinutes: lesson.time_spent_minutes,
       completedAt: lesson.completed_at,
-      test: lesson.test_id ? {
-        id: lesson.test_id,
-        title: lesson.test_title,
-        passingScore: lesson.passing_score,
-        maxAttempts: lesson.max_attempts
-      } : null,
-      nextUnlocked: isUnlocked && !testPassed && lesson.test_id
+      hasTest: !!lesson.test_id
     };
+
+    // Only include test details if requested
+    if (includeTests === 'true' && lesson.test_id) {
+      lessonData.testId = lesson.test_id;
+    }
 
     progressionData.push(lessonData);
 
     if (isUnlocked) unlockedCount++;
     if (lesson.is_completed) completedCount++;
+    if (testPassed) passedTestsCount++;
   }
 
-  // Get course stats
-  const courseStats = await getRow(
-    `SELECT 
-       COUNT(DISTINCT l.id) as total_lessons,
-       COUNT(DISTINCT CASE WHEN lp.is_completed = true THEN l.id END) as completed_lessons,
-       COUNT(DISTINCT CASE WHEN ta.status = 'completed' AND ta.score >= t.passing_score THEN t.id END) as passed_tests
-     FROM courses c
-     LEFT JOIN lessons l ON c.id = l.course_id AND l.is_published = true
-     LEFT JOIN lesson_progress lp ON l.id = lp.lesson_id AND lp.user_id = $1
-     LEFT JOIN tests t ON l.id = t.lesson_id
-     LEFT JOIN test_attempts ta ON t.id = ta.test_id AND ta.user_id = $1
-     WHERE c.id = $2`,
-    [userId, id]
-  );
-
-  const totalProgress = courseStats.total_lessons > 0 
-    ? Math.round((completedCount / courseStats.total_lessons) * 100)
+  // Calculate total progress
+  const totalProgress = lessons.length > 0 
+    ? Math.round((completedCount / lessons.length) * 100)
     : 0;
+
+  // Find current and next lessons
+  const currentLesson = progressionData.find(l => l.isUnlocked && !l.isCompleted) || null;
+  const nextUnlockedLesson = progressionData.find(l => !l.isUnlocked) || null;
+
+  // Apply limit if specified (for pagination)
+  const limitedProgression = limit ? progressionData.slice(0, parseInt(limit)) : progressionData;
 
   res.json({
     courseId: id,
-    progression: progressionData,
+    progression: limitedProgression,
     courseStats: {
-      totalLessons: parseInt(courseStats.total_lessons) || 0,
+      totalLessons: lessons.length,
       unlockedLessons: unlockedCount,
       completedLessons: completedCount,
-      passedTests: parseInt(courseStats.passed_tests) || 0,
+      passedTests: passedTestsCount,
       totalProgress: totalProgress
     },
-    currentLesson: progressionData.find(l => l.isUnlocked && !l.testPassed) || null,
-    nextUnlockedLesson: progressionData.find(l => !l.isUnlocked) || null
+    currentLesson: currentLesson,
+    nextUnlockedLesson: nextUnlockedLesson
   });
 }));
 

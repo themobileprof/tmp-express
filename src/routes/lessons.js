@@ -374,6 +374,9 @@ router.get('/:id/tests', authenticateToken, asyncHandler(async (req, res) => {
 }));
 
 // Mark lesson as completed for user
+// NOTE: Lessons are automatically marked complete when tests are passed or force-progressed
+// This endpoint only updates progress tracking (time spent, progress percentage)
+// It does NOT mark the lesson as complete - only passing the test does that
 router.post('/:id/complete', authenticateToken, asyncHandler(async (req, res) => {
   const { id } = req.params;
   const userId = req.user.id;
@@ -393,27 +396,22 @@ router.post('/:id/complete', authenticateToken, asyncHandler(async (req, res) =>
     throw new AppError('Lesson not found or you are not enrolled in this course', 404, 'Lesson Not Found');
   }
 
-  // Update or insert lesson progress
+  // Update lesson progress tracking ONLY (not completion status)
+  // Completion is handled by test passing or force progression
   await query(
-    `INSERT INTO lesson_progress (user_id, lesson_id, is_completed, completed_at, progress_percentage, time_spent_minutes)
-     VALUES ($1, $2, true, CURRENT_TIMESTAMP, 100, $3)
+    `INSERT INTO lesson_progress (user_id, lesson_id, progress_percentage, time_spent_minutes)
+     VALUES ($1, $2, 100, $3)
      ON CONFLICT (user_id, lesson_id) 
      DO UPDATE SET 
-       is_completed = true,
-       completed_at = CURRENT_TIMESTAMP,
        progress_percentage = 100,
-       time_spent_minutes = $3,
+       time_spent_minutes = GREATEST(lesson_progress.time_spent_minutes, $3),
        updated_at = CURRENT_TIMESTAMP`,
     [userId, id, timeSpentMinutes]
   );
 
-  // Update course progress
-  await updateCourseProgressFromLesson(id, userId);
-
   res.json({
-    message: 'Lesson marked as completed',
-    lessonId: id,
-    completedAt: new Date().toISOString()
+    message: 'Lesson progress updated. Complete the test to unlock the next lesson.',
+    lessonId: id
   });
 }));
 
