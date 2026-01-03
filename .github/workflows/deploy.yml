@@ -219,6 +219,10 @@ jobs:
           
           echo "📁 Using uploads directory: $UPLOADS_DIR"
           
+          # Remove any existing .env file or directory
+          echo "🧹 Cleaning up existing .env..."
+          rm -rf .env
+          
           # Create .env file from GitHub secret
           echo "📝 Creating .env file..."
           cat > .env << 'EOF'
