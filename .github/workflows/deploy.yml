@@ -181,10 +181,16 @@ jobs:
           
           echo "✅ Image pulled successfully"
           
-          # Stop and remove existing container
-          echo "🛑 Stopping existing container..."
+          # Stop and remove existing containers (both old and new names)
+          echo "🛑 Stopping existing containers..."
           docker stop themobileprof-backend || true
           docker rm themobileprof-backend || true
+          docker stop themobileprof-be || true
+          docker rm themobileprof-be || true
+          
+          # Clean up any containers using port 3000
+          echo "🧹 Checking for containers using port 3000..."
+          docker ps -a --filter "publish=3000" --format "{{.Names}}" | xargs -r docker rm -f || true
           
           # Check uploads directory
           echo "📁 Checking uploads directory..."
