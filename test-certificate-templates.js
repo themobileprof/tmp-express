@@ -2,9 +2,15 @@ const certificateTemplateManager = require('./src/utils/certificateTemplateManag
 const certificateService = require('./src/utils/certificateService');
 const { query } = require('./src/database/config');
 
+/**
+ * Test script for certificate template system (client-side Canvas rendering)
+ * Tests template data generation for HTML5 Canvas rendering
+ * Run with: node test-certificate-templates.js
+ */
+
 async function testCertificateTemplates() {
   try {
-    console.log('🧪 Testing Certificate Template System...\n');
+    console.log('🧪 Testing Certificate Template System (Client-Side Rendering)...\n');
 
     // Test 1: Get default template
     console.log('1. Testing default template retrieval...');
@@ -45,8 +51,8 @@ async function testCertificateTemplates() {
       console.log('⚠️  Skipping signature addition test (no signature created)');
     }
 
-    // Test 5: Generate certificate with template
-    console.log('\n5. Testing certificate generation with template...');
+    // Test 5: Generate certificate data with template
+    console.log('\n5. Testing certificate data generation with template...');
     const certificateData = {
       userName: 'Test User',
       courseTitle: 'Test Course',
@@ -56,13 +62,29 @@ async function testCertificateTemplates() {
       issuer: 'TheMobileProf Learning Platform'
     };
 
-    const certificateFile = await certificateTemplateManager.generateCertificateFromTemplate(
+    const certificateResult = await certificateTemplateManager.generateCertificateFromTemplate(
       defaultTemplate.id,
       certificateData
     );
-    console.log('✅ Certificate generated:', certificateFile.fileName);
-    console.log('📁 File location:', certificateFile.filePath);
-    console.log('🔗 Certificate URL:', certificateFile.certificateUrl);
+    
+    console.log('✅ Certificate data generated successfully!');
+    console.log('🆔 Certificate ID:', certificateResult.id);
+    console.log('📋 Certificate Type:', certificateResult.type);
+    console.log('🎨 Template Name:', certificateResult.template.name);
+    console.log('🔢 Verification Code:', certificateResult.data.verificationCode);
+    
+    // Validate certificate data structure for Canvas rendering
+    console.log('\n✓ Validating template data structure...');
+    if (!certificateResult.template) throw new Error('Missing template data');
+    if (!certificateResult.template.layout) throw new Error('Missing layout data');
+    if (!certificateResult.template.styling && !certificateResult.template.backgroundColor) {
+      console.log('⚠️  Warning: Template styling not in expected format');
+    }
+    if (!certificateResult.data) throw new Error('Missing certificate data');
+    console.log('✓ Template data structure is valid for Canvas rendering!');
+    
+    console.log('\n📄 Full Certificate Data Structure:');
+    console.log(JSON.stringify(certificateResult, null, 2));
 
     // Test 6: Test certificate service integration
     console.log('\n6. Testing certificate service with templates...');
@@ -105,6 +127,15 @@ async function testCertificateTemplates() {
     }
 
     console.log('\n🎉 All certificate template tests passed!');
+    console.log('\n💡 Certificate Template System Status:');
+    console.log('   ✓ Templates return structured JSON data');
+    console.log('   ✓ Data format ready for HTML5 Canvas rendering');
+    console.log('   ✓ No PDF files generated (client-side rendering)');
+    console.log('   ✓ Template metadata stored in database');
+    console.log('\n📋 Next steps:');
+    console.log('   1. Frontend: Implement Canvas renderer using template data');
+    console.log('   2. Test /api/certifications/:id/view endpoint');
+    console.log('   3. Verify signature images load with proper CORS headers');
 
   } catch (error) {
     console.error('❌ Certificate template test failed:', error);

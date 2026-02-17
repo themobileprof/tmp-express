@@ -1,4 +1,3 @@
-const PDFDocument = require('pdfkit');
 const fs = require('fs');
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
@@ -7,16 +6,13 @@ const { query, getRow, getRows } = require('../database/config');
 /**
  * Certificate Template Manager
  * Manages certificate templates and signature integration
+ * Returns template data for client-side HTML5 Canvas rendering
  */
 class CertificateTemplateManager {
   constructor() {
-    this.certificatesDir = path.join(process.env.UPLOAD_PATH || './uploads', 'certificates');
     this.signaturesDir = path.join(process.env.UPLOAD_PATH || './uploads', 'signatures');
 
     // Ensure directories exist
-    if (!fs.existsSync(this.certificatesDir)) {
-      fs.mkdirSync(this.certificatesDir, { recursive: true });
-    }
     if (!fs.existsSync(this.signaturesDir)) {
       fs.mkdirSync(this.signaturesDir, { recursive: true });
     }
@@ -84,7 +80,8 @@ class CertificateTemplateManager {
   }
 
   /**
-   * Generate certificate using template
+   * Generate certificate data using template for client-side Canvas rendering
+   * Returns structured data instead of generating a PDF
    */
   async generateCertificateFromTemplate(templateId, data) {
     const template = await this.getTemplateWithSignatures(templateId);
@@ -102,283 +99,69 @@ class CertificateTemplateManager {
       issuer = 'TheMobileProf Learning Platform'
     } = data;
 
-    // Generate unique filename
-    const fileName = `certificate-${uuidv4()}.pdf`;
-    const filePath = path.join(this.certificatesDir, fileName);
-
-    // Create PDF document
-    const doc = new PDFDocument({
-      size: 'A4',
-      layout: 'landscape',
-      margin: 50
+    // Format completion date
+    const completionDateObj = new Date(completionDate);
+    const formattedDate = completionDateObj.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
     });
 
-    // Pipe to file
-    const stream = fs.createWriteStream(filePath);
-    doc.pipe(stream);
+    // Generate unique certificate ID
+    const certificateId = uuidv4();
 
-    // Apply template styling
-    this.applyTemplateStyling(doc, template);
-
-    // Draw certificate content using template layout
-    await this.drawTemplatedContent(doc, template, {
-      userName,
-      courseTitle,
-      classTitle,
-      instructorName,
-      completionDate,
-      verificationCode,
-      issuer
-    });
-
-    // Finalize PDF
-    doc.end();
-
-    // Wait for file to be written
-    await new Promise((resolve, reject) => {
-      stream.on('finish', resolve);
-      stream.on('error', reject);
-    });
-
-    // Return certificate info
-    const certificateUrl = `/uploads/certificates/${fileName}`;
-
+    // Return certificate data for client-side Canvas rendering
     return {
-      filePath,
-      fileName,
-      certificateUrl,
-      verificationCode,
-      templateId,
-      fileSize: fs.statSync(filePath).size
+      id: certificateId,
+      type: courseTitle ? 'course_completion' : 'class_attendance',
+      template: {
+        id: template.id,
+        name: template.name,
+        layout: template.layout_data,
+        backgroundColor: template.background_color,
+        textColor: template.text_color,
+        accentColor: template.accent_color,
+        fontFamily: template.font_family,
+        signatures: template.signatures || []
+      },
+      data: {
+        userName,
+        courseTitle: courseTitle || classTitle,
+        instructorName,
+        completionDate: formattedDate,
+        verificationCode,
+        issuer
+      },
+      verificationUrl: `/api/certifications/verify/${verificationCode}`,
+      issuedAt: new Date().toISOString()
     };
   }
 
   /**
-   * Apply template styling to PDF document
+   * Get certificate template data formatted for client-side rendering
+   * This prepares all template styling and layout data for the frontend Canvas renderer
    */
-  applyTemplateStyling(doc, template) {
-    const { width, height } = doc.page;
-
-    // Set background color
-    if (template.background_color && template.background_color !== '#FFFFFF') {
-      doc.rect(0, 0, width, height)
-         .fill(template.background_color);
-    }
-
-    // Draw decorative elements if specified in layout
-    if (template.layout_data?.decorativeElements) {
-      this.drawDecorativeElements(doc, template.layout_data.decorativeElements);
-    }
-
-    // Set default font
-    if (template.font_family) {
-      doc.font(template.font_family);
-    }
-  }
-
-  /**
-   * Draw decorative elements
-   */
-  drawDecorativeElements(doc, elements) {
-    const { width, height } = doc.page;
-
-    elements.forEach(element => {
-      const { type, x, y, width: w, height: h, color, opacity = 1 } = element;
-
-      switch (type) {
-        case 'circle':
-          doc.circle(width * (x / 100), height * (y / 100), Math.max(w, h) / 2)
-             .fillOpacity(opacity)
-             .fill(color || '#667EEA');
-          break;
-        case 'rectangle':
-          doc.rect(width * (x / 100), height * (y / 100), width * (w / 100), height * (h / 100))
-             .fillOpacity(opacity)
-             .fill(color || '#667EEA');
-          break;
-      }
-    });
-  }
-
-  /**
-   * Draw certificate content using template layout
-   */
-  async drawTemplatedContent(doc, template, data) {
-    const { width, height } = doc.page;
-    const layout = template.layout_data;
-
-    // Helper function to get position
-    const getPosition = (element) => ({
-      x: width * (element.x / 100),
-      y: height * (element.y / 100)
-    });
-
-    // Title
-    if (layout.title) {
-      const pos = getPosition(layout.title);
-      doc.fontSize(layout.title.fontSize || 36)
-         .fillColor(template.accent_color || '#1A202C')
-         .text('CERTIFICATE OF COMPLETION', pos.x, pos.y, {
-           align: layout.title.align || 'center',
-           width: layout.title.width ? width * (layout.title.width / 100) : width
-         });
-    }
-
-    // Subtitle
-    if (layout.subtitle) {
-      const pos = getPosition(layout.subtitle);
-      doc.fontSize(layout.subtitle.fontSize || 16)
-         .fillColor(template.text_color || '#4A5568')
-         .text('This certifies that', pos.x, pos.y, {
-           align: layout.subtitle.align || 'center',
-           width: layout.subtitle.width ? width * (layout.subtitle.width / 100) : width
-         });
-    }
-
-    // Recipient name
-    if (layout.recipientName) {
-      const pos = getPosition(layout.recipientName);
-      doc.fontSize(layout.recipientName.fontSize || 32)
-         .fillColor(template.accent_color || '#2D3748')
-         .text(data.userName, pos.x, pos.y, {
-           align: layout.recipientName.align || 'center',
-           width: layout.recipientName.width ? width * (layout.recipientName.width / 100) : width
-         });
-    }
-
-    // Completion text
-    if (layout.completionText) {
-      const pos = getPosition(layout.completionText);
-      const completionText = data.courseTitle
-        ? 'has successfully completed the course'
-        : 'has successfully attended and completed the class';
-
-      doc.fontSize(layout.completionText.fontSize || 16)
-         .fillColor(template.text_color || '#4A5568')
-         .text(completionText, pos.x, pos.y, {
-           align: layout.completionText.align || 'center',
-           width: layout.completionText.width ? width * (layout.completionText.width / 100) : width
-         });
-    }
-
-    // Course/Class title
-    if (layout.courseTitle && data.courseTitle) {
-      const pos = getPosition(layout.courseTitle);
-      doc.fontSize(layout.courseTitle.fontSize || 24)
-         .fillColor(template.accent_color || '#2D3748')
-         .text(`"${data.courseTitle}"`, pos.x, pos.y, {
-           align: layout.courseTitle.align || 'center',
-           width: layout.courseTitle.width ? width * (layout.courseTitle.width / 100) : width
-         });
-    } else if (layout.classTitle && data.classTitle) {
-      const pos = getPosition(layout.classTitle);
-      doc.fontSize(layout.classTitle.fontSize || 24)
-         .fillColor(template.accent_color || '#2D3748')
-         .text(`"${data.classTitle}"`, pos.x, pos.y, {
-           align: layout.classTitle.align || 'center',
-           width: layout.classTitle.width ? width * (layout.classTitle.width / 100) : width
-         });
-    }
-
-    // Issuer
-    if (layout.issuer) {
-      const pos = getPosition(layout.issuer);
-      doc.fontSize(layout.issuer.fontSize || 14)
-         .fillColor(template.text_color || '#4A5568')
-         .text(`Awarded by ${data.issuer}`, pos.x, pos.y, {
-           align: layout.issuer.align || 'center',
-           width: layout.issuer.width ? width * (layout.issuer.width / 100) : width
-         });
-    }
-
-    // Completion date
-    if (layout.completionDate) {
-      const pos = getPosition(layout.completionDate);
-      const completionDate = new Date(data.completionDate);
-      const formattedDate = completionDate.toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric'
-      });
-
-      doc.fontSize(layout.completionDate.fontSize || 14)
-         .fillColor(template.text_color || '#4A5568')
-         .text(`Completed on ${formattedDate}`, pos.x, pos.y, {
-           align: layout.completionDate.align || 'center',
-           width: layout.completionDate.width ? width * (layout.completionDate.width / 100) : width
-         });
-    }
-
-    // Draw signatures
-    if (template.signatures && template.signatures.length > 0) {
-      await this.drawSignatures(doc, template.signatures);
-    }
-
-    // Verification code
-    if (layout.verificationCode) {
-      const pos = getPosition(layout.verificationCode);
-      doc.fontSize(layout.verificationCode.fontSize || 10)
-         .fillColor('#718096')
-         .text(`Verification Code: ${data.verificationCode}`, pos.x, pos.y, {
-           align: layout.verificationCode.align || 'center',
-           width: layout.verificationCode.width ? width * (layout.verificationCode.width / 100) : width
-         });
-    }
-
-    // Footer
-    if (layout.footer) {
-      const pos = getPosition(layout.footer);
-      doc.fontSize(layout.footer.fontSize || 8)
-         .fillColor('#A0AEC0')
-         .text('This certificate can be verified at themobileprof.com/verify', pos.x, pos.y, {
-           align: layout.footer.align || 'center',
-           width: layout.footer.width ? width * (layout.footer.width / 100) : width
-         });
-    }
-  }
-
-  /**
-   * Draw signatures on the certificate
-   */
-  async drawSignatures(doc, signatures) {
-    const { width, height } = doc.page;
-
-    for (const signature of signatures) {
-      try {
-        const imagePath = path.resolve(signature.imageUrl.replace('/uploads/', './uploads/'));
-
-        if (fs.existsSync(imagePath)) {
-          const x = width * (signature.position.x / 100);
-          const y = height * (signature.position.y / 100);
-          const w = width * (signature.size.width / 100);
-          const h = height * (signature.size.height / 100);
-
-          // Draw signature image
-          doc.image(imagePath, x, y, {
-            width: w,
-            height: h,
-            fit: [w, h]
-          });
-
-          // Draw signature line above image
-          doc.moveTo(x, y - 5)
-             .lineTo(x + w, y - 5)
-             .stroke('#4A5568');
-
-          // Draw signature title below image
-          if (signature.title) {
-            doc.fontSize(10)
-               .fillColor('#4A5568')
-               .text(signature.title, x, y + h + 2, {
-                 align: 'center',
-                 width: w
-               });
-          }
-        }
-      } catch (error) {
-        console.error(`Error drawing signature ${signature.name}:`, error);
-      }
-    }
+  getTemplateRenderData(template) {
+    return {
+      id: template.id,
+      name: template.name,
+      templateType: template.template_type,
+      layout: template.layout_data,
+      styling: {
+        backgroundColor: template.background_color || '#FFFFFF',
+        textColor: template.text_color || '#000000',
+        accentColor: template.accent_color || '#2D3748',
+        fontFamily: template.font_family || 'Helvetica'
+      },
+      signatures: template.signatures ? template.signatures.map(sig => ({
+        id: sig.id,
+        name: sig.name,
+        title: sig.title,
+        imageUrl: sig.imageUrl,
+        position: sig.position,
+        size: sig.size
+      })) : []
+    };
   }
 
   /**

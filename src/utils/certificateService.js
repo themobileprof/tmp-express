@@ -104,10 +104,10 @@ class CertificateService {
         templateImagePath: template ? path.resolve(template.image_path.replace('/uploads/', './uploads/')) : null
       };
 
-      const certificateFile = await certificateGenerator.generateCourseCertificate(certificateData);
+      const certificateResult = certificateGenerator.generateCourseCertificate(certificateData);
 
-      // Save certificate to database
-      const certificateResult = await query(
+      // Save certificate to database (no file stored, data for client-side rendering)
+      const certificationRecord = await query(
         `INSERT INTO certifications (
           user_id, course_id, certification_name, issuer, issued_date,
           certificate_url, verification_code, status, template_id
@@ -119,22 +119,21 @@ class CertificateService {
           `${courseInfo.title} - Certificate of Completion`,
           'TheMobileProf Learning Platform',
           new Date().toISOString().split('T')[0], // issued_date as DATE
-          certificateFile.certificateUrl,
+          certificateResult.data.templateImageUrl, // Store template image URL if available
           verificationCode,
           'issued',
           template ? template.id : null
         ]
       );
 
-      const certificate = certificateResult.rows[0];
+      const certificate = certificationRecord.rows[0];
 
-      // Send notification email
+      // Send notification email with link to certificate viewer
       await this.sendCertificateEmail(userInfo.email, {
         userName,
         courseTitle: courseInfo.title,
-        certificateUrl: certificateFile.certificateUrl,
-        verificationCode,
-        certificateId: certificate.id
+        certificateId: certificate.id,
+        verificationCode
       });
 
       // Create in-app notification
@@ -144,9 +143,7 @@ class CertificateService {
 
       return {
         certificateId: certificate.id,
-        certificateUrl: certificateFile.certificateUrl,
-        verificationCode,
-        filePath: certificateFile.filePath
+        verificationCode
       };
 
     } catch (error) {
@@ -250,10 +247,10 @@ class CertificateService {
         templateImagePath: template ? path.resolve(template.image_path.replace('/uploads/', './uploads/')) : null
       };
 
-      const certificateFile = await certificateGenerator.generateClassCertificate(certificateData);
+      const certificateResult = certificateGenerator.generateClassCertificate(certificateData);
 
-      // Save certificate to database
-      const certificateResult = await query(
+      // Save certificate to database (no file stored, data for client-side rendering)
+      const certificationRecord = await query(
         `INSERT INTO certifications (
           user_id, class_id, certification_name, issuer, issued_date,
           certificate_url, verification_code, status, template_id
@@ -265,22 +262,21 @@ class CertificateService {
           `${classInfo.title} - Certificate of Attendance`,
           'TheMobileProf Learning Platform',
           new Date().toISOString().split('T')[0], // issued_date as DATE
-          certificateFile.certificateUrl,
+          certificateResult.data.templateImageUrl, // Store template image URL if available
           verificationCode,
           'issued',
           template ? template.id : null
         ]
       );
 
-      const certificate = certificateResult.rows[0];
+      const certificate = certificationRecord.rows[0];
 
-      // Send notification email
+      // Send notification email with link to certificate viewer
       await this.sendCertificateEmail(userInfo.email, {
         userName,
         courseTitle: classInfo.title,
-        certificateUrl: certificateFile.certificateUrl,
-        verificationCode,
         certificateId: certificate.id,
+        verificationCode,
         type: 'class'
       });
 
@@ -291,9 +287,7 @@ class CertificateService {
 
       return {
         certificateId: certificate.id,
-        certificateUrl: certificateFile.certificateUrl,
-        verificationCode,
-        filePath: certificateFile.filePath
+        verificationCode
       };
 
     } catch (error) {
@@ -322,11 +316,14 @@ class CertificateService {
   /**
    * Send certificate award email notification
    * @param {string} email - Recipient email
-   * @param {Object} data - Email data
+   * @param {Object} data - Email data (userName, courseTitle, certificateId, verificationCode, type?)
    */
   async sendCertificateEmail(email, data) {
     try {
       const certificateType = data.type === 'class' ? 'class attendance' : 'course completion';
+      const baseUrl = process.env.BASE_URL || 'https://themobileprof.com';
+      const certificateViewUrl = `${baseUrl}/api/certifications/${data.certificateId}/view`;
+      const verifyUrl = `${baseUrl}/api/certifications/verify/${data.verificationCode}`;
 
       await sendEmail({
         to: email,
@@ -336,9 +333,9 @@ class CertificateService {
           firstName: data.userName.split(' ')[0],
           message: `Congratulations! You have successfully completed "${data.courseTitle}" and earned your certificate of ${certificateType}.`,
           data: {
-            certificateUrl: `${process.env.BASE_URL || 'https://themobileprof.com'}${data.certificateUrl}`,
+            certificateViewUrl, // Link to client-side certificate viewer
             verificationCode: data.verificationCode,
-            verifyUrl: `${process.env.BASE_URL || 'https://themobileprof.com'}/verify/${data.verificationCode}`
+            verifyUrl
           }
         }
       });
@@ -405,13 +402,12 @@ class CertificateService {
     );
 
     if (userInfo) {
-      // Send notification email
+      // Send notification email with link to certificate viewer
       await this.sendCertificateEmail(userInfo.email, {
         userName: `${userInfo.first_name} ${userInfo.last_name}`,
         courseTitle: certificationName,
-        certificateUrl: certificateUrl || certificate.certificate_url,
-        verificationCode,
-        certificateId: certificate.id
+        certificateId: certificate.id,
+        verificationCode
       });
 
       // Create in-app notification

@@ -1,4 +1,6 @@
-pleas# Certificate Template System
+# Certificate Template System
+
+> **Note:** This template system has been updated for **client-side HTML5 Canvas rendering**. Templates now return structured data (JSON) for frontend rendering instead of generating server-side PDFs. This eliminates the need for PDFKit and heavy native dependencies.
 
 This document describes the certificate template system that allows administrators to create customizable certificate designs with signature support.
 
@@ -11,6 +13,7 @@ The certificate template system provides:
 - **Template Types**: Support for course certificates, class certificates, and custom certificates
 - **Admin Management**: Full CRUD operations for templates and signatures via API
 - **Automatic Integration**: Seamlessly integrates with the existing certificate awarding system
+- **Client-Side Rendering**: Returns template data for HTML5 Canvas rendering in the browser
 
 ## Database Schema
 
@@ -204,7 +207,9 @@ Remove a signature from a template.
 ### Template Preview
 
 #### POST /api/certificate-templates/templates/:id/preview
-Generate a preview certificate using the template.
+Generate a preview certificate data using the template.
+
+> **Note:** This now returns JSON data for client-side Canvas rendering, not a PDF file.
 
 **Request Body:**
 ```json
@@ -222,9 +227,24 @@ Generate a preview certificate using the template.
 **Response:**
 ```json
 {
-  "previewUrl": "/uploads/certificates/preview-uuid.pdf",
-  "fileName": "preview-uuid.pdf",
-  "fileSize": 12345
+  "id": "preview-uuid",
+  "type": "course_completion",
+  "template": {
+    "id": "template-uuid",
+    "name": "Professional Certificate",
+    "layout": { /* layout data */ },
+    "backgroundColor": "#FFFFFF",
+    "textColor": "#000000",
+    "accentColor": "#2D3748",
+    "fontFamily": "Helvetica",
+    "signatures": []
+  },
+  "data": {
+    "userName": "John Doe",
+    "courseTitle": "Sample Course",
+    "completionDate": "November 27, 2025",
+    "verificationCode": "CERTPREVIEW"
+  }
 }
 ```
 
@@ -370,15 +390,18 @@ The template system integrates seamlessly with the existing certificate awarding
 backend/
 ├── src/
 │   ├── utils/
-│   │   ├── certificateTemplateManager.js    # Template management logic
-│   │   └── certificateService.js             # Updated to use templates
+│   │   ├── certificateTemplateManager.js    # Template management (returns data for Canvas)
+│   │   └── certificateService.js             # Updated for client-side rendering
 │   └── routes/
 │       └── certificateTemplates.js           # Template API endpoints
 ├── uploads/
-│   ├── certificates/                         # Generated certificates
 │   └── signatures/                          # Signature images
-└── test-certificate-templates.js            # Template system tests
+├── docs/
+│   └── certificate-viewer.html              # Client-side Canvas certificate viewer
+└── test-certificate-templates.js            # Template system tests (needs updating)
 ```
+
+> **Note:** The `uploads/certificates/` directory is no longer needed for storing PDF files since certificates are now rendered client-side.
 
 ## Usage Examples
 
@@ -423,6 +446,8 @@ await certificateTemplateManager.addSignatureToTemplate(
 
 ### Generating a Certificate with Template
 
+> **Updated:** This now returns JSON data for client-side Canvas rendering instead of generating PDF files.
+
 ```javascript
 const certificateData = {
   userName: "John Doe",
@@ -433,10 +458,34 @@ const certificateData = {
   issuer: "Tech University"
 };
 
-const certificate = await certificateTemplateManager.generateCertificateFromTemplate(
+const certificateResult = await certificateTemplateManager.generateCertificateFromTemplate(
   templateId,
   certificateData
 );
+
+// Returns structured data for client-side rendering:
+// {
+//   id: 'certificate-uuid',
+//   type: 'course_completion',
+//   template: {
+//     id: 'template-uuid',
+//     name: 'Professional Certificate',
+//     layout: { /* layout configuration */ },
+//     backgroundColor: '#FFFFFF',
+//     textColor: '#000000',
+//     accentColor: '#2D3748',
+//     fontFamily: 'Helvetica',
+//     signatures: []
+//   },
+//   data: {
+//     userName: 'John Doe',
+//     courseTitle: 'Advanced JavaScript',
+//     completionDate: 'November 27, 2025',
+//     verificationCode: 'CERT123456'
+//   },
+//   verificationUrl: '/api/certifications/verify/CERT123456',
+//   issuedAt: '2025-11-27T...'
+// }
 ```
 
 ## Security Considerations
@@ -448,19 +497,21 @@ const certificate = await certificateTemplateManager.generateCertificateFromTemp
 
 ## Performance Notes
 
-- **PDF Generation**: Templates are compiled once and cached during generation
-- **Image Loading**: Signature images are loaded from disk during PDF generation
+- **Client-Side Rendering**: Certificate generation happens in the browser using HTML5 Canvas (zero server processing)
+- **Image Loading**: Signature images loaded with proper CORS headers for Canvas rendering
 - **Database Queries**: Template data is efficiently queried with proper indexing
-- **File Cleanup**: Old certificate files can be cleaned up automatically
+- **No File Storage**: Eliminates need for file storage and cleanup (certificates rendered on-demand)
+- **Template Caching**: Template data can be cached on the frontend for faster rendering
 
 ## Troubleshooting
 
 ### Common Issues
 
-1. **Template Not Found**: Ensure the template exists and is active
-2. **Signature Not Displaying**: Check that the signature image file exists and is accessible
-3. **Layout Issues**: Verify that layout coordinates are within valid ranges (0-100)
-4. **Font Issues**: Ensure the specified font family is available in PDFKit
+1. **Template Not Found**: Ensure template exists and is active
+2. **Signature Images**: Verify images are uploaded correctly with proper CORS headers for Canvas rendering
+3. **Canvas Rendering Errors**: Check browser Console for JavaScript errors in certificate viewer
+4. **Layout Issues**: Verify that layout coordinates are within valid ranges (0-100)
+5. **Font Issues**: Template fonts are rendered client-side; ensure browser supports specified fonts
 
 ### Debug Mode
 
@@ -468,9 +519,9 @@ Enable debug logging by setting `NODE_ENV=development` to see detailed template 
 
 ## Future Enhancements
 
-- **Template Preview**: Real-time template preview in the admin interface
+- **Template Preview**: Real-time template preview in the admin interface using Canvas
 - **Bulk Template Operations**: Apply templates to multiple certificates
 - **Template Categories**: Organize templates by category or organization
 - **Dynamic Content**: Support for conditional content based on certificate type
-- **QR Codes**: Add QR codes linking to verification pages
+- **QR Codes**: Add QR codes linking to verification pages (Canvas API supports QR generation)
 - **Multi-language Support**: Localized certificate text

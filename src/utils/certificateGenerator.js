@@ -4,18 +4,14 @@ const { v4: uuidv4 } = require('uuid');
 
 /**
  * Lightweight Certificate Generator for TheMobileProf Learning Platform
- * Generates certificate data for client-side rendering
+ * Generates certificate data for client-side HTML5 Canvas rendering
  * No server-side image generation - eliminates heavy dependencies
  */
 class CertificateGenerator {
   constructor() {
-    this.certificatesDir = path.join(process.env.UPLOAD_PATH || './uploads', 'certificates');
     this.templatesDir = path.join(process.env.UPLOAD_PATH || './uploads', 'certificate-templates');
 
-    // Ensure directories exist
-    if (!fs.existsSync(this.certificatesDir)) {
-      fs.mkdirSync(this.certificatesDir, { recursive: true });
-    }
+    // Ensure template directory exists
     if (!fs.existsSync(this.templatesDir)) {
       fs.mkdirSync(this.templatesDir, { recursive: true });
     }
@@ -91,28 +87,6 @@ class CertificateGenerator {
       templateUrl,
       fileName: templateFileName
     };
-  }
-
-  /**
-   * Clean up old certificate files (optional maintenance function)
-   */
-  async cleanupOldCertificates(daysOld = 365) {
-    const files = fs.readdirSync(this.certificatesDir);
-    const cutoffDate = new Date();
-    cutoffDate.setDate(cutoffDate.getDate() - daysOld);
-
-    let deletedCount = 0;
-    for (const file of files) {
-      const filePath = path.join(this.certificatesDir, file);
-      const stats = fs.statSync(filePath);
-
-      if (stats.mtime < cutoffDate) {
-        fs.unlinkSync(filePath);
-        deletedCount++;
-      }
-    }
-
-    return deletedCount;
   }
 }
 
