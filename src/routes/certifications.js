@@ -199,25 +199,19 @@ router.get('/:id', authenticateToken, asyncHandler(async (req, res) => {
     day: 'numeric'
   });
 
-  // Return data in format expected by certificate-viewer.html
+  // Return certificate data with PDF download URL
   res.json({
     id: certification.id,
-    type: 'course_completion',
-    data: {
-      userName: `${certification.first_name} ${certification.last_name}`,
-      courseTitle: certification.course_title || 'Course',
-      classTitle: certification.class_title,
-      completionDate: formattedDate,
-      verificationCode: certification.verification_code,
-      templateImageUrl: certification.certificate_url // May be null for generated certificates
-    },
-    verificationUrl: `/api/certifications/verify/${certification.verification_code}`,
-    issuedAt: certification.issued_date,
-    // Include additional metadata for compatibility
     userId: certification.user_id,
     userEmail: certification.email,
+    userName: `${certification.first_name} ${certification.last_name}`,
     certificationName: certification.certification_name,
     issuer: certification.issuer,
+    courseTitle: certification.course_title || null,
+    classTitle: certification.class_title || null,
+    issuedDate: formattedDate,
+    verificationCode: certification.verification_code,
+    certificateUrl: certification.certificate_url, // URL to PDF file
     expiryDate: certification.expiry_date,
     status: certification.status,
     courseId: certification.course_id,
@@ -379,46 +373,6 @@ router.get('/:id/download', authenticateToken, asyncHandler(async (req, res) => 
 	}
 
 	throw new AppError('Certificate file not available', 404, 'File Not Found');
-}));
-
-// View certificate page (client-side HTML5 Canvas rendering)
-router.get('/:id/view', authenticateToken, asyncHandler(async (req, res) => {
-	const { id } = req.params;
-	const userId = req.user.id;
-
-	const certification = await getRow(
-		`SELECT cert.*, u.first_name, u.last_name, u.email,
-				c.title as course_title, cl.title as class_title
-		 FROM certifications cert
-		 JOIN users u ON cert.user_id = u.id
-		 LEFT JOIN courses c ON cert.course_id = c.id
-		 LEFT JOIN classes cl ON cert.class_id = cl.id
-		 WHERE cert.id = $1`,
-		[id]
-	);
-
-	if (!certification) {
-		throw new AppError('Certificate not found', 404, 'Certificate Not Found');
-	}
-
-	// Authorization: owner or admin
-	if (certification.user_id !== userId && req.user.role !== 'admin') {
-		throw new AppError('Access denied', 403, 'Access Denied');
-	}
-
-	// Read the HTML template
-	const fs = require('fs');
-	const path = require('path');
-	const templatePath = path.join(__dirname, '../../docs/certificate-viewer.html');
-
-	if (!fs.existsSync(templatePath)) {
-		throw new AppError('Certificate viewer not found', 500, 'Viewer Not Found');
-	}
-
-	let html = fs.readFileSync(templatePath, 'utf8');
-
-	res.setHeader('Content-Type', 'text/html');
-	res.send(html);
 }));
 
 // In-progress certification programs (student-facing)

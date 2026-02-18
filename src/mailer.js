@@ -479,7 +479,7 @@ const generateEmailHTML = (emailData) => {
             </div>
             
             <div style="text-align: center;">
-              <a href="${emailData.context?.data?.certificateViewUrl}" class="button" style="margin-right: 10px;">🎓 View Certificate</a>
+              <a href="${emailData.context?.data?.certificateUrl}" class="button" style="margin-right: 10px;">📄 Download Certificate</a>
               <a href="${emailData.context?.data?.verifyUrl}" class="button" style="background: #10b981; margin-left: 10px;">✅ Verify Certificate</a>
             </div>
             

@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Certificate of Completion</title>
+    <style>
+        @page {
+            size: A4 landscape;
+            margin: 0;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Georgia', 'Times New Roman', serif;
+            width: 297mm;
+            height: 210mm;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        
+        .certificate {
+            background: white;
+            width: 260mm;
+            height: 180mm;
+            padding: 40px 60px;
+            border-radius: 15px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+        }
+        
+        .border-decoration {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            right: 20px;
+            bottom: 20px;
+            border: 3px solid #667eea;
+            border-radius: 10px;
+            pointer-events: none;
+        }
+        
+        .logo {
+            font-size: 24px;
+            font-weight: bold;
+            color: #667eea;
+            margin-bottom: 20px;
+        }
+        
+        h1 {
+            font-size: 56px;
+            color: #2d3748;
+            margin-bottom: 20px;
+            font-weight: bold;
+            letter-spacing: 2px;
+        }
+        
+        .subtitle {
+            font-size: 20px;
+            color: #4a5568;
+            margin-bottom: 30px;
+        }
+        
+        .recipient-name {
+            font-size: 48px;
+            font-weight: bold;
+            color: #667eea;
+            margin: 20px 0;
+            padding: 10px 40px;
+            border-bottom: 3px solid #667eea;
+        }
+        
+        .completion-text {
+            font-size: 18px;
+            color: #4a5568;
+            margin: 20px 0 10px 0;
+        }
+        
+        .course-title {
+            font-size: 32px;
+            color: #2d3748;
+            font-weight: bold;
+            margin: 10px 0 30px 0;
+            max-width: 80%;
+        }
+        
+        .completion-date {
+            font-size: 16px;
+            color: #718096;
+            margin: 20px 0;
+        }
+        
+        .footer {
+            position: absolute;
+            bottom: 30px;
+            left: 0;
+            right: 0;
+            display: flex;
+            justify-content: space-between;
+            padding: 0 60px;
+            font-size: 14px;
+            color: #718096;
+        }
+        
+        .verification-code {
+            font-family: 'Courier New', monospace;
+            background: #edf2f7;
+            padding: 5px 15px;
+            border-radius: 5px;
+            font-size: 12px;
+        }
+        
+        .signature-section {
+            margin-top: 40px;
+            display: flex;
+            justify-content: center;
+            gap: 100px;
+            width: 100%;
+        }
+        
+        .signature {
+            text-align: center;
+        }
+        
+        .signature-image {
+            height: 60px;
+            margin-bottom: 5px;
+        }
+        
+        .signature-line {
+            width: 200px;
+            height: 2px;
+            background: #2d3748;
+            margin: 10px auto 5px auto;
+        }
+        
+        .signature-name {
+            font-size: 14px;
+            font-weight: bold;
+            color: #2d3748;
+        }
+        
+        .signature-title {
+            font-size: 12px;
+            color: #718096;
+        }
+    </style>
+</head>
+<body>
+    <div class="certificate">
+        <div class="border-decoration"></div>
+        
+        <div class="logo">TheMobileProf</div>
+        
+        <h1>CERTIFICATE OF COMPLETION</h1>
+        
+        <p class="subtitle">This certifies that</p>
+        
+        <div class="recipient-name">{{userName}}</div>
+        
+        <p class="completion-text">has successfully completed the course</p>
+        
+        <div class="course-title">{{courseTitle}}</div>
+        
+        <p class="completion-date">Completed on {{completionDate}}</p>
+        
+        {{#signatures}}
+        <div class="signature-section">
+            {{#signatures}}
+            <div class="signature">
+                {{#imageUrl}}
+                <img src="{{imageUrl}}" alt="Signature" class="signature-image">
+                {{/imageUrl}}
+                <div class="signature-line"></div>
+                <div class="signature-name">{{name}}</div>
+                <div class="signature-title">{{title}}</div>
+            </div>
+            {{/signatures}}
+        </div>
+        {{/signatures}}
+        
+        <div class="footer">
+            <div>Issued by {{issuer}}</div>
+            <div class="verification-code">{{verificationCode}}</div>
+        </div>
+    </div>
+</body>
+</html>

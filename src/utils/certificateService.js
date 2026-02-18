@@ -101,12 +101,13 @@ class CertificateService {
         instructorName: `${courseInfo.first_name} ${courseInfo.last_name}`,
         completionDate: courseInfo.completed_at || new Date().toISOString(),
         verificationCode,
-        templateImagePath: template ? path.resolve(template.image_path.replace('/uploads/', './uploads/')) : null
+        signatures: [] // Add signatures if available from template
       };
 
-      const certificateResult = certificateGenerator.generateCourseCertificate(certificateData);
+      // Generate PDF certificate using Puppeteer
+      const certificateFile = await certificateGenerator.generateCourseCertificate(certificateData);
 
-      // Save certificate to database (no file stored, data for client-side rendering)
+      // Save certificate to database with PDF file info
       const certificationRecord = await query(
         `INSERT INTO certifications (
           user_id, course_id, certification_name, issuer, issued_date,
@@ -119,7 +120,7 @@ class CertificateService {
           `${courseInfo.title} - Certificate of Completion`,
           'TheMobileProf Learning Platform',
           new Date().toISOString().split('T')[0], // issued_date as DATE
-          certificateResult.data.templateImageUrl, // Store template image URL if available
+          certificateFile.certificateUrl, // Store PDF URL
           verificationCode,
           'issued',
           template ? template.id : null
@@ -128,12 +129,13 @@ class CertificateService {
 
       const certificate = certificationRecord.rows[0];
 
-      // Send notification email with link to certificate viewer
+      // Send notification email with certificate download link
       await this.sendCertificateEmail(userInfo.email, {
         userName,
         courseTitle: courseInfo.title,
         certificateId: certificate.id,
-        verificationCode
+        verificationCode,
+        certificateUrl: certificateFile.certificateUrl
       });
 
       // Create in-app notification
@@ -143,7 +145,9 @@ class CertificateService {
 
       return {
         certificateId: certificate.id,
-        verificationCode
+        certificateUrl: certificateFile.certificateUrl,
+        verificationCode,
+        filePath: certificateFile.filePath
       };
 
     } catch (error) {
@@ -244,12 +248,13 @@ class CertificateService {
         instructorName: `${classInfo.first_name} ${classInfo.last_name}`,
         completionDate: classInfo.completed_at || new Date().toISOString(),
         verificationCode,
-        templateImagePath: template ? path.resolve(template.image_path.replace('/uploads/', './uploads/')) : null
+        signatures: [] // Add signatures if available from template
       };
 
-      const certificateResult = certificateGenerator.generateClassCertificate(certificateData);
+      // Generate PDF certificate using Puppeteer
+      const certificateFile = await certificateGenerator.generateClassCertificate(certificateData);
 
-      // Save certificate to database (no file stored, data for client-side rendering)
+      // Save certificate to database with PDF file info
       const certificationRecord = await query(
         `INSERT INTO certifications (
           user_id, class_id, certification_name, issuer, issued_date,
@@ -262,7 +267,7 @@ class CertificateService {
           `${classInfo.title} - Certificate of Attendance`,
           'TheMobileProf Learning Platform',
           new Date().toISOString().split('T')[0], // issued_date as DATE
-          certificateResult.data.templateImageUrl, // Store template image URL if available
+          certificateFile.certificateUrl, // Store PDF URL
           verificationCode,
           'issued',
           template ? template.id : null
@@ -271,12 +276,13 @@ class CertificateService {
 
       const certificate = certificationRecord.rows[0];
 
-      // Send notification email with link to certificate viewer
+      // Send notification email with certificate download link
       await this.sendCertificateEmail(userInfo.email, {
         userName,
         courseTitle: classInfo.title,
         certificateId: certificate.id,
         verificationCode,
+        certificateUrl: certificateFile.certificateUrl,
         type: 'class'
       });
 
@@ -287,7 +293,9 @@ class CertificateService {
 
       return {
         certificateId: certificate.id,
-        verificationCode
+        certificateUrl: certificateFile.certificateUrl,
+        verificationCode,
+        filePath: certificateFile.filePath
       };
 
     } catch (error) {
@@ -316,13 +324,13 @@ class CertificateService {
   /**
    * Send certificate award email notification
    * @param {string} email - Recipient email
-   * @param {Object} data - Email data (userName, courseTitle, certificateId, verificationCode, type?)
+   * @param {Object} data - Email data (userName, courseTitle, certificateId, verificationCode, certificateUrl, type?)
    */
   async sendCertificateEmail(email, data) {
     try {
       const certificateType = data.type === 'class' ? 'class attendance' : 'course completion';
       const baseUrl = process.env.BASE_URL || 'https://themobileprof.com';
-      const certificateViewUrl = `${baseUrl}/api/certifications/${data.certificateId}/view`;
+      const certificateDownloadUrl = `${baseUrl}${data.certificateUrl}`;
       const verifyUrl = `${baseUrl}/api/certifications/verify/${data.verificationCode}`;
 
       await sendEmail({
@@ -333,7 +341,7 @@ class CertificateService {
           firstName: data.userName.split(' ')[0],
           message: `Congratulations! You have successfully completed "${data.courseTitle}" and earned your certificate of ${certificateType}.`,
           data: {
-            certificateViewUrl, // Link to client-side certificate viewer
+            certificateUrl: certificateDownloadUrl, // Link to PDF download
             verificationCode: data.verificationCode,
             verifyUrl
           }

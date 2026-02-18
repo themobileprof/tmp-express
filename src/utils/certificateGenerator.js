@@ -1,37 +1,71 @@
 const fs = require('fs');
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
+const puppeteer = require('puppeteer');
+const templateEngine = require('./templateEngine');
 
 /**
- * Lightweight Certificate Generator for TheMobileProf Learning Platform
- * Generates certificate data for client-side HTML5 Canvas rendering
- * No server-side image generation - eliminates heavy dependencies
+ * Certificate Generator using Puppeteer + HTML Templates
+ * Generates PDF certificates from HTML templates with professional design
  */
 class CertificateGenerator {
   constructor() {
-    this.templatesDir = path.join(process.env.UPLOAD_PATH || './uploads', 'certificate-templates');
-
-    // Ensure template directory exists
-    if (!fs.existsSync(this.templatesDir)) {
-      fs.mkdirSync(this.templatesDir, { recursive: true });
+    this.certificatesDir = path.join(process.env.UPLOAD_PATH || './uploads', 'certificates');
+    this.templatesDir = path.join(__dirname, '../templates/certificates');
+    
+    // Ensure directories exist
+    if (!fs.existsSync(this.certificatesDir)) {
+      fs.mkdirSync(this.certificatesDir, { recursive: true });
     }
+    
+    // Browser instance (reuse for performance)
+    this.browser = null;
   }
-
+  
   /**
-   * Generate certificate data for client-side rendering
-   * @param {Object} data - Certificate data
-   * @returns {Object} - Certificate data object for frontend
+   * Get or create browser instance
    */
-  generateCourseCertificate(data) {
+  async getBrowser() {
+    if (!this.browser || !this.browser.isConnected()) {
+      this.browser = await puppeteer.launch({
+        headless: true,
+        args: [
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
+          '--disable-dev-shm-usage',
+          '--disable-gpu'
+        ]
+      });
+    }
+    return this.browser;
+  }
+  
+  /**
+   * Load HTML template
+   */
+  loadTemplate(templateName = 'default-certificate') {
+    const templatePath = path.join(this.templatesDir, `${templateName}.html`);
+    if (!fs.existsSync(templatePath)) {
+      throw new Error(`Template not found: ${templateName}`);
+    }
+    return fs.readFileSync(templatePath, 'utf8');
+  }
+  
+  /**
+   * Generate certificate PDF from HTML template
+   */
+  async generateCertificatePDF(data, templateName = 'default-certificate') {
     const {
       userName,
       courseTitle,
+      classTitle,
       instructorName,
       completionDate,
       verificationCode,
-      templateImagePath
+      issuer = 'TheMobileProf Learning Platform',
+      signatures = []
     } = data;
-
+    
     // Format completion date
     const completionDateObj = new Date(completionDate);
     const formattedDate = completionDateObj.toLocaleDateString('en-US', {
@@ -39,55 +73,118 @@ class CertificateGenerator {
       month: 'long',
       day: 'numeric'
     });
-
-    // Generate unique certificate ID
-    const certificateId = uuidv4();
-
-    // Return data for client-side generation
-    return {
-      id: certificateId,
-      type: 'course_completion',
-      data: {
-        userName,
-        courseTitle,
-        instructorName,
-        completionDate: formattedDate,
-        verificationCode,
-        templateImageUrl: templateImagePath ? `/uploads/certificate-templates/${path.basename(templateImagePath)}` : null
-      },
-      verificationUrl: `/api/certifications/verify/${verificationCode}`,
-      issuedAt: new Date().toISOString()
-    };
-  }
-
-  /**
-   * Generate a class completion certificate (same structure)
-   */
-  generateClassCertificate(data) {
-    return this.generateCourseCertificate({
-      ...data,
-      courseTitle: data.classTitle || data.courseTitle
+    
+    // Load and render template
+    const template = this.loadTemplate(templateName);
+    const html = templateEngine.render(template, {
+      userName,
+      courseTitle: courseTitle || classTitle,
+      instructorName,
+      completionDate: formattedDate,
+      verificationCode,
+      issuer,
+      signatures: signatures.length > 0 ? signatures : null
     });
+    
+    // Generate unique filename
+    const fileName = `certificate-${uuidv4()}.pdf`;
+    const filePath = path.join(this.certificatesDir, fileName);
+    
+    // Generate PDF with Puppeteer
+    const browser = await this.getBrowser();
+    const page = await browser.newPage();
+    
+    try {
+      await page.setContent(html, { waitUntil: 'networkidle0' });
+      
+      await page.pdf({
+        path: filePath,
+        format: 'A4',
+        landscape: true,
+        printBackground: true,
+        preferCSSPageSize: true
+      });
+      
+      await page.close();
+      
+      const certificateUrl = `/uploads/certificates/${fileName}`;
+      const fileSize = fs.statSync(filePath).size;
+      
+      console.log(`✓ Certificate PDF generated: ${fileName} (${fileSize} bytes)`);
+      
+      return {
+        fileName,
+        filePath,
+        certificateUrl,
+        verificationCode,
+        fileSize
+      };
+      
+    } catch (error) {
+      await page.close();
+      throw error;
+    }
   }
-
+  
   /**
-   * Upload and validate a certificate template image
+   * Generate course completion certificate
    */
-  async uploadTemplateImage(imageBuffer, fileName) {
-    const templateFileName = `template-${Date.now()}-${Math.random().toString(36).substr(2, 9)}${path.extname(fileName)}`;
-    const templatePath = path.join(this.templatesDir, templateFileName);
-
-    // Save the template image
-    fs.writeFileSync(templatePath, imageBuffer);
-
-    const templateUrl = `/uploads/certificate-templates/${templateFileName}`;
-
-    return {
-      templatePath,
-      templateUrl,
-      fileName: templateFileName
-    };
+  async generateCourseCertificate(data) {
+    return await this.generateCertificatePDF(data, 'default-certificate');
+  }
+  
+  /**
+   * Generate class attendance certificate
+   */
+  async generateClassCertificate(data) {
+    return await this.generateCertificatePDF(data, 'default-certificate');
+  }
+  
+  /**
+   * Clean up browser instance
+   */
+  async cleanup() {
+    if (this.browser) {
+      await this.browser.close();
+      this.browser = null;
+    }
+  }
+  
+  /**
+   * Clean up old certificate files
+   */
+  async cleanupOldCertificates(daysOld = 365) {
+    const files = fs.readdirSync(this.certificatesDir);
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - daysOld);
+    
+    let deletedCount = 0;
+    for (const file of files) {
+      const filePath = path.join(this.certificatesDir, file);
+      const stats = fs.statSync(filePath);
+      
+      if (stats.mtime < cutoffDate) {
+        fs.unlinkSync(filePath);
+        deletedCount++;
+      }
+    }
+    
+    return deletedCount;
   }
 }
 
-module.exports = new CertificateGenerator();
+// Create singleton instance
+const generator = new CertificateGenerator();
+
+// Cleanup on process exit
+process.on('SIGINT', async () => {
+  await generator.cleanup();
+  process.exit();
+});
+
+process.on('SIGTERM', async () => {
+  await generator.cleanup();
+  process.exit();
+});
+
+module.exports = generator;

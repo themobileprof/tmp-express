@@ -30,7 +30,6 @@ const uploadRoutes = require('./routes/uploads');
 const searchRoutes = require('./routes/search');
 const metaRoutes = require('./routes/meta');
 const certificationProgramRoutes = require('./routes/certificationPrograms');
-const certificateTemplateRoutes = require('./routes/certificateTemplates');
 
 const { errorHandler } = require('./middleware/errorHandler');
 const { authenticateToken } = require('./middleware/auth');
@@ -472,7 +471,6 @@ app.use('/api/lessons', authenticateToken, lessonRoutes);
 app.use('/api/tests', authenticateToken, testRoutes);
 app.use('/api/discussions', discussionRoutes);
 app.use('/api/certifications', authenticateToken, certificationRoutes);
-app.use('/api/certificate-templates', authenticateToken, certificateTemplateRoutes);
 app.use('/api/settings', authenticateToken, settingsRoutes);
 app.use('/api/payments', paymentLimiter, paymentRoutes);
 app.use('/api/admin', adminRoutes);

@@ -2,8 +2,8 @@ const certificateGenerator = require('./src/utils/certificateGenerator');
 const certificateService = require('./src/utils/certificateService');
 
 /**
- * Test script for certificate data generation (client-side Canvas rendering)
- * Tests the new JSON-based certificate system
+ * Test script for certificate PDF generation using Puppeteer + HTML templates
+ * Tests the new PDF-based certificate system
  * Run with: node test-certificates.js
  */
 
@@ -21,29 +21,23 @@ async function testCertificateGeneration() {
       issuer: 'TheMobileProf Learning Platform'
     };
 
-    console.log('📄 Generating course completion certificate data...');
-    const certificate = certificateGenerator.generateCourseCertificate(testData);
+    console.log('📄 Generating course completion certificate PDF...');
+    const certificate = await certificateGenerator.generateCourseCertificate(testData);
 
-    console.log('✅ Certificate data generated successfully!');
-    console.log('🆔 Certificate ID:', certificate.id);
-    console.log('📋 Certificate Type:', certificate.type);
-    console.log('🔢 Verification Code:', certificate.data.verificationCode);
-    console.log('📅 Issued At:', certificate.issuedAt);
-    console.log('🔗 Verification URL:', certificate.verificationUrl);
+    console.log('✅ Certificate PDF generated successfully!');
+    console.log('📁 File Path:', certificate.filePath);
+    console.log('🔗 Certificate URL:', certificate.certificateUrl);
+    console.log('🔢 Verification Code:', certificate.verificationCode);
+    console.log('📏 File Size:', certificate.fileSize, 'bytes');
+    console.log('📄 File Name:', certificate.fileName);
     
-    console.log('\n📄 Certificate Data Structure:');
-    console.log(JSON.stringify(certificate, null, 2));
-    
-    // Validate certificate data structure
-    console.log('\n✓ Validating certificate structure...');
-    if (!certificate.id) throw new Error('Missing certificate ID');
-    if (!certificate.type) throw new Error('Missing certificate type');
-    if (!certificate.data) throw new Error('Missing certificate data');
-    if (!certificate.data.userName) throw new Error('Missing user name');
-    if (!certificate.data.courseTitle) throw new Error('Missing course title');
-    if (!certificate.data.verificationCode) throw new Error('Missing verification code');
-    if (!certificate.verificationUrl) throw new Error('Missing verification URL');
-    console.log('✓ Certificate structure is valid!');
+    // Validate certificate file exists
+    const fs = require('fs');
+    if (fs.existsSync(certificate.filePath)) {
+      console.log('✓ Certificate file exists on disk\n');
+    } else {
+      throw new Error('Certificate file was not created!');
+    }
 
     // Test class certificate
     const classTestData = {
@@ -55,27 +49,22 @@ async function testCertificateGeneration() {
       issuer: 'TheMobileProf Learning Platform'
     };
 
-    console.log('\n📄 Generating class attendance certificate data...');
-    const classCertificate = certificateGenerator.generateClassCertificate(classTestData);
+    console.log('\n📄 Generating class attendance certificate PDF...');
+    const classCertificate = await certificateGenerator.generateClassCertificate(classTestData);
 
-    console.log('✅ Class certificate data generated successfully!');
-    console.log('🆔 Certificate ID:', classCertificate.id);
-    console.log('📋 Certificate Type:', classCertificate.type);
-    console.log('🔢 Verification Code:', classCertificate.data.verificationCode);
-    console.log('📅 Issued At:', classCertificate.issuedAt);
-    console.log('🔗 Verification URL:', classCertificate.verificationUrl);
+    console.log('✅ Class certificate PDF generated successfully!');
+    console.log('📁 File Path:', classCertificate.filePath);
+    console.log('🔗 Certificate URL:', classCertificate.certificateUrl);
+    console.log('🔢 Verification Code:', classCertificate.verificationCode);
+    console.log('📏 File Size:', classCertificate.fileSize, 'bytes');
+    console.log('📄 File Name:', classCertificate.fileName);
     
-    console.log('\n📄 Class Certificate Data Structure:');
-    console.log(JSON.stringify(classCertificate, null, 2));
-    
-    // Validate class certificate data structure
-    console.log('\n✓ Validating class certificate structure...');
-    if (!classCertificate.id) throw new Error('Missing certificate ID');
-    if (!classCertificate.type) throw new Error('Missing certificate type');
-    if (!classCertificate.data) throw new Error('Missing certificate data');
-    if (!classCertificate.data.userName) throw new Error('Missing user name');
-    if (!classCertificate.data.classTitle && !classCertificate.data.courseTitle) throw new Error('Missing class/course title');
-    console.log('✓ Class certificate structure is valid!');
+    // Validate certificate file exists
+    if (fs.existsSync(classCertificate.filePath)) {
+      console.log('✓ Certificate file exists on disk\n');
+    } else {
+      throw new Error('Class certificate file was not created!');
+    }
 
     console.log('🎉 All certificate generation tests passed!');
 
@@ -120,14 +109,15 @@ async function runTests() {
 
   console.log('\n🎊 All tests completed successfully!');
   console.log('\n📋 Next steps:');
-  console.log('1. ✓ Certificate data generation working correctly');
-  console.log('2. Test the /api/certifications/:id/view endpoint for client-side rendering');
+  console.log('1. ✓ Certificate PDF generation working correctly with Puppeteer');
+  console.log('2. Check the uploads/certificates/ directory for generated PDFs');
   console.log('3. Test the API endpoints for certificate awarding');
-  console.log('4. Verify email notifications link to certificate viewer');
+  console.log('4. Verify email notifications include PDF download links');
   console.log('5. Test certificate verification endpoint');
-  console.log('6. Verify Canvas rendering in the browser certificate viewer');
-  console.log('\n💡 Certificate system now uses client-side HTML5 Canvas rendering!');
-  console.log('   No PDF files are generated - all rendering happens in the browser.');
+  console.log('6. Customize HTML templates in src/templates/certificates/');
+  console.log('\n💡 Certificate system now uses Puppeteer + HTML templates!');
+  console.log('   Professional PDF certificates generated server-side.');
+  console.log('   Easy to customize - just edit HTML/CSS templates!');
 }
 
 if (require.main === module) {
