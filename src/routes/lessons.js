@@ -247,6 +247,12 @@ router.get('/:id', authenticateToken, asyncHandler(async (req, res) => {
       reviewedAt: lesson.reviewed_at,
       reviewNotes: lesson.review_notes
     },
+    flagStatus: {
+      isFlagged: lesson.flagged || false,
+      flagCount: lesson.flag_count || 0,
+      lastFlaggedAt: lesson.last_flagged_at || null,
+      lastFlagReason: lesson.last_flag_reason || null
+    },
     progress: progress ? {
       isCompleted: progress.is_completed,
       progressPercentage: progress.progress_percentage,
@@ -581,7 +587,112 @@ router.get('/:id/workshop', authenticateToken, asyncHandler(async (req, res) => 
           reviewedByName: workshop.reviewed_by_name,
           reviewedAt: workshop.reviewed_at,
           reviewNotes: workshop.review_notes
+        },
+        flagStatus: {
+          isFlagged: workshop.flagged || false,
+          flagCount: workshop.flag_count || 0,
+          lastFlaggedAt: workshop.last_flagged_at || null,
+          lastFlagReason: workshop.last_flag_reason || null
         }
       }
+    });
+}));
+
+// Flag a lesson as problematic (student-facing)
+router.post('/:id/flag', 
+  authenticateToken, 
+  [
+    body('reason')
+      .optional()
+      .isString()
+      .trim()
+      .isLength({ max: 500 })
+      .withMessage('Reason must be 500 characters or less')
+  ],
+  asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const { reason } = req.body;
+
+    // Verify lesson exists
+    const lesson = await getRow('SELECT id, title FROM lessons WHERE id = $1', [id]);
+    if (!lesson) {
+      throw new AppError('Lesson not found', 404, 'Lesson Not Found');
+    }
+
+    // Sanitize reason (trim and limit)
+    const sanitizedReason = reason ? reason.trim().substring(0, 500) : 'No reason provided';
+
+    // Increment flag counter, mark as flagged, and reset review status
+    await query(
+      `UPDATE lessons
+       SET flag_count = flag_count + 1,
+           flagged = true,
+           last_flagged_at = CURRENT_TIMESTAMP,
+           last_flag_reason = $1,
+           is_reviewed = false,
+           review_notes = CONCAT(
+             COALESCE(review_notes || E'\\n\\n', ''),
+             'FLAGGED BY STUDENT at ', TO_CHAR(CURRENT_TIMESTAMP, 'YYYY-MM-DD HH24:MI:SS'), 
+             E'\\nReason: ', $1
+           )
+       WHERE id = $2`,
+      [sanitizedReason, id]
+    );
+
+    res.json({ 
+      success: true, 
+      message: 'Lesson flagged for review. An admin will investigate shortly.' 
+    });
+}));
+
+// Flag a workshop as problematic (student-facing)
+router.post('/:id/workshop/flag',
+  authenticateToken,
+  [
+    body('reason')
+      .optional()
+      .isString()
+      .trim()
+      .isLength({ max: 500 })
+      .withMessage('Reason must be 500 characters or less')
+  ],
+  asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const { reason } = req.body;
+
+    // Verify lesson and workshop exist
+    const lesson = await getRow('SELECT id, title FROM lessons WHERE id = $1', [id]);
+    if (!lesson) {
+      throw new AppError('Lesson not found', 404, 'Lesson Not Found');
+    }
+
+    const workshop = await getRow('SELECT id FROM lesson_workshops WHERE lesson_id = $1', [id]);
+    if (!workshop) {
+      throw new AppError('Workshop not found for this lesson', 404, 'Workshop Not Found');
+    }
+
+    // Sanitize reason (trim and limit)
+    const sanitizedReason = reason ? reason.trim().substring(0, 500) : 'No reason provided';
+
+    // Increment flag counter, mark as flagged, and reset review status
+    await query(
+      `UPDATE lesson_workshops
+       SET flag_count = flag_count + 1,
+           flagged = true,
+           last_flagged_at = CURRENT_TIMESTAMP,
+           last_flag_reason = $1,
+           is_reviewed = false,
+           review_notes = CONCAT(
+             COALESCE(review_notes || E'\\n\\n', ''),
+             'FLAGGED BY STUDENT at ', TO_CHAR(CURRENT_TIMESTAMP, 'YYYY-MM-DD HH24:MI:SS'),
+             E'\\nReason: ', $1
+           )
+       WHERE lesson_id = $2`,
+      [sanitizedReason, id]
+    );
+
+    res.json({
+      success: true,
+      message: 'Workshop flagged for review. An admin will investigate shortly.'
     });
 }));

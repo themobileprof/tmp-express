@@ -278,6 +278,195 @@ curl -X PUT \
 
 Check your content's review status by looking at the `is_reviewed`, `reviewed_by`, `reviewed_at`, and `review_notes` fields when fetching lessons/questions/workshops.
 
+## Student Flag System
+
+Students can flag problematic content (lessons, workshops, or test questions) when they encounter issues. When content is flagged by a student:
+
+1. **Review status is reset** - `is_reviewed` is set to `false` automatically
+2. **Flag counter increments** - Track how many times content has been flagged
+3. **Timestamp and reason recorded** - Know when it was flagged and why
+4. **Admin notification via notes** - Flag details are added to `review_notes`
+
+### Student Flag Endpoints
+
+These endpoints are **authenticated but not admin-only** - any enrolled student can use them.
+
+#### Flag a Lesson
+
+```http
+POST /api/lessons/:id/flag
+Content-Type: application/json
+Authorization: Bearer {student-token}
+
+{
+  "reason": "The video URL is broken and doesn't load"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Lesson flagged for review. An admin will investigate shortly."
+}
+```
+
+#### Flag a Workshop
+
+```http
+POST /api/lessons/:id/workshop/flag
+Content-Type: application/json
+Authorization: Bearer {student-token}
+
+{
+  "reason": "The workshop instructions are unclear"
+}
+```
+
+#### Flag a Test Question
+
+```http
+POST /api/tests/:id/questions/:questionId/flag
+Content-Type: application/json
+Authorization: Bearer {student-token}
+
+{
+  "reason": "Multiple answers seem correct"
+}
+```
+
+### Flag Validation & Security
+
+To prevent abuse, the system implements:
+
+- **Character limit**: Reasons are limited to 500 characters
+- **Sanitization**: Input is trimmed and length-validated
+- **Authentication required**: Must be logged in to flag content
+- **Default reason**: If no reason provided, uses "No reason provided"
+
+### Flag Status in GET Responses
+
+Flag information is included in regular GET endpoints so the frontend can display flag counts and reasons:
+
+**Lesson endpoint response:**
+```json
+{
+  "id": "...",
+  "title": "...",
+  "reviewStatus": { ... },
+  "flagStatus": {
+    "isFlagged": true,
+    "flagCount": 3,
+    "lastFlaggedAt": "2026-02-20T14:30:00Z",
+    "lastFlagReason": "Video doesn't work"
+  }
+}
+```
+
+**Test questions response:**
+```json
+{
+  "questions": [
+    {
+      "id": "...",
+      "question": "...",
+      "reviewStatus": { ... },
+      "flagStatus": {
+        "isFlagged": true,
+        "flagCount": 2,
+        "lastFlaggedAt": "2026-02-20T15:45:00Z",
+        "lastFlagReason": "Answer key seems wrong"
+      }
+    }
+  ]
+}
+```
+
+**Workshop endpoint response:**
+```json
+{
+  "lesson": { ... },
+  "workshop": {
+    "spec": { ... },
+    "reviewStatus": { ... },
+    "flagStatus": {
+      "isFlagged": false,
+      "flagCount": 0,
+      "lastFlaggedAt": null,
+      "lastFlagReason": null
+    }
+  }
+}
+```
+
+### What Happens When Content is Flagged?
+
+1. **Flag counter increments**: `flag_count` increases by 1
+2. **Flagged status set**: `flagged` boolean set to `true`
+3. **Timestamp recorded**: `last_flagged_at` updated to current time
+4. **Reason stored**: `last_flag_reason` captures the student's comment
+5. **Review reset**: `is_reviewed` set to `false` (needs admin re-review)
+6. **Notes appended**: Review notes get updated with flag details:
+   ```
+   FLAGGED BY STUDENT at 2026-02-20 14:30:00
+   Reason: The video URL is broken and doesn't load
+   ```
+
+### Admin Response to Flags
+
+When an admin sees flagged content in the review list:
+
+1. **Investigate the issue** - Check the flag reason in `review_notes`
+2. **Fix the content** - Update the lesson/question/workshop
+3. **Mark as reviewed** - Use the admin review endpoint:
+   ```bash
+   PUT /api/admin/lessons/{id}/mark-reviewed
+   Body: {"isReviewed": true, "notes": "Fixed broken video URL"}
+   ```
+
+### Frontend Implementation for Students
+
+```javascript
+// Show flag button for enrolled students
+async function flagLesson(lessonId, reason) {
+  const response = await fetch(`/api/lessons/${lessonId}/flag`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${userToken}`
+    },
+    body: JSON.stringify({ reason })
+  });
+  
+  if (response.ok) {
+    alert('Thank you for reporting this issue!');
+  }
+}
+
+// Display flag count (for admins)
+if (lesson.flagStatus.isFlagged && userIsAdmin) {
+  showWarning(`This lesson has been flagged ${lesson.flagStatus.flagCount} times`);
+  showLastFlagReason(lesson.flagStatus.lastFlagReason);
+}
+```
+
+### Example Student Flag Workflow
+
+1. **Student encounters issue**: Video doesn't play in lesson
+2. **Student flags lesson**:
+   ```javascript
+   POST /api/lessons/abc-123/flag
+   Body: {"reason": "Video link is broken"}
+   ```
+3. **System automatically**:
+   - Sets `is_reviewed = false`
+   - Increments `flag_count`
+   - Records timestamp and reason
+   - Appends to review notes
+4. **Admin receives notification** (via review list)
+5. **Admin investigates and fixes**
+6. **Admin marks as reviewed** with fix notes
+
 ## Database Queries
 
 ### Find Unreviewed Content
@@ -301,6 +490,47 @@ JOIN lessons l ON lw.lesson_id = l.id
 WHERE lw.is_reviewed = false;
 ```
 
+### Find Flagged Content
+
+```sql
+-- Flagged lessons
+SELECT id, title, flag_count, last_flagged_at, last_flag_reason
+FROM lessons 
+WHERE flagged = true AND deleted_at IS NULL
+ORDER BY flag_count DESC, last_flagged_at DESC;
+
+-- Flagged test questions
+SELECT tq.id, tq.question, t.title as test_title, 
+       tq.flag_count, tq.last_flagged_at, tq.last_flag_reason
+FROM test_questions tq
+JOIN tests t ON tq.test_id = t.id
+WHERE tq.flagged = true
+ORDER BY tq.flag_count DESC, tq.last_flagged_at DESC;
+
+-- Flagged workshops
+SELECT lw.id, l.title as lesson_title, 
+       lw.flag_count, lw.last_flagged_at, lw.last_flag_reason
+FROM lesson_workshops lw
+JOIN lessons l ON lw.lesson_id = l.id
+WHERE lw.flagged = true
+ORDER BY lw.flag_count DESC, lw.last_flagged_at DESC;
+
+-- Priority flags (multiple flags)
+SELECT 'lesson' as type, id, title as name, flag_count, last_flag_reason
+FROM lessons 
+WHERE flag_count > 2 AND deleted_at IS NULL
+UNION ALL
+SELECT 'question' as type, tq.id, tq.question as name, tq.flag_count, tq.last_flag_reason
+FROM test_questions tq
+WHERE tq.flag_count > 2
+UNION ALL
+SELECT 'workshop' as type, lw.id, l.title as name, lw.flag_count, lw.last_flag_reason
+FROM lesson_workshops lw
+JOIN lessons l ON lw.lesson_id = l.id
+WHERE lw.flag_count > 2
+ORDER BY flag_count DESC;
+```
+
 ### Get Review Statistics
 
 ```sql
@@ -311,6 +541,28 @@ SELECT
 FROM lessons
 WHERE deleted_at IS NULL
 GROUP BY is_reviewed;
+
+-- Flag statistics
+SELECT 
+  'lessons' as content_type,
+  COUNT(*) FILTER (WHERE flagged = true) as flagged_count,
+  SUM(flag_count) as total_flags,
+  AVG(flag_count) FILTER (WHERE flagged = true) as avg_flags_per_item
+FROM lessons WHERE deleted_at IS NULL
+UNION ALL
+SELECT 
+  'questions' as content_type,
+  COUNT(*) FILTER (WHERE flagged = true) as flagged_count,
+  SUM(flag_count) as total_flags,
+  AVG(flag_count) FILTER (WHERE flagged = true) as avg_flags_per_item
+FROM test_questions
+UNION ALL
+SELECT 
+  'workshops' as content_type,
+  COUNT(*) FILTER (WHERE flagged = true) as flagged_count,
+  SUM(flag_count) as total_flags,
+  AVG(flag_count) FILTER (WHERE flagged = true) as avg_flags_per_item
+FROM lesson_workshops;
 ```
 
 ## Integration Tips

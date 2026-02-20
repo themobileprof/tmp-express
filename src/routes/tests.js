@@ -306,43 +306,64 @@ router.get('/:id/questions', authenticateToken, asyncHandler(async (req, res) =>
         reviewedAt: q.reviewed_at,
         reviewNotes: q.review_notes
       },
-      flagSummary: {
-        total: q.flag_count || 0,
-        flagged: !!q.flagged,
-        lastFlaggedAt: q.last_flagged_at || null
+      flagStatus: {
+        isFlagged: !!q.flagged,
+        flagCount: q.flag_count || 0,
+        lastFlaggedAt: q.last_flagged_at || null,
+        lastFlagReason: q.last_flag_reason || null
       }
     }))
   });
 }));
 
 // Flag a question as problematic (user-facing)
-router.post('/:id/questions/:questionId/flag', authenticateToken, asyncHandler(async (req, res) => {
-  const { id, questionId } = req.params;
-  const { reason } = req.body || {};
+router.post('/:id/questions/:questionId/flag', 
+  authenticateToken,
+  [
+    body('reason')
+      .optional()
+      .isString()
+      .trim()
+      .isLength({ max: 500 })
+      .withMessage('Reason must be 500 characters or less')
+  ],
+  asyncHandler(async (req, res) => {
+    const { id, questionId } = req.params;
+    const { reason } = req.body;
 
-  // Verify test and question
-  const test = await getRow('SELECT id FROM tests WHERE id = $1', [id]);
-  if (!test) {
-    throw new AppError('Test not found', 404, 'Test Not Found');
-  }
+    // Verify test and question
+    const test = await getRow('SELECT id FROM tests WHERE id = $1', [id]);
+    if (!test) {
+      throw new AppError('Test not found', 404, 'Test Not Found');
+    }
 
-  const question = await getRow('SELECT id FROM test_questions WHERE id = $1 AND test_id = $2', [questionId, id]);
-  if (!question) {
-    throw new AppError('Question not found', 404, 'Question Not Found');
-  }
+    const question = await getRow('SELECT id FROM test_questions WHERE id = $1 AND test_id = $2', [questionId, id]);
+    if (!question) {
+      throw new AppError('Question not found', 404, 'Question Not Found');
+    }
 
-  // Simple anonymous flagging flow: increment counter and mark as flagged
-  await query(
-    `UPDATE test_questions
-     SET flag_count = flag_count + 1,
-         flagged = true,
-         last_flagged_at = CURRENT_TIMESTAMP
-     WHERE id = $1 AND test_id = $2`,
-    [questionId, id]
-  );
+    // Sanitize reason (trim and limit)
+    const sanitizedReason = reason ? reason.trim().substring(0, 500) : 'No reason provided';
 
-  res.json({ success: true, message: 'Question flagged for review' });
-}));
+    // Increment flag counter, mark as flagged, reset review status, and store reason
+    await query(
+      `UPDATE test_questions
+       SET flag_count = flag_count + 1,
+           flagged = true,
+           last_flagged_at = CURRENT_TIMESTAMP,
+           last_flag_reason = $1,
+           is_reviewed = false,
+           review_notes = CONCAT(
+             COALESCE(review_notes || E'\\n\\n', ''),
+             'FLAGGED BY STUDENT at ', TO_CHAR(CURRENT_TIMESTAMP, 'YYYY-MM-DD HH24:MI:SS'),
+             E'\\nReason: ', $1
+           )
+       WHERE id = $2 AND test_id = $3`,
+      [sanitizedReason, questionId, id]
+    );
+
+    res.json({ success: true, message: 'Question flagged for review' });
+  }));
 
 // Add question to test
 router.post('/:id/questions', authenticateToken, authorizeOwnerOrAdmin('tests', 'id'), validateCreateQuestion, asyncHandler(async (req, res) => {
