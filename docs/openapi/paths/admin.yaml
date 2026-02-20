@@ -1,0 +1,443 @@
+# Admin Content Review Endpoints
+
+# Get Content Review List
+/content/review-list:
+  get:
+    tags:
+      - Admin
+      - Content Review
+    summary: Get content review list
+    description: |
+      Get a list of content items (lessons, test questions, workshops) with their review status.
+      Supports filtering by review status and content type.
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: reviewed
+        in: query
+        description: Filter by review status (true for reviewed, false for unreviewed)
+        schema:
+          type: boolean
+      - name: contentType
+        in: query
+        description: Filter by content type
+        schema:
+          type: string
+          enum: [lessons, test_questions, workshops]
+      - name: page
+        in: query
+        description: Page number
+        schema:
+          type: integer
+          default: 1
+          minimum: 1
+      - name: limit
+        in: query
+        description: Items per page
+        schema:
+          type: integer
+          default: 50
+          minimum: 1
+          maximum: 100
+    responses:
+      '200':
+        description: Content review list retrieved successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                lessons:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      title:
+                        type: string
+                      courseId:
+                        type: string
+                        format: uuid
+                      courseTitle:
+                        type: string
+                      isReviewed:
+                        type: boolean
+                      reviewedBy:
+                        type: string
+                        format: uuid
+                      reviewedByName:
+                        type: string
+                      reviewedAt:
+                        type: string
+                        format: date-time
+                      reviewNotes:
+                        type: string
+                      isFlagged:
+                        type: boolean
+                      flagCount:
+                        type: integer
+                      lastFlaggedAt:
+                        type: string
+                        format: date-time
+                      lastFlagReason:
+                        type: string
+                testQuestions:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      question:
+                        type: string
+                      testId:
+                        type: string
+                        format: uuid
+                      testTitle:
+                        type: string
+                      isReviewed:
+                        type: boolean
+                      reviewedBy:
+                        type: string
+                        format: uuid
+                      reviewedByName:
+                        type: string
+                      reviewedAt:
+                        type: string
+                        format: date-time
+                      reviewNotes:
+                        type: string
+                      isFlagged:
+                        type: boolean
+                      flagCount:
+                        type: integer
+                      lastFlaggedAt:
+                        type: string
+                        format: date-time
+                      lastFlagReason:
+                        type: string
+                workshops:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      lessonId:
+                        type: string
+                        format: uuid
+                      lessonTitle:
+                        type: string
+                      courseTitle:
+                        type: string
+                      isReviewed:
+                        type: boolean
+                      reviewedBy:
+                        type: string
+                        format: uuid
+                      reviewedByName:
+                        type: string
+                      reviewedAt:
+                        type: string
+                        format: date-time
+                      reviewNotes:
+                        type: string
+                      isFlagged:
+                        type: boolean
+                      flagCount:
+                        type: integer
+                      lastFlaggedAt:
+                        type: string
+                        format: date-time
+                      lastFlagReason:
+                        type: string
+                pagination:
+                  type: object
+                  properties:
+                    page:
+                      type: integer
+                    limit:
+                      type: integer
+      '401':
+        $ref: '../responses/Unauthorized.yaml'
+      '403':
+        description: Admin access required
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                error:
+                  type: string
+                  example: Admin access required
+
+# Mark Lesson as Reviewed
+/lessons/{id}/mark-reviewed:
+  put:
+    tags:
+      - Admin
+      - Content Review
+    summary: Mark lesson as reviewed or unreviewed
+    description: |
+      Mark a lesson as reviewed or unreviewed with optional notes.
+      Sets is_reviewed flag, records reviewer and timestamp.
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Lesson ID
+        schema:
+          type: string
+          format: uuid
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - isReviewed
+            properties:
+              isReviewed:
+                type: boolean
+                description: Whether the lesson is reviewed
+              notes:
+                type: string
+                description: Optional review notes or feedback
+                maxLength: 2000
+          examples:
+            markReviewed:
+              summary: Mark as reviewed
+              value:
+                isReviewed: true
+                notes: "Content verified and approved"
+            markUnreviewed:
+              summary: Mark as needing review
+              value:
+                isReviewed: false
+                notes: "Needs more examples in section 3"
+    responses:
+      '200':
+        description: Lesson review status updated successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                  example: true
+                message:
+                  type: string
+                  example: Lesson review status updated
+      '400':
+        $ref: '../responses/BadRequest.yaml'
+      '401':
+        $ref: '../responses/Unauthorized.yaml'
+      '403':
+        description: Admin access required
+      '404':
+        $ref: '../responses/NotFound.yaml'
+
+# Mark Workshop as Reviewed
+/lessons/{lessonId}/workshop/mark-reviewed:
+  put:
+    tags:
+      - Admin
+      - Content Review
+    summary: Mark workshop as reviewed or unreviewed
+    description: |
+      Mark a lesson's workshop as reviewed or unreviewed with optional notes.
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: lessonId
+        in: path
+        required: true
+        description: Lesson ID (workshop is identified by lesson)
+        schema:
+          type: string
+          format: uuid
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - isReviewed
+            properties:
+              isReviewed:
+                type: boolean
+                description: Whether the workshop is reviewed
+              notes:
+                type: string
+                description: Optional review notes or feedback
+                maxLength: 2000
+    responses:
+      '200':
+        description: Workshop review status updated successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                  example: true
+                message:
+                  type: string
+                  example: Workshop review status updated
+      '400':
+        $ref: '../responses/BadRequest.yaml'
+      '401':
+        $ref: '../responses/Unauthorized.yaml'
+      '403':
+        description: Admin access required
+      '404':
+        $ref: '../responses/NotFound.yaml'
+
+# Mark Question as Reviewed
+/tests/{testId}/questions/{questionId}/mark-reviewed:
+  put:
+    tags:
+      - Admin
+      - Content Review
+    summary: Mark test question as reviewed or unreviewed
+    description: |
+      Mark a test question as reviewed or unreviewed with optional notes.
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: testId
+        in: path
+        required: true
+        description: Test ID
+        schema:
+          type: string
+          format: uuid
+      - name: questionId
+        in: path
+        required: true
+        description: Question ID
+        schema:
+          type: string
+          format: uuid
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - isReviewed
+            properties:
+              isReviewed:
+                type: boolean
+                description: Whether the question is reviewed
+              notes:
+                type: string
+                description: Optional review notes or feedback
+                maxLength: 2000
+    responses:
+      '200':
+        description: Question review status updated successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                  example: true
+                message:
+                  type: string
+                  example: Question review status updated
+      '400':
+        $ref: '../responses/BadRequest.yaml'
+      '401':
+        $ref: '../responses/Unauthorized.yaml'
+      '403':
+        description: Admin access required
+      '404':
+        $ref: '../responses/NotFound.yaml'
+
+# Bulk Mark Questions as Reviewed
+/tests/{testId}/questions/bulk-mark-reviewed:
+  put:
+    tags:
+      - Admin
+      - Content Review
+    summary: Bulk mark test questions as reviewed
+    description: |
+      Mark multiple test questions as reviewed or unreviewed in a single operation.
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: testId
+        in: path
+        required: true
+        description: Test ID
+        schema:
+          type: string
+          format: uuid
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - questionIds
+              - isReviewed
+            properties:
+              questionIds:
+                type: array
+                description: Array of question IDs to update
+                items:
+                  type: string
+                  format: uuid
+                minItems: 1
+              isReviewed:
+                type: boolean
+                description: Whether the questions are reviewed
+              notes:
+                type: string
+                description: Optional review notes applied to all questions
+                maxLength: 2000
+          example:
+            questionIds: ["123e4567-e89b-12d3-a456-426614174000", "223e4567-e89b-12d3-a456-426614174001"]
+            isReviewed: true
+            notes: "All questions verified"
+    responses:
+      '200':
+        description: Questions review status updated successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                  example: true
+                message:
+                  type: string
+                  example: Questions review status updated
+                updatedCount:
+                  type: integer
+                  description: Number of questions updated
+                  example: 2
+      '400':
+        $ref: '../responses/BadRequest.yaml'
+      '401':
+        $ref: '../responses/Unauthorized.yaml'
+      '403':
+        description: Admin access required
+      '404':
+        $ref: '../responses/NotFound.yaml'

@@ -43,6 +43,10 @@ Lesson:
       type: string
       format: date-time
       description: When the lesson was last updated
+    reviewStatus:
+      $ref: './ReviewStatus.yaml'
+    flagStatus:
+      $ref: './FlagStatus.yaml'
   required:
     - id
     - courseId

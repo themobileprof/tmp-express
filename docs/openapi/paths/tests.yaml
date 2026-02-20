@@ -450,8 +450,15 @@
     post:
       tags:
         - Tests
+        - Student Feedback
       summary: Flag a question for review
-      description: Allow an authenticated user to flag a specific question within a test for manual review. One flag per user per question is enforced.
+      description: |
+        Allow students to flag a test question when they encounter issues (incorrect answer, ambiguous wording, etc.).
+        When flagged:
+        - Flag counter increments
+        - Review status resets to false (requires admin re-review)
+        - Flag reason is recorded (max 500 characters)
+        - Timestamp and reason are appended to review notes for admin visibility
       security:
         - BearerAuth: []
       parameters:
@@ -478,10 +485,13 @@
               properties:
                 reason:
                   type: string
-                  description: Optional reason provided by the user for flagging the question
+                  description: Reason for flagging the question (optional, max 500 characters)
+                  maxLength: 500
+            example:
+              reason: "Multiple answers seem correct"
       responses:
         '200':
-          description: Question flagged for review
+          description: Question flagged for review successfully
           content:
             application/json:
               schema:
@@ -492,6 +502,9 @@
                     example: true
                   message:
                     type: string
+                    example: "Question flagged for review"
+        '400':
+          $ref: '../responses/BadRequest.yaml'
         '401':
           $ref: '../responses/Unauthorized.yaml'
         '404':

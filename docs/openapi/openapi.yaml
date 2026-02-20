@@ -196,12 +196,28 @@ paths:
       $ref: './paths/lessons.yaml#/~1{id}~1progress'
     /lessons/{id}/workshop:
       $ref: './paths/lessons.yaml#/~1{id}~1workshop'
+    /lessons/{id}/flag:
+      $ref: './paths/lessons.yaml#/~1{id}~1flag'
+    /lessons/{id}/workshop/flag:
+      $ref: './paths/lessons.yaml#/~1{id}~1workshop~1flag'
     /admin/lessons/{lessonId}/workshop:
       $ref: './paths/lessons.yaml#/~1admin~1lessons~1{lessonId}~1workshop'
     /lessons/admin/courses/{courseId}/lessons:
       $ref: './paths/lessons.yaml#/~1admin~1courses~1{courseId}~1lessons'
     /lessons/courses/{id}/lessons:
       $ref: './paths/lessons.yaml#/~1courses~1{id}~1lessons'
+
+    # Admin Content Review Endpoints
+    /admin/content/review-list:
+      $ref: './paths/admin.yaml#/~1content~1review-list'
+    /admin/lessons/{id}/mark-reviewed:
+      $ref: './paths/admin.yaml#/~1lessons~1{id}~1mark-reviewed'
+    /admin/lessons/{lessonId}/workshop/mark-reviewed:
+      $ref: './paths/admin.yaml#/~1lessons~1{lessonId}~1workshop~1mark-reviewed'
+    /admin/tests/{testId}/questions/{questionId}/mark-reviewed:
+      $ref: './paths/admin.yaml#/~1tests~1{testId}~1questions~1{questionId}~1mark-reviewed'
+    /admin/tests/{testId}/questions/bulk-mark-reviewed:
+      $ref: './paths/admin.yaml#/~1tests~1{testId}~1questions~1bulk-mark-reviewed'
 
     # Courses (use correct file per path)
     /courses/browse:

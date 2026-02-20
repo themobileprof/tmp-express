@@ -1,0 +1,23 @@
+type: object
+description: Content flag status information from student reports
+properties:
+  isFlagged:
+    type: boolean
+    description: Whether the content has been flagged by students
+    example: true
+  flagCount:
+    type: integer
+    minimum: 0
+    description: Number of times the content has been flagged
+    example: 3
+  lastFlaggedAt:
+    type: string
+    format: date-time
+    nullable: true
+    description: Timestamp when the content was last flagged
+  lastFlagReason:
+    type: string
+    nullable: true
+    description: Most recent reason provided for flagging
+    maxLength: 500
+    example: "The video link is broken"

@@ -58,6 +58,10 @@
                 updatedAt:
                   type: string
                   format: date-time
+                reviewStatus:
+                  $ref: '../schemas/ReviewStatus.yaml'
+                flagStatus:
+                  $ref: '../schemas/FlagStatus.yaml'
                 progress:
                   type: object
                   nullable: true
@@ -283,6 +287,120 @@
                         updatedAt:
                           type: string
                           format: date-time
+                        reviewStatus:
+                          $ref: '../schemas/ReviewStatus.yaml'
+                        flagStatus:
+                          $ref: '../schemas/FlagStatus.yaml'
+      '401':
+        $ref: '../responses/Unauthorized.yaml'
+      '404':
+        $ref: '../responses/NotFound.yaml'
+
+# Flag Lesson (Student)
+/{id}/flag:
+  post:
+    tags:
+      - Lessons
+      - Student Feedback
+    summary: Flag a lesson for review
+    description: |
+      Allow students to flag a lesson when they encounter issues (broken video, incorrect content, etc.).
+      When flagged, the lesson's review status is automatically reset to false and an admin is notified.
+      The flag reason is limited to 500 characters to prevent abuse.
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Lesson ID
+        schema:
+          type: string
+          format: uuid
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              reason:
+                type: string
+                description: Reason for flagging the lesson (optional, max 500 characters)
+                maxLength: 500
+          example:
+            reason: "The video link is broken and doesn't load"
+    responses:
+      '200':
+        description: Lesson flagged for review successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                  example: true
+                message:
+                  type: string
+                  example: "Lesson flagged for review. An admin will investigate shortly."
+      '400':
+        $ref: '../responses/BadRequest.yaml'
+      '401':
+        $ref: '../responses/Unauthorized.yaml'
+      '404':
+        $ref: '../responses/NotFound.yaml'
+
+# Flag Workshop (Student)
+/{id}/workshop/flag:
+  post:
+    tags:
+      - Lessons
+      - Student Feedback
+    summary: Flag a workshop for review
+    description: |
+      Allow students to flag a lesson's workshop when they encounter issues.
+      When flagged, the workshop's review status is automatically reset to false.
+      The flag reason is limited to 500 characters to prevent abuse.
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Lesson ID (workshop is identified by lesson)
+        schema:
+          type: string
+          format: uuid
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              reason:
+                type: string
+                description: Reason for flagging the workshop (optional, max 500 characters)
+                maxLength: 500
+          example:
+            reason: "The workshop instructions are unclear"
+    responses:
+      '200':
+        description: Workshop flagged for review successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                  example: true
+                message:
+                  type: string
+                  example: "Workshop flagged for review. An admin will investigate shortly."
+      '400':
+        $ref: '../responses/BadRequest.yaml'
       '401':
         $ref: '../responses/Unauthorized.yaml'
       '404':

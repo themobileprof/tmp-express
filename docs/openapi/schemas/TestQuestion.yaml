@@ -42,6 +42,10 @@ properties:
     type: string
     nullable: true
     description: Explanation of the correct answer
+  reviewStatus:
+    $ref: './ReviewStatus.yaml'
+  flagStatus:
+    $ref: './FlagStatus.yaml'
 required:
   - id
   - question
