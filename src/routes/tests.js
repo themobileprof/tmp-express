@@ -281,7 +281,11 @@ router.get('/:id/questions', authenticateToken, asyncHandler(async (req, res) =>
   }
 
   const questions = await getRows(
-    'SELECT * FROM test_questions WHERE test_id = $1 ORDER BY order_index',
+    `SELECT tq.*, CONCAT(u.first_name, ' ', u.last_name) as reviewed_by_name
+     FROM test_questions tq
+     LEFT JOIN users u ON tq.reviewed_by = u.id
+     WHERE tq.test_id = $1 
+     ORDER BY tq.order_index`,
     [id]
   );
 
@@ -295,6 +299,13 @@ router.get('/:id/questions', authenticateToken, asyncHandler(async (req, res) =>
       correctAnswerText: q.correct_answer_text,
       points: q.points,
       orderIndex: q.order_index,
+      reviewStatus: {
+        isReviewed: q.is_reviewed || false,
+        reviewedBy: q.reviewed_by,
+        reviewedByName: q.reviewed_by_name,
+        reviewedAt: q.reviewed_at,
+        reviewNotes: q.review_notes
+      },
       flagSummary: {
         total: q.flag_count || 0,
         flagged: !!q.flagged,

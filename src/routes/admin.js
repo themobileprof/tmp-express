@@ -1167,6 +1167,128 @@ router.get('/lessons/deleted/list', asyncHandler(async (req, res) => {
   });
 }));
 
+// ===== CONTENT REVIEW =====
+
+// Get all content with review status
+router.get('/content/review-list', asyncHandler(async (req, res) => {
+  const { reviewed, contentType, page = 1, limit = 50 } = req.query;
+  const offset = (page - 1) * limit;
+
+  const results = { lessons: [], testQuestions: [], workshops: [] };
+
+  // Get lessons
+  if (!contentType || contentType === 'lessons') {
+    const lessonQuery = reviewed !== undefined
+      ? `SELECT l.id, l.title, l.course_id, c.title as course_title, l.is_reviewed, l.reviewed_at, l.created_at,
+                CONCAT(u.first_name, ' ', u.last_name) as reviewed_by_name
+         FROM lessons l
+         LEFT JOIN courses c ON l.course_id = c.id
+         LEFT JOIN users u ON l.reviewed_by = u.id
+         WHERE l.deleted_at IS NULL AND l.is_reviewed = $1
+         ORDER BY l.created_at DESC
+         LIMIT $2 OFFSET $3`
+      : `SELECT l.id, l.title, l.course_id, c.title as course_title, l.is_reviewed, l.reviewed_at, l.created_at,
+                CONCAT(u.first_name, ' ', u.last_name) as reviewed_by_name
+         FROM lessons l
+         LEFT JOIN courses c ON l.course_id = c.id
+         LEFT JOIN users u ON l.reviewed_by = u.id
+         WHERE l.deleted_at IS NULL
+         ORDER BY l.created_at DESC
+         LIMIT $1 OFFSET $2`;
+    
+    const lessonParams = reviewed !== undefined ? [reviewed === 'true', limit, offset] : [limit, offset];
+    results.lessons = await getRows(lessonQuery, lessonParams);
+  }
+
+  // Get test questions
+  if (!contentType || contentType === 'test_questions') {
+    const questionQuery = reviewed !== undefined
+      ? `SELECT tq.id, tq.question, tq.test_id, t.title as test_title, tq.is_reviewed, tq.reviewed_at, tq.created_at,
+                CONCAT(u.first_name, ' ', u.last_name) as reviewed_by_name
+         FROM test_questions tq
+         JOIN tests t ON tq.test_id = t.id
+         LEFT JOIN users u ON tq.reviewed_by = u.id
+         WHERE tq.is_reviewed = $1
+         ORDER BY tq.created_at DESC
+         LIMIT $2 OFFSET $3`
+      : `SELECT tq.id, tq.question, tq.test_id, t.title as test_title, tq.is_reviewed, tq.reviewed_at, tq.created_at,
+                CONCAT(u.first_name, ' ', u.last_name) as reviewed_by_name
+         FROM test_questions tq
+         JOIN tests t ON tq.test_id = t.id
+         LEFT JOIN users u ON tq.reviewed_by = u.id
+         ORDER BY tq.created_at DESC
+         LIMIT $1 OFFSET $2`;
+    
+    const questionParams = reviewed !== undefined ? [reviewed === 'true', limit, offset] : [limit, offset];
+    results.testQuestions = await getRows(questionQuery, questionParams);
+  }
+
+  // Get workshops
+  if (!contentType || contentType === 'workshops') {
+    const workshopQuery = reviewed !== undefined
+      ? `SELECT lw.id, lw.lesson_id, l.title as lesson_title, lw.is_reviewed, lw.reviewed_at, lw.created_at,
+                CONCAT(u.first_name, ' ', u.last_name) as reviewed_by_name
+         FROM lesson_workshops lw
+         JOIN lessons l ON lw.lesson_id = l.id
+         LEFT JOIN users u ON lw.reviewed_by = u.id
+         WHERE lw.is_reviewed = $1
+         ORDER BY lw.created_at DESC
+         LIMIT $2 OFFSET $3`
+      : `SELECT lw.id, lw.lesson_id, l.title as lesson_title, lw.is_reviewed, lw.reviewed_at, lw.created_at,
+                CONCAT(u.first_name, ' ', u.last_name) as reviewed_by_name
+         FROM lesson_workshops lw
+         JOIN lessons l ON lw.lesson_id = l.id
+         LEFT JOIN users u ON lw.reviewed_by = u.id
+         ORDER BY lw.created_at DESC
+         LIMIT $1 OFFSET $2`;
+    
+    const workshopParams = reviewed !== undefined ? [reviewed === 'true', limit, offset] : [limit, offset];
+    results.workshops = await getRows(workshopQuery, workshopParams);
+  }
+
+  res.json({
+    ...results,
+    pagination: { page: parseInt(page), limit: parseInt(limit) }
+  });
+}));
+
+// Mark lesson as reviewed/unreviewed
+router.put('/lessons/:id/mark-reviewed', [
+  body('isReviewed').isBoolean(),
+  body('notes').optional().trim()
+], asyncHandler(async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    throw new AppError('Validation failed', 400, 'Validation Error');
+  }
+
+  const { id } = req.params;
+  const { isReviewed, notes } = req.body;
+
+  const lesson = await getRow('SELECT id, title FROM lessons WHERE id = $1', [id]);
+  if (!lesson) {
+    throw new AppError('Lesson not found', 404, 'Lesson Not Found');
+  }
+
+  const result = await query(
+    `UPDATE lessons 
+     SET is_reviewed = $1,
+         reviewed_by = $2,
+         reviewed_at = CURRENT_TIMESTAMP,
+         review_notes = $3,
+         updated_at = CURRENT_TIMESTAMP
+     WHERE id = $4
+     RETURNING *`,
+    [isReviewed, req.user.id, notes || null, id]
+  );
+
+  res.json({
+    success: true,
+    message: `Lesson marked as ${isReviewed ? 'reviewed' : 'not reviewed'}`,
+    lesson: result.rows[0]
+  });
+}));
+
 // ===== LESSON WORKSHOP MANAGEMENT (Admin) =====
 
 // Get workshop spec for a lesson
@@ -1281,6 +1403,43 @@ router.delete('/lessons/:lessonId/workshop', asyncHandler(async (req, res) => {
   }
   await query('DELETE FROM lesson_workshops WHERE lesson_id = $1', [lessonId]);
   res.json({ message: 'Workshop removed for lesson' });
+}));
+
+// Mark workshop as reviewed/unreviewed
+router.put('/lessons/:lessonId/workshop/mark-reviewed', [
+  body('isReviewed').isBoolean(),
+  body('notes').optional().trim()
+], asyncHandler(async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    throw new AppError('Validation failed', 400, 'Validation Error');
+  }
+
+  const { lessonId } = req.params;
+  const { isReviewed, notes } = req.body;
+
+  const workshop = await getRow('SELECT id FROM lesson_workshops WHERE lesson_id = $1', [lessonId]);
+  if (!workshop) {
+    throw new AppError('Workshop not found for lesson', 404, 'Workshop Not Found');
+  }
+
+  const result = await query(
+    `UPDATE lesson_workshops 
+     SET is_reviewed = $1,
+         reviewed_by = $2,
+         reviewed_at = CURRENT_TIMESTAMP,
+         review_notes = $3,
+         updated_at = CURRENT_TIMESTAMP
+     WHERE lesson_id = $4
+     RETURNING *`,
+    [isReviewed, req.user.id, notes || null, lessonId]
+  );
+
+  res.json({
+    success: true,
+    message: `Workshop marked as ${isReviewed ? 'reviewed' : 'not reviewed'}`,
+    workshop: result.rows[0]
+  });
 }));
 
 // ===== TEST MANAGEMENT =====
@@ -1810,6 +1969,84 @@ router.get('/tests/:id/results', asyncHandler(async (req, res) => {
     overview: overview.rows[0],
     studentResults: studentResults.rows,
     questionAnalytics: questionAnalytics.rows
+  });
+}));
+
+// Mark test question as reviewed/unreviewed
+router.put('/tests/:testId/questions/:questionId/mark-reviewed', [
+  body('isReviewed').isBoolean(),
+  body('notes').optional().trim()
+], asyncHandler(async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    throw new AppError('Validation failed', 400, 'Validation Error');
+  }
+
+  const { testId, questionId } = req.params;
+  const { isReviewed, notes } = req.body;
+
+  const question = await getRow(
+    'SELECT id, question FROM test_questions WHERE id = $1 AND test_id = $2',
+    [questionId, testId]
+  );
+  
+  if (!question) {
+    throw new AppError('Question not found', 404, 'Question Not Found');
+  }
+
+  const result = await query(
+    `UPDATE test_questions 
+     SET is_reviewed = $1,
+         reviewed_by = $2,
+         reviewed_at = CURRENT_TIMESTAMP,
+         review_notes = $3,
+         updated_at = CURRENT_TIMESTAMP
+     WHERE id = $4
+     RETURNING *`,
+    [isReviewed, req.user.id, notes || null, questionId]
+  );
+
+  res.json({
+    success: true,
+    message: `Question marked as ${isReviewed ? 'reviewed' : 'not reviewed'}`,
+    question: result.rows[0]
+  });
+}));
+
+// Bulk mark questions as reviewed/unreviewed
+router.put('/tests/:testId/questions/bulk-mark-reviewed', [
+  body('questionIds').isArray().withMessage('questionIds must be an array'),
+  body('isReviewed').isBoolean(),
+  body('notes').optional().trim()
+], asyncHandler(async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    throw new AppError('Validation failed', 400, 'Validation Error');
+  }
+
+  const { testId } = req.params;
+  const { questionIds, isReviewed, notes } = req.body;
+
+  if (questionIds.length === 0) {
+    throw new AppError('No question IDs provided', 400, 'Invalid Request');
+  }
+
+  const result = await query(
+    `UPDATE test_questions 
+     SET is_reviewed = $1,
+         reviewed_by = $2,
+         reviewed_at = CURRENT_TIMESTAMP,
+         review_notes = $3,
+         updated_at = CURRENT_TIMESTAMP
+     WHERE test_id = $4 AND id = ANY($5)
+     RETURNING id, question, is_reviewed`,
+    [isReviewed, req.user.id, notes || null, testId, questionIds]
+  );
+
+  res.json({
+    success: true,
+    message: `${result.rows.length} question(s) marked as ${isReviewed ? 'reviewed' : 'not reviewed'}`,
+    questions: result.rows
   });
 }));
 

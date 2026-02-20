@@ -168,9 +168,11 @@ router.get('/:id', authenticateToken, asyncHandler(async (req, res) => {
 
   // Verify lesson exists
   const lesson = await getRow(
-    `SELECT l.*, c.id as course_id, c.title as course_title
+    `SELECT l.*, c.id as course_id, c.title as course_title,
+            CONCAT(u.first_name, ' ', u.last_name) as reviewed_by_name
      FROM lessons l
      JOIN courses c ON l.course_id = c.id
+     LEFT JOIN users u ON l.reviewed_by = u.id
      WHERE l.id = $1`,
     [id]
   );
@@ -238,6 +240,13 @@ router.get('/:id', authenticateToken, asyncHandler(async (req, res) => {
     isUnlocked: true,
     createdAt: lesson.created_at,
     updatedAt: lesson.updated_at,
+    reviewStatus: {
+      isReviewed: lesson.is_reviewed || false,
+      reviewedBy: lesson.reviewed_by,
+      reviewedByName: lesson.reviewed_by_name,
+      reviewedAt: lesson.reviewed_at,
+      reviewNotes: lesson.review_notes
+    },
     progress: progress ? {
       isCompleted: progress.is_completed,
       progressPercentage: progress.progress_percentage,
@@ -547,7 +556,10 @@ router.get('/:id/workshop', authenticateToken, asyncHandler(async (req, res) => 
 
   // Fetch enabled workshop
   const workshop = await getRow(
-    'SELECT is_enabled, spec, updated_at FROM lesson_workshops WHERE lesson_id = $1',
+    `SELECT lw.*, CONCAT(u.first_name, ' ', u.last_name) as reviewed_by_name
+     FROM lesson_workshops lw
+     LEFT JOIN users u ON lw.reviewed_by = u.id
+     WHERE lw.lesson_id = $1`,
     [id]
   );
 
@@ -562,7 +574,14 @@ router.get('/:id/workshop', authenticateToken, asyncHandler(async (req, res) => 
       lesson: { id: lesson.id, title: lesson.title },
       workshop: {
         spec,
-        updatedAt: workshop.updated_at
+        updatedAt: workshop.updated_at,
+        reviewStatus: {
+          isReviewed: workshop.is_reviewed || false,
+          reviewedBy: workshop.reviewed_by,
+          reviewedByName: workshop.reviewed_by_name,
+          reviewedAt: workshop.reviewed_at,
+          reviewNotes: workshop.review_notes
+        }
       }
     });
 }));
