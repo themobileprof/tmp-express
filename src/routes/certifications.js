@@ -5,6 +5,9 @@ const { asyncHandler, AppError } = require('../middleware/errorHandler');
 const { authenticateToken, authorizeInstructor, authorizeOwnerOrAdmin } = require('../middleware/auth');
 const { v4: uuidv4 } = require('uuid');
 const certificateService = require('../utils/certificateService');
+const templateEngine = require('../utils/templateEngine');
+const fs = require('fs').promises;
+const path = require('path');
 
 // Admin middleware - ensure user is admin
 const requireAdmin = (req, res, next) => {
@@ -107,6 +110,208 @@ router.get('/', authenticateToken, asyncHandler(async (req, res) => {
       createdAt: c.created_at
     }))
   });
+}));
+
+// Verify certification by code (must be before /:id)
+router.get('/verify/:code', asyncHandler(async (req, res) => {
+  const { code } = req.params;
+
+  const certification = await getRow(
+    `SELECT cert.*, u.first_name, u.last_name,
+            c.title as course_title, cl.title as class_title
+     FROM certifications cert
+     JOIN users u ON cert.user_id = u.id
+     LEFT JOIN courses c ON cert.course_id = c.id
+     LEFT JOIN classes cl ON cert.class_id = cl.id
+     WHERE cert.verification_code = $1`,
+    [code]
+  );
+
+  if (!certification) {
+    return res.json({
+      valid: false,
+      message: 'Certification not found'
+    });
+  }
+
+  // Check if certification is expired
+  const isExpired = certification.expiry_date && new Date() > new Date(certification.expiry_date);
+
+  res.json({
+    valid: !isExpired && certification.status === 'issued',
+    certification: {
+      id: certification.id,
+      userName: `${certification.first_name} ${certification.last_name}`,
+      certificationName: certification.certification_name,
+      issuer: certification.issuer,
+      issuedDate: certification.issued_date,
+      expiryDate: certification.expiry_date,
+      status: certification.status,
+      courseTitle: certification.course_title,
+      classTitle: certification.class_title,
+      isExpired
+    }
+  });
+}));
+
+// Current user's certifications (must be before /:id)
+router.get('/my', authenticateToken, asyncHandler(async (req, res) => {
+	const userId = req.user.id;
+	const certifications = await getRows(
+		`SELECT cert.*, co.title as course_title, cl.title as class_title
+		 FROM certifications cert
+		 LEFT JOIN courses co ON cert.course_id = co.id
+		 LEFT JOIN classes cl ON cert.class_id = cl.id
+		 WHERE cert.user_id = $1
+		 ORDER BY cert.issued_date DESC`,
+		[userId]
+	);
+	res.json({
+		certifications: certifications.map(c => ({
+			id: c.id,
+			title: c.certification_name,
+			issuer: c.issuer,
+			dateEarned: c.issued_date,
+			validUntil: c.expiry_date,
+			credentialId: c.verification_code,
+			skills: c.skills || null,
+			certificateUrl: c.certificate_url,
+			course: c.course_id ? { id: c.course_id, title: c.course_title } : null,
+			class: c.class_id ? { id: c.class_id, title: c.class_title } : null
+		}))
+	});
+}));
+
+// In-progress certification programs (must be before /:id)
+router.get('/progress', authenticateToken, asyncHandler(async (req, res) => {
+	const userId = req.user.id;
+
+	const enrollments = await getRows(
+		`SELECT e.id as enrollment_id, e.status, e.progress, e.enrolled_at, e.completed_at,
+		        p.id as program_id, p.title, p.level, p.duration
+		 FROM certification_program_enrollments e
+		 JOIN certification_programs p ON e.program_id = p.id
+		 WHERE e.user_id = $1
+		 ORDER BY e.enrolled_at DESC`,
+		[userId]
+	);
+
+	const results = [];
+	for (const e of enrollments) {
+		const totalModulesRow = await getRow('SELECT COUNT(*)::int as count FROM certification_program_modules WHERE program_id = $1', [e.program_id]);
+		const completedModulesRow = await getRow(
+			`SELECT COUNT(*)::int as count
+			 FROM certification_program_progress pr
+			 JOIN certification_program_modules m ON pr.module_id = m.id
+			 WHERE pr.enrollment_id = $1 AND pr.is_completed = true`,
+			[e.enrollment_id]
+		);
+
+		const total = totalModulesRow?.count || 0;
+		const completed = completedModulesRow?.count || 0;
+		let nextRequirement = null;
+		if (total > completed) {
+			const nextModule = await getRow(
+				`SELECT m.title
+				 FROM certification_program_modules m
+				 WHERE m.program_id = $1 AND NOT EXISTS (
+					 SELECT 1 FROM certification_program_progress pr WHERE pr.module_id = m.id AND pr.enrollment_id = $2 AND pr.is_completed = true
+				 )
+				 ORDER BY m.order_index ASC
+				 LIMIT 1`,
+				[e.program_id, e.enrollment_id]
+			);
+			nextRequirement = nextModule?.title || null;
+		}
+
+		results.push({
+			programId: e.program_id,
+			title: e.title,
+			level: e.level,
+			duration: e.duration,
+			progress: total ? Math.round((completed / total) * 100) : 0,
+			nextRequirement,
+			estimatedCompletion: null,
+			totals: { totalModules: total, completedModules: completed }
+		});
+	}
+
+	res.json({ programs: results });
+}));
+
+// Get certificate statistics (must be before /:id)
+router.get('/stats', authenticateToken, requireAdmin, asyncHandler(async (req, res) => {
+  const stats = await certificateService.getCertificateStats();
+  res.json({
+    success: true,
+    data: stats
+  });
+}));
+
+// Preview certificate template (must be before /:id)
+router.get('/preview', authenticateToken, asyncHandler(async (req, res) => {
+  // Return sample certificate data for UI preview purposes
+  const sampleCertificate = {
+    id: '00000000-0000-0000-0000-000000000000',
+    userName: 'John Doe',
+    userEmail: 'john.doe@example.com',
+    certificationName: 'Sample Course Certification',
+    issuer: 'TheMobileProf',
+    courseTitle: 'Introduction to Web Development',
+    classTitle: null,
+    issuedDate: new Date().toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    }),
+    verificationCode: 'CERT-SAMPLE-001',
+    certificateUrl: null, // Preview doesn't have actual file
+    expiryDate: null,
+    status: 'issued',
+    courseId: null,
+    classId: null,
+    createdAt: new Date().toISOString(),
+    preview: true
+  };
+
+  res.json({
+    success: true,
+    data: sampleCertificate,
+    message: 'This is a sample certificate for preview purposes'
+  });
+}));
+
+// Check certificate eligibility (must be before /:id)
+router.get('/eligibility/:userId', authenticateToken, requireAdmin, asyncHandler(async (req, res) => {
+  const { userId } = req.params;
+  const { courseId, classId } = req.query;
+
+  if (!courseId && !classId) {
+    throw new AppError('Either courseId or classId must be provided', 400, 'Missing Parameter');
+  }
+
+  let result = null;
+
+  if (courseId) {
+    result = await certificateService.checkAndAwardCourseCertificate(userId, courseId);
+  } else if (classId) {
+    result = await certificateService.checkAndAwardClassCertificate(userId, classId);
+  }
+
+  if (result) {
+    res.json({
+      success: true,
+      eligible: true,
+      certificate: result,
+      message: 'Certificate awarded successfully'
+    });
+  } else {
+    res.json({
+      success: true,
+      eligible: false,
+      message: 'User is not eligible for certificate or already has one'
+    });
+  }
 }));
 
 // Create new certification
@@ -282,76 +487,6 @@ router.delete('/:id', authenticateToken, authorizeOwnerOrAdmin('certifications',
   });
 }));
 
-// Verify certification by code
-router.get('/verify/:code', asyncHandler(async (req, res) => {
-  const { code } = req.params;
-
-  const certification = await getRow(
-    `SELECT cert.*, u.first_name, u.last_name,
-            c.title as course_title, cl.title as class_title
-     FROM certifications cert
-     JOIN users u ON cert.user_id = u.id
-     LEFT JOIN courses c ON cert.course_id = c.id
-     LEFT JOIN classes cl ON cert.class_id = cl.id
-     WHERE cert.verification_code = $1`,
-    [code]
-  );
-
-  if (!certification) {
-    return res.json({
-      valid: false,
-      message: 'Certification not found'
-    });
-  }
-
-  // Check if certification is expired
-  const isExpired = certification.expiry_date && new Date() > new Date(certification.expiry_date);
-
-  res.json({
-    valid: !isExpired && certification.status === 'issued',
-    certification: {
-      id: certification.id,
-      userName: `${certification.first_name} ${certification.last_name}`,
-      certificationName: certification.certification_name,
-      issuer: certification.issuer,
-      issuedDate: certification.issued_date,
-      expiryDate: certification.expiry_date,
-      status: certification.status,
-      courseTitle: certification.course_title,
-      classTitle: certification.class_title,
-      isExpired
-    }
-  });
-}));
-
-// Current user's certifications (alias)
-router.get('/my', authenticateToken, asyncHandler(async (req, res) => {
-	const userId = req.user.id;
-	const certifications = await getRows(
-		`SELECT cert.*, co.title as course_title, cl.title as class_title
-		 FROM certifications cert
-		 LEFT JOIN courses co ON cert.course_id = co.id
-		 LEFT JOIN classes cl ON cert.class_id = cl.id
-		 WHERE cert.user_id = $1
-		 ORDER BY cert.issued_date DESC`,
-		[userId]
-	);
-	res.json({
-		certifications: certifications.map(c => ({
-			id: c.id,
-			title: c.certification_name,
-			issuer: c.issuer,
-			dateEarned: c.issued_date,
-			validUntil: c.expiry_date,
-			credentialId: c.verification_code,
-			skills: c.skills || null,
-			certificateUrl: c.certificate_url,
-			course: c.course_id ? { id: c.course_id, title: c.course_title } : null,
-			class: c.class_id ? { id: c.class_id, title: c.class_title } : null
-		}))
-	});
-}));
-
 // Download certificate (return file or signed URL)
 router.get('/:id/download', authenticateToken, asyncHandler(async (req, res) => {
 	const { id } = req.params;
@@ -375,70 +510,59 @@ router.get('/:id/download', authenticateToken, asyncHandler(async (req, res) => 
 	throw new AppError('Certificate file not available', 404, 'File Not Found');
 }));
 
-// In-progress certification programs (student-facing)
-router.get('/progress', authenticateToken, asyncHandler(async (req, res) => {
+// View certificate in HTML (must come before /:id routes that aren't specific)
+router.get('/:id/view', authenticateToken, asyncHandler(async (req, res) => {
+	const { id } = req.params;
 	const userId = req.user.id;
 
-	const enrollments = await getRows(
-		`SELECT e.id as enrollment_id, e.status, e.progress, e.enrolled_at, e.completed_at,
-		        p.id as program_id, p.title, p.level, p.duration
-		 FROM certification_program_enrollments e
-		 JOIN certification_programs p ON e.program_id = p.id
-		 WHERE e.user_id = $1
-		 ORDER BY e.enrolled_at DESC`,
-		[userId]
+	const cert = await getRow(
+		`SELECT cert.*, u.first_name, u.last_name,
+		        c.title as course_title, cl.title as class_title
+		 FROM certifications cert
+		 JOIN users u ON cert.user_id = u.id
+		 LEFT JOIN courses c ON cert.course_id = c.id
+		 LEFT JOIN classes cl ON cert.class_id = cl.id
+		 WHERE cert.id = $1`,
+		[id]
 	);
 
-	const results = [];
-	for (const e of enrollments) {
-		const totalModulesRow = await getRow('SELECT COUNT(*)::int as count FROM certification_program_modules WHERE program_id = $1', [e.program_id]);
-		const completedModulesRow = await getRow(
-			`SELECT COUNT(*)::int as count
-			 FROM certification_program_progress pr
-			 JOIN certification_program_modules m ON pr.module_id = m.id
-			 WHERE pr.enrollment_id = $1 AND pr.is_completed = true`,
-			[e.enrollment_id]
-		);
-
-		const total = totalModulesRow?.count || 0;
-		const completed = completedModulesRow?.count || 0;
-		let nextRequirement = null;
-		if (total > completed) {
-			const nextModule = await getRow(
-				`SELECT m.title
-				 FROM certification_program_modules m
-				 WHERE m.program_id = $1 AND NOT EXISTS (
-					 SELECT 1 FROM certification_program_progress pr WHERE pr.module_id = m.id AND pr.enrollment_id = $2 AND pr.is_completed = true
-				 )
-				 ORDER BY m.order_index ASC
-				 LIMIT 1`,
-				[e.program_id, e.enrollment_id]
-			);
-			nextRequirement = nextModule?.title || null;
-		}
-
-		results.push({
-			programId: e.program_id,
-			title: e.title,
-			level: e.level,
-			duration: e.duration,
-			progress: total ? Math.round((completed / total) * 100) : 0,
-			nextRequirement,
-			estimatedCompletion: null,
-			totals: { totalModules: total, completedModules: completed }
-		});
+	if (!cert) {
+		throw new AppError('Certificate not found', 404, 'Certificate Not Found');
 	}
 
-	res.json({ programs: results });
-}));
+	// Authorization: owner or admin
+	if (cert.user_id !== userId && req.user.role !== 'admin') {
+		throw new AppError('Access denied', 403, 'Access Denied');
+	}
 
-// Get certificate statistics (admin only)
-router.get('/stats', authenticateToken, requireAdmin, asyncHandler(async (req, res) => {
-  const stats = await certificateService.getCertificateStats();
-  res.json({
-    success: true,
-    data: stats
-  });
+	// Load certificate template
+	const templatePath = path.join(__dirname, '../templates/certificates/default-certificate.html');
+	const templateContent = await fs.readFile(templatePath, 'utf8');
+
+	// Format completion date
+	const completionDateObj = new Date(cert.issued_date);
+	const completionDate = completionDateObj.toLocaleDateString('en-US', {
+		year: 'numeric',
+		month: 'long',
+		day: 'numeric'
+	});
+
+	// Prepare certificate data
+	const certificateData = {
+		userName: `${cert.first_name} ${cert.last_name}`,
+		courseTitle: cert.course_title || cert.class_title || cert.certification_name,
+		completionDate,
+		issuer: cert.issuer || 'TheMobileProf',
+		verificationCode: cert.verification_code,
+		signatures: [] // Can be populated from database if signature system is implemented
+	};
+
+	// Render template with data
+	const renderedHtml = templateEngine.render(templateContent, certificateData);
+
+	// Send HTML response
+	res.setHeader('Content-Type', 'text/html');
+	res.send(renderedHtml);
 }));
 
 // Manually award certificate (admin only)
@@ -465,39 +589,6 @@ router.post('/award', authenticateToken, requireAdmin, [
     data: result,
     message: 'Certificate awarded successfully'
   });
-}));
-
-// Check certificate eligibility for a user and course/class
-router.get('/eligibility/:userId', authenticateToken, requireAdmin, asyncHandler(async (req, res) => {
-  const { userId } = req.params;
-  const { courseId, classId } = req.query;
-
-  if (!courseId && !classId) {
-    throw new AppError('Either courseId or classId must be provided', 400, 'Missing Parameter');
-  }
-
-  let result = null;
-
-  if (courseId) {
-    result = await certificateService.checkAndAwardCourseCertificate(userId, courseId);
-  } else if (classId) {
-    result = await certificateService.checkAndAwardClassCertificate(userId, classId);
-  }
-
-  if (result) {
-    res.json({
-      success: true,
-      eligible: true,
-      certificate: result,
-      message: 'Certificate awarded successfully'
-    });
-  } else {
-    res.json({
-      success: true,
-      eligible: false,
-      message: 'User is not eligible for certificate or already has one'
-    });
-  }
 }));
 
 // Bulk certificate operations (admin only)

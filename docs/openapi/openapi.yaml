@@ -178,8 +178,14 @@ paths:
       $ref: './paths/certifications.yaml#/~1my'
     /certifications/{id}/download:
       $ref: './paths/certifications.yaml#/~1{id}~1download'
+    /certifications/{id}/view:
+      $ref: './paths/certifications.yaml#/~1{id}~1view'
     /certifications/progress:
       $ref: './paths/certifications.yaml#/~1progress'
+    /certifications/stats:
+      $ref: './paths/certifications.yaml#/~1stats'
+    /certifications/preview:
+      $ref: './paths/certifications.yaml#/~1preview'
 
     # Certification Programs
     /certification-programs:

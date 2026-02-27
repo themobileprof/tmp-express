@@ -656,4 +656,131 @@
                             type: integer
                             description: Number of completed modules
       '401':
+        $ref: '../responses/Unauthorized.yaml'
+
+# Get Certificate Statistics
+/stats:
+  get:
+    tags:
+      - Certifications
+    summary: Get certificate statistics
+    description: Retrieve overall certificate statistics (admin only)
+    security:
+      - BearerAuth: []
+    responses:
+      '200':
+        description: Certificate statistics retrieved successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                  example: true
+                data:
+                  type: object
+                  properties:
+                    total_certificates:
+                      type: string
+                      description: Total number of certificates issued
+                    course_certificates:
+                      type: string
+                      description: Certificates issued for courses
+                    class_certificates:
+                      type: string
+                      description: Certificates issued for classes
+                    active_certificates:
+                      type: string
+                      description: Currently active certificates
+                    expired_certificates:
+                      type: string
+                      description: Expired certificates
+                    revoked_certificates:
+                      type: string
+                      description: Revoked certificates
+      '401':
+        $ref: '../responses/Unauthorized.yaml'
+      '403':
+        $ref: '../responses/Forbidden.yaml'
+
+# Preview Certificate Template
+/preview:
+  get:
+    tags:
+      - Certifications
+    summary: Preview certificate template
+    description: Get sample certificate data for UI preview purposes
+    security:
+      - BearerAuth: []
+    responses:
+      '200':
+        description: Sample certificate data retrieved successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                  example: true
+                data:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                      format: uuid
+                      description: Sample certificate ID
+                    userName:
+                      type: string
+                      example: John Doe
+                    userEmail:
+                      type: string
+                      example: john.doe@example.com
+                    certificationName:
+                      type: string
+                      example: Sample Course Certification
+                    issuer:
+                      type: string
+                      example: TheMobileProf
+                    courseTitle:
+                      type: string
+                      example: Introduction to Web Development
+                    classTitle:
+                      type: string
+                      nullable: true
+                    issuedDate:
+                      type: string
+                      example: February 27, 2026
+                    verificationCode:
+                      type: string
+                      example: CERT-SAMPLE-001
+                    certificateUrl:
+                      type: string
+                      nullable: true
+                    expiryDate:
+                      type: string
+                      nullable: true
+                    status:
+                      type: string
+                      example: issued
+                    courseId:
+                      type: string
+                      format: uuid
+                      nullable: true
+                    classId:
+                      type: string
+                      format: uuid
+                      nullable: true
+                    createdAt:
+                      type: string
+                      format: date-time
+                    preview:
+                      type: boolean
+                      example: true
+                      description: Indicates this is preview data
+                message:
+                  type: string
+                  example: This is a sample certificate for preview purposes
+      '401':
         $ref: '../responses/Unauthorized.yaml' 
