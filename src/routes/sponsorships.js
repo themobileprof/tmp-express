@@ -13,6 +13,7 @@ const router = express.Router();
 const validateSponsorship = [
   body('courseIds').isArray({ min: 1 }).withMessage('At least one course ID is required'),
   body('courseIds.*').isUUID().withMessage('All course IDs must be valid UUIDs'),
+  body('discountCode').optional().isString().trim().isLength({ min: 3, max: 50 }).withMessage('Discount code must be 3-50 characters'),
   body('discountType').isIn(['percentage', 'fixed']).withMessage('Discount type must be percentage or fixed'),
   body('discountValue').isFloat({ min: 0 }).withMessage('Discount value must be a positive number'),
   body('maxStudents').isInt({ min: 1 }).withMessage('Maximum students must be at least 1'),
@@ -48,8 +49,16 @@ router.post('/', authenticateToken, authorizeSponsor, validateSponsorship, async
     throw new AppError('Validation failed', 400, 'Validation Error');
   }
 
-  const { courseIds, discountType, discountValue, maxStudents, duration, notes } = req.body;
+  const { courseIds, discountCode: customDiscountCode, discountType, discountValue, maxStudents, duration, notes } = req.body;
   const sponsorId = req.user.id;
+
+  // If custom discount code is provided, validate it's unique
+  if (customDiscountCode) {
+    const existing = await getRow('SELECT id FROM sponsorships WHERE discount_code = $1', [customDiscountCode]);
+    if (existing) {
+      throw new AppError('Discount code already exists. Please choose a different code.', 409, 'Code Already Exists');
+    }
+  }
 
   // Verify courses exist
   const courses = await Promise.all(courseIds.map(async (courseId) => {
@@ -80,8 +89,8 @@ router.post('/', authenticateToken, authorizeSponsor, validateSponsorship, async
   const endDate = new Date();
   endDate.setMonth(endDate.getMonth() + cappedDuration);
 
-  // Generate unique discount code
-  const discountCode = await generateDiscountCode();
+  // Use custom discount code or generate unique one
+  const discountCode = customDiscountCode || await generateDiscountCode();
 
   // Create sponsorship
   const result = await query(

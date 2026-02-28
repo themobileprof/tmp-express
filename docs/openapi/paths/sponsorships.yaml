@@ -157,6 +157,11 @@
                   type: string
                   format: uuid
                 description: Array of course IDs to sponsor (at least one required)
+              discountCode:
+                type: string
+                minLength: 3
+                maxLength: 50
+                description: Optional custom discount code (3-50 characters). If not provided, a unique code will be auto-generated.
               discountType:
                 type: string
                 enum: [percentage, fixed]
@@ -198,7 +203,7 @@
                     format: uuid
                 discountCode:
                   type: string
-                  description: Generated unique discount code
+                  description: Unique discount code (custom or auto-generated)
                 discountType:
                   type: string
                   enum: [percentage, fixed]
@@ -903,7 +908,7 @@
                     type: string
                 discountCode:
                   type: string
-                  description: Generated unique discount code
+                  description: Unique discount code (custom or auto-generated)
                 discountType:
                   type: string
                   enum: [percentage, fixed]
