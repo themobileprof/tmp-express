@@ -2123,7 +2123,13 @@ router.post('/sponsorships', [
   body('sponsorId').isUUID().withMessage('Valid sponsor ID is required'),
   body('courseIds').isArray({ min: 1 }).withMessage('At least one course ID is required'),
   body('courseIds.*').isUUID().withMessage('All course IDs must be valid UUIDs'),
-  body('discountCode').optional().isString().trim().isLength({ min: 3, max: 50 }).withMessage('Discount code must be 3-50 characters'),
+  body('discountCode')
+    .optional({ checkFalsy: true })
+    .isString()
+    .trim()
+    .customSanitizer(value => value ? value.toUpperCase() : value)
+    .isLength({ min: 3, max: 50 })
+    .withMessage('Discount code must be 3-50 characters'),
   body('discountType').isIn(['percentage', 'fixed']).withMessage('Discount type must be percentage or fixed'),
   body('discountValue').isFloat({ min: 0 }).withMessage('Discount value must be a positive number'),
   body('maxStudents').isInt({ min: 1 }).withMessage('Maximum students must be at least 1'),
