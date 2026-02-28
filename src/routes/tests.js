@@ -544,8 +544,22 @@ router.post('/:id/start', authenticateToken, asyncHandler(async (req, res) => {
   );
 
   if (inProgressAttempt) {
-    // Resume existing attempt: return attempt details and questions with any saved answers
-    const resumeQuestions = await getRows(
+    // Check if the in-progress attempt has expired based on test duration
+    const attemptAge = Math.round((Date.now() - new Date(inProgressAttempt.started_at).getTime()) / (1000 * 60));
+    const testDurationWithBuffer = (test.duration_minutes || 60) + 30; // Add 30 min buffer for reasonable delays
+    
+    if (attemptAge > testDurationWithBuffer) {
+      // Mark old attempt as abandoned and create new one
+      console.log(`Abandoning timed-out attempt ${inProgressAttempt.id} (age: ${attemptAge} minutes, limit: ${testDurationWithBuffer})`);
+      await query(
+        `UPDATE test_attempts SET status = 'abandoned' WHERE id = $1`,
+        [inProgressAttempt.id]
+      );
+      // Continue to create new attempt below
+    } else {
+      // Resume existing attempt: return attempt details and questions with any saved answers
+      console.log(`Resuming in-progress attempt ${inProgressAttempt.id} (age: ${attemptAge} minutes)`);
+      const resumeQuestions = await getRows(
       `SELECT q.id, q.question, q.question_type, q.options, q.points, q.order_index,
               a.selected_answer, a.answer_text
        FROM test_questions q
@@ -576,6 +590,7 @@ router.post('/:id/start', authenticateToken, asyncHandler(async (req, res) => {
         answerText: q.answer_text
       }))
     });
+    }
   }
 
   // Get questions for the test
