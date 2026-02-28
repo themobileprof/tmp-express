@@ -2123,6 +2123,7 @@ router.post('/sponsorships', [
   body('sponsorId').isUUID().withMessage('Valid sponsor ID is required'),
   body('courseIds').isArray({ min: 1 }).withMessage('At least one course ID is required'),
   body('courseIds.*').isUUID().withMessage('All course IDs must be valid UUIDs'),
+  body('discountCode').optional().isString().trim().isLength({ min: 3, max: 50 }).withMessage('Discount code must be 3-50 characters'),
   body('discountType').isIn(['percentage', 'fixed']).withMessage('Discount type must be percentage or fixed'),
   body('discountValue').isFloat({ min: 0 }).withMessage('Discount value must be a positive number'),
   body('maxStudents').isInt({ min: 1 }).withMessage('Maximum students must be at least 1'),
@@ -2140,7 +2141,15 @@ router.post('/sponsorships', [
     throw new AppError('Validation failed', 400, 'Validation Error', errorDetails);
   }
 
-  const { sponsorId, courseIds, discountType, discountValue, maxStudents, startDate, endDate, notes } = req.body;
+  const { sponsorId, courseIds, discountCode: customDiscountCode, discountType, discountValue, maxStudents, startDate, endDate, notes } = req.body;
+
+  // If custom discount code is provided, validate it's unique
+  if (customDiscountCode) {
+    const existing = await getRow('SELECT id FROM sponsorships WHERE discount_code = $1', [customDiscountCode]);
+    if (existing) {
+      throw new AppError('Discount code already exists. Please choose a different code.', 409, 'Code Already Exists');
+    }
+  }
 
   // Check if sponsor exists and is a sponsor
   const sponsor = await getRow(
@@ -2160,23 +2169,28 @@ router.post('/sponsorships', [
     return course;
   }));
 
-  // Generate unique discount code
-  const generateDiscountCode = () => {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    let result = '';
-    for (let i = 0; i < 10; i++) {
-      result += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return result;
-  };
-
+  // Generate unique discount code if not provided
   let discountCode;
-  let isUnique = false;
-  while (!isUnique) {
-    discountCode = generateDiscountCode();
-    const existing = await getRow('SELECT id FROM sponsorships WHERE discount_code = $1', [discountCode]);
-    if (!existing) {
-      isUnique = true;
+  
+  if (customDiscountCode) {
+    discountCode = customDiscountCode;
+  } else {
+    const generateDiscountCode = () => {
+      const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+      let result = '';
+      for (let i = 0; i < 10; i++) {
+        result += chars.charAt(Math.floor(Math.random() * chars.length));
+      }
+      return result;
+    };
+
+    let isUnique = false;
+    while (!isUnique) {
+      discountCode = generateDiscountCode();
+      const existing = await getRow('SELECT id FROM sponsorships WHERE discount_code = $1', [discountCode]);
+      if (!existing) {
+        isUnique = true;
+      }
     }
   }
 

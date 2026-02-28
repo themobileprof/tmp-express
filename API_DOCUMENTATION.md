@@ -430,7 +430,8 @@ Authorization: Bearer <jwt-token>
       "id": "uuid",
       "sponsor_first_name": "TechCorp",
       "sponsor_last_name": "Inc",
-      "course_title": "JavaScript Fundamentals",
+      "course_titles": ["JavaScript Fundamentals", "React Masterclass"],
+      "course_ids": ["uuid1", "uuid2"],
       "discount_code": "TECH50",
       "discount_type": "percentage",
       "discount_value": 50,
@@ -465,7 +466,8 @@ Authorization: Bearer <jwt-token>
 ```json
 {
   "sponsorId": "uuid-of-sponsor",
-  "courseId": "uuid-of-course",
+  "courseIds": ["uuid-of-course1", "uuid-of-course2"],
+  "discountCode": "CUSTOM50",
   "discountType": "percentage",
   "discountValue": 30,
   "maxStudents": 50,
@@ -475,13 +477,23 @@ Authorization: Bearer <jwt-token>
 }
 ```
 
+**Fields:**
+- `sponsorId` (required) - UUID of the sponsor user
+- `courseIds` (required) - Array of course IDs to sponsor
+- `discountCode` (optional) - Custom discount code (3-50 characters). If not provided, a unique code will be auto-generated
+- `discountType` (required) - Either "percentage" or "fixed"
+- `discountValue` (required) - Discount value
+- `maxStudents` (required) - Maximum number of students
+- `startDate` (required) - Start date
+- `endDate` (required) - End date  
+- `notes` (optional) - Additional notes
+
 **Response (201):**
 ```json
 {
   "sponsorship": {
     "id": "uuid",
     "sponsor_id": "uuid-of-sponsor",
-    "course_id": "uuid-of-course",
     "discount_code": "AUTO123456",
     "discount_type": "percentage",
     "discount_value": 30,
@@ -489,6 +501,7 @@ Authorization: Bearer <jwt-token>
     "start_date": "2024-01-01",
     "end_date": "2024-06-30",
     "notes": "Special discount for students",
+    "courseIds": ["uuid-of-course1", "uuid-of-course2"],
     "created_at": "2024-01-01T00:00:00.000Z"
   }
 }
@@ -4088,9 +4101,9 @@ Authorization: Bearer <jwt-token>
   "sponsorships": [
     {
       "id": "uuid",
-      "courseId": "uuid",
-      "courseTitle": "JavaScript Fundamentals",
-      "coursePrice": 99.99,
+      "courseIds": ["uuid1", "uuid2"],
+      "courseTitles": ["JavaScript Fundamentals", "React Masterclass"],
+      "coursePrices": [99.99, 149.99],
       "discountCode": "SPONSOR123",
       "discountType": "percentage",
       "discountValue": 20,
@@ -4111,7 +4124,7 @@ Authorization: Bearer <jwt-token>
 #### Create Sponsorship
 **POST** `/api/sponsorships`
 
-Create a new sponsorship (sponsor only).
+Create a new sponsorship for one or more courses (sponsor only).
 
 **Headers:**
 ```
@@ -4122,7 +4135,7 @@ Content-Type: application/json
 **Request Body:**
 ```json
 {
-  "courseId": "uuid",
+  "courseIds": ["uuid1", "uuid2"],
   "discountType": "percentage",
   "discountValue": 20,
   "maxStudents": 50,
@@ -4131,13 +4144,23 @@ Content-Type: application/json
 }
 ```
 
+**Fields:**
+- `courseIds` (required) - Array of course IDs to sponsor (at least one required)
+- `discountType` (required) - Either "percentage" or "fixed"
+- `discountValue` (required) - Discount value (percentage or fixed amount)
+- `maxStudents` (required) - Maximum number of students who can use this sponsorship
+- `duration` (required) - Duration in months (1-12)
+- `notes` (optional) - Additional notes about the sponsorship
+
+**Note:** Discount codes are automatically generated for sponsors. Only admins can create custom discount codes.
+
 **Response (201):**
 ```json
 {
   "id": "uuid",
   "sponsorId": "uuid",
-  "courseId": "uuid",
-  "discountCode": "SPONSOR123",
+  "courseIds": ["uuid1", "uuid2"],
+  "discountCode": "SPONSORABC123",
   "discountType": "percentage",
   "discountValue": 20,
   "maxStudents": 50,
@@ -4166,10 +4189,10 @@ Authorization: Bearer <jwt-token>
   "id": "uuid",
   "sponsorId": "uuid",
   "sponsorName": "John Doe",
-  "courseId": "uuid",
-  "courseTitle": "JavaScript Fundamentals",
-  "coursePrice": 99.99,
-  "courseDescription": "Learn JavaScript from scratch",
+  "courseIds": ["uuid1", "uuid2"],
+  "courseTitles": ["JavaScript Fundamentals", "React Masterclass"],
+  "coursePrices": [99.99, 149.99],
+  "courseDescriptions": ["Learn JavaScript from scratch", "Master React development"],
   "discountCode": "SPONSOR123",
   "discountType": "percentage",
   "discountValue": 20,
