@@ -1,6 +1,45 @@
 # TheMobileProf Backend API
 
-A comprehensive Learning Management System (LMS) backend API built with Node.js, Express, and PostgreSQL. This API supports course management, user authentication, sponsorship programs, testing systems, and more.
+Backend API for [TheMobileProf](https://themobileprof.com) — a learning platform built so people without a PC can learn software development and IT operations using only an Android phone.
+
+## About TheMobileProf
+
+Most tech education assumes a laptop or desktop. Courses, tutorials, and hiring pipelines are built around that assumption. For much of the world, a smartphone is the only computer someone has — and on Android, tools like [Termux](https://termux.dev/) make a real Linux environment possible on that device.
+
+TheMobileProf exists to close that gap. We are building the infrastructure, content, and community so learners can go from zero to employable skills without ever needing traditional hardware.
+
+### The problem we are solving
+
+- **Access**: Millions of people cannot afford or reliably access a PC, but many do have an Android phone with mobile data.
+- **Content mismatch**: Existing curricula assume desktop setups, large screens, and IDE-centric workflows that do not translate to a phone terminal.
+- **Cost**: Even when content exists online, course fees, certification costs, and payment friction block participation.
+- **Proof of skill**: Without formal training paths, mobile-only learners struggle to demonstrate competence to employers.
+
+### What we are building
+
+This repository is the backend for that platform — the API layer that powers courses, hands-on practice, assessments, payments, and credentials on mobile.
+
+| Area | What it enables |
+|------|-----------------|
+| **Mobile-first LMS** | Courses, lessons, classes, and discussions designed for small screens and intermittent connectivity |
+| **Interactive workshops** | Step-by-step terminal exercises (see [Workshop System](docs/WORKSHOP_FORMAT.md)) that mirror real command-line work on Android |
+| **Assessments & certification** | Tests, scoring, and verifiable digital certificates so skills can be demonstrated |
+| **Sponsorships** | Discount codes and funded seats so cost is not a barrier (see [Sponsorships](docs/sponsorships.md)) |
+| **Mobile-friendly payments** | Flutterwave integration including mobile money options common in regions where card payments are rare |
+| **Content pipeline** | Tools and agents to adapt traditional learning materials into mobile-optimized lessons with Termux-style visuals (see [docs/agent](docs/agent/README.md)) |
+
+### Who this is for
+
+- **Learners** who want to learn Linux, DevOps, programming, or IT operations from an Android phone
+- **Instructors** who create and deliver mobile-native courses and workshops
+- **Sponsors** who fund seats and scholarships for underserved communities
+- **Contributors** who help extend the platform, API, and educational content
+
+The goal is not to replace desktop development forever — it is to make the **first steps, daily practice, and career entry** possible for everyone, regardless of what hardware they start with.
+
+---
+
+Built with Node.js, Express, and PostgreSQL.
 
 ## 🚀 Quick Start
 
@@ -62,18 +101,7 @@ docker run -d \
    PORT=3000
    ```
 
-4. **Payment Configuration (Optional)**
-   
-   Add these variables to your `.env` file for payment functionality:
-   ```env
-   FLUTTERWAVE_PUBLIC_KEY=your-public-key
-   FLUTTERWAVE_SECRET_KEY=your-secret-key
-   FLUTTERWAVE_SECRET_HASH=your-webhook-secret-hash
-   ```
-
-   **Note for Docker:** The `.env` file is excluded from the Docker image for security. In production, the `.env` file is mounted into the container at runtime.
-
-5. **Database Setup**
+4. **Database Setup**
    ```bash
    # Run database migration
    npm run migrate
@@ -390,5 +418,5 @@ curl http://localhost:3000/health
 
 ---
 
-**Last Updated**: January 2024  
+**Last Updated**: June 2025  
 **Version**: 1.0.0
