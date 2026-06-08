@@ -1068,6 +1068,7 @@ router.get('/stats/courses', asyncHandler(async (req, res) => {
       c.id,
       c.title,
       c.topic,
+      c.format,
       c.price,
       c.is_published,
       u.first_name as instructor_first_name,
@@ -1084,7 +1085,8 @@ router.get('/stats/courses', asyncHandler(async (req, res) => {
     LEFT JOIN tests t ON c.id = t.course_id
     LEFT JOIN test_attempts ta ON t.id = ta.test_id
     LEFT JOIN lessons l ON c.id = l.course_id
-    GROUP BY c.id, u.first_name, u.last_name
+    WHERE c.deleted_at IS NULL
+    GROUP BY c.id, c.format, u.first_name, u.last_name
     ORDER BY enrollment_count DESC
   `);
 
