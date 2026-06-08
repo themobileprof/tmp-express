@@ -30,6 +30,7 @@ const uploadRoutes = require('./routes/uploads');
 const searchRoutes = require('./routes/search');
 const metaRoutes = require('./routes/meta');
 const certificationProgramRoutes = require('./routes/certificationPrograms');
+const miniCourseRoutes = require('./routes/miniCourses');
 
 const { errorHandler } = require('./middleware/errorHandler');
 const { authenticateToken } = require('./middleware/auth');
@@ -464,6 +465,7 @@ app.get('/', (req, res) => {
 app.use('/api/auth', authLimiter, authRoutes);
 app.use('/api/users', authenticateToken, userRoutes);
 app.use('/api/courses', courseRoutes);
+app.use('/api/mini-courses', miniCourseRoutes);
 app.use('/api/sponsorships', sponsorshipRoutes);
 app.use('/api/sponsorship-opportunities', sponsorshipOpportunityRoutes);
 app.use('/api/classes', classRoutes);

@@ -5,6 +5,23 @@ const { asyncHandler, AppError } = require('../middleware/errorHandler');
 const { authenticateToken } = require('../middleware/auth');
 const { clearSettingsCache } = require('../utils/systemSettings');
 const { sendEmail } = require('../mailer');
+const {
+  generateUniqueSlug,
+  slugify,
+  MICRO_MAX_LESSONS,
+  mapMiniCourseAdmin,
+  getMiniCourseMicroRows,
+  resolveMicroCourseIds,
+  setMiniCourseMicros,
+} = require('../utils/miniCourseHelpers');
+const {
+  mapMicroCourseAdmin,
+  findMicroCourseByTitle,
+  loadMicroCourseById,
+  validateMicroPrice,
+  normalizeMicroCreateFields,
+  listMicroCoursesQuery,
+} = require('../utils/microCourseAdminHelpers');
 
 const router = express.Router();
 
@@ -308,7 +325,7 @@ router.put('/users/:id/password', [
 
 // Get all courses with admin details
 router.get('/courses', asyncHandler(async (req, res) => {
-  const { page = 1, limit = 20, status, instructor, search } = req.query;
+  const { page = 1, limit = 20, status, instructor, search, format, topic } = req.query;
   const offset = (page - 1) * limit;
 
   let whereClause = 'WHERE c.deleted_at IS NULL'; // Exclude soft-deleted courses
@@ -331,6 +348,18 @@ router.get('/courses', asyncHandler(async (req, res) => {
     paramCount++;
     whereClause += ` AND (c.title ILIKE $${paramCount} OR c.description ILIKE $${paramCount} OR c.topic ILIKE $${paramCount})`;
     params.push(`%${search}%`);
+  }
+
+  if (format) {
+    paramCount++;
+    whereClause += ` AND c.format = $${paramCount}`;
+    params.push(format);
+  }
+
+  if (topic) {
+    paramCount++;
+    whereClause += ` AND c.topic ILIKE $${paramCount}`;
+    params.push(`%${topic}%`);
   }
 
   // Get total count
@@ -370,6 +399,200 @@ router.get('/courses', asyncHandler(async (req, res) => {
   });
 }));
 
+// ===== MICRO COURSE MANAGEMENT (agent-friendly) =====
+
+const microCourseBodyValidators = [
+  body('title').optional().trim().isLength({ min: 1 }),
+  body('description').optional().trim().isLength({ min: 1 }),
+  body('topic').optional().trim().isLength({ min: 1 }),
+  body('type').optional().isIn(['online', 'offline']),
+  body('price').optional().isFloat({ min: 0 }),
+  body('duration').optional().trim().isLength({ min: 1 }),
+  body('difficulty').optional().isIn(['beginner', 'intermediate', 'advanced']),
+  body('objectives').optional().trim(),
+  body('prerequisites').optional().trim(),
+  body('syllabus').optional().trim(),
+  body('tags').optional().isArray(),
+  body('imageUrl').optional().trim(),
+  body('isPublished').optional().isBoolean(),
+  body('instructorId').optional().isUUID(),
+];
+
+async function applyMicroCourseUpdate(courseId, body) {
+  const updates = [];
+  const params = [];
+  let paramCount = 0;
+
+  const fields = {
+    title: body.title?.trim(),
+    description: body.description,
+    topic: body.topic?.trim(),
+    type: body.type,
+    duration: body.duration?.trim(),
+    difficulty: body.difficulty,
+    objectives: body.objectives,
+    prerequisites: body.prerequisites,
+    syllabus: body.syllabus,
+    tags: body.tags,
+    image_url: body.imageUrl,
+    is_published: body.isPublished,
+    instructor_id: body.instructorId,
+  };
+
+  if (body.price !== undefined) {
+    fields.price = validateMicroPrice(body.price);
+  }
+
+  Object.entries(fields).forEach(([column, value]) => {
+    if (value !== undefined) {
+      paramCount += 1;
+      updates.push(`${column} = $${paramCount}`);
+      params.push(value);
+    }
+  });
+
+  if (updates.length > 0) {
+    updates.push('updated_at = CURRENT_TIMESTAMP');
+    paramCount += 1;
+    params.push(courseId);
+    await query(`UPDATE courses SET ${updates.join(', ')} WHERE id = $${paramCount}`, params);
+  }
+
+  return loadMicroCourseById(courseId, getRow);
+}
+
+router.get('/micro-courses', asyncHandler(async (req, res) => {
+  const result = await listMicroCoursesQuery(req.query, getRow, getRows);
+  res.json(result);
+}));
+
+router.get('/micro-courses/by-title/:title', asyncHandler(async (req, res) => {
+  const course = await findMicroCourseByTitle(decodeURIComponent(req.params.title), getRow);
+  if (!course) {
+    throw new AppError('Micro course not found', 404, 'NOT_FOUND');
+  }
+  res.json({ microCourse: mapMicroCourseAdmin(course) });
+}));
+
+router.post('/micro-courses/upsert', microCourseBodyValidators, asyncHandler(async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    throw new AppError('Validation failed', 400, 'VALIDATION_ERROR');
+  }
+
+  if (!req.body.title?.trim()) {
+    throw new AppError('Title is required', 400, 'VALIDATION_ERROR');
+  }
+
+  const existing = await findMicroCourseByTitle(req.body.title, getRow);
+
+  if (existing) {
+    const microCourse = await applyMicroCourseUpdate(existing.id, req.body);
+    return res.json({ success: true, created: false, microCourse });
+  }
+
+  const fields = normalizeMicroCreateFields(req.body);
+  const result = await query(
+    `INSERT INTO courses (
+      title, description, topic, type, certification, price, duration, difficulty,
+      objectives, prerequisites, syllabus, tags, instructor_id, image_url, format, is_published
+    ) VALUES ($1, $2, $3, $4, NULL, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'micro', $14)
+    RETURNING *`,
+    [
+      fields.title,
+      fields.description,
+      fields.topic,
+      fields.type,
+      fields.price,
+      fields.duration,
+      fields.difficulty,
+      fields.objectives,
+      fields.prerequisites,
+      fields.syllabus,
+      fields.tags,
+      fields.instructorId,
+      fields.imageUrl,
+      fields.isPublished,
+    ]
+  );
+
+  res.status(201).json({
+    success: true,
+    created: true,
+    microCourse: mapMicroCourseAdmin(result.rows[0]),
+  });
+}));
+
+router.post('/micro-courses', [
+  body('title').trim().isLength({ min: 1 }),
+  body('description').trim().isLength({ min: 1 }),
+  body('topic').trim().isLength({ min: 1 }),
+  body('duration').trim().isLength({ min: 1 }),
+  ...microCourseBodyValidators.slice(4),
+], asyncHandler(async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    throw new AppError('Validation failed', 400, 'VALIDATION_ERROR');
+  }
+
+  const fields = normalizeMicroCreateFields(req.body);
+  const duplicate = await findMicroCourseByTitle(fields.title, getRow);
+  if (duplicate) {
+    throw new AppError(`Micro course already exists with title: ${fields.title}`, 409, 'DUPLICATE_TITLE');
+  }
+
+  const result = await query(
+    `INSERT INTO courses (
+      title, description, topic, type, certification, price, duration, difficulty,
+      objectives, prerequisites, syllabus, tags, instructor_id, image_url, format, is_published
+    ) VALUES ($1, $2, $3, $4, NULL, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'micro', $14)
+    RETURNING *`,
+    [
+      fields.title,
+      fields.description,
+      fields.topic,
+      fields.type,
+      fields.price,
+      fields.duration,
+      fields.difficulty,
+      fields.objectives,
+      fields.prerequisites,
+      fields.syllabus,
+      fields.tags,
+      fields.instructorId,
+      fields.imageUrl,
+      fields.isPublished,
+    ]
+  );
+
+  res.status(201).json({
+    success: true,
+    microCourse: mapMicroCourseAdmin(result.rows[0]),
+  });
+}));
+
+router.get('/micro-courses/:id', asyncHandler(async (req, res) => {
+  const microCourse = await loadMicroCourseById(req.params.id, getRow);
+  res.json({ microCourse });
+}));
+
+router.put('/micro-courses/:id', microCourseBodyValidators, asyncHandler(async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    throw new AppError('Validation failed', 400, 'VALIDATION_ERROR');
+  }
+
+  await loadMicroCourseById(req.params.id, getRow);
+  const microCourse = await applyMicroCourseUpdate(req.params.id, req.body);
+  res.json({ success: true, microCourse });
+}));
+
+router.delete('/micro-courses/:id', asyncHandler(async (req, res) => {
+  await loadMicroCourseById(req.params.id, getRow);
+  await query('UPDATE courses SET deleted_at = CURRENT_TIMESTAMP WHERE id = $1', [req.params.id]);
+  res.json({ success: true, message: 'Micro course deleted' });
+}));
+
 // Create course
 router.post('/courses', [
   body('title').trim().isLength({ min: 1 }).withMessage('Title is required and must not be empty'),
@@ -384,6 +607,7 @@ router.post('/courses', [
   body('prerequisites').optional({ values: 'falsy' }).trim().isLength({ min: 1 }).withMessage('Prerequisites must be a non-empty string if provided'),
   body('syllabus').optional({ values: 'falsy' }).trim().isLength({ min: 1 }).withMessage('Syllabus must be a non-empty string if provided'),
   body('tags').optional().isArray().withMessage('Tags must be an array'),
+  body('format').optional().isIn(['micro', 'professional']).withMessage('Format must be micro or professional'),
   body('instructorId').optional().custom((value) => {
     if (value === '' || value === null || value === undefined) {
       return true; // Allow empty/null values
@@ -408,7 +632,11 @@ router.post('/courses', [
     throw validationError;
   }
 
-  const { title, description, topic, type, certification, price, duration, difficulty, objectives, prerequisites, syllabus, tags, instructorId, imageUrl } = req.body;
+  const { title, description, topic, type, certification, price, duration, difficulty, objectives, prerequisites, syllabus, tags, instructorId, imageUrl, format = 'professional' } = req.body;
+
+  if (format === 'micro' && price > 20) {
+    throw new AppError('Micro courses should be priced at $20 or less', 400, 'VALIDATION_ERROR');
+  }
 
   // If instructorId is provided, verify the instructor exists
   if (instructorId) {
@@ -422,10 +650,10 @@ router.post('/courses', [
   }
 
   const result = await query(
-    `INSERT INTO courses (title, description, topic, type, certification, price, duration, difficulty, objectives, prerequisites, syllabus, tags, instructor_id, image_url)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+    `INSERT INTO courses (title, description, topic, type, certification, price, duration, difficulty, objectives, prerequisites, syllabus, tags, instructor_id, image_url, format)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
      RETURNING *`,
-    [title, description, topic, type, certification, price, duration, difficulty, objectives, prerequisites, syllabus, tags, instructorId || null, imageUrl]
+    [title, description, topic, type, certification, price, duration, difficulty, objectives, prerequisites, syllabus, tags, instructorId || null, imageUrl, format]
   );
 
   res.status(201).json({
@@ -449,6 +677,7 @@ router.put('/courses/:id', [
   body('syllabus').optional({ values: 'falsy' }).trim().isLength({ min: 1 }).withMessage('Syllabus must be a non-empty string if provided'),
   body('tags').optional().isArray(),
   body('isPublished').optional().isBoolean(),
+  body('format').optional().isIn(['micro', 'professional']),
   body('instructorId').optional().custom((value) => {
     if (value === '' || value === null || value === undefined) {
       return true; // Allow empty/null values
@@ -469,7 +698,7 @@ router.put('/courses/:id', [
   }
 
   const { id } = req.params;
-  const { title, description, topic, type, certification, price, duration, difficulty, objectives, prerequisites, syllabus, tags, imageUrl, isPublished, instructorId } = req.body;
+  const { title, description, topic, type, certification, price, duration, difficulty, objectives, prerequisites, syllabus, tags, imageUrl, isPublished, instructorId, format } = req.body;
 
   // Check if course exists
   const existingCourse = await getRow('SELECT id FROM courses WHERE id = $1', [id]);
@@ -517,13 +746,19 @@ router.put('/courses/:id', [
     params.push(type);
   }
 
+  if (format) {
+    paramCount++;
+    updates.push(`format = $${paramCount}`);
+    params.push(format);
+  }
+
   if (certification !== undefined) {
     paramCount++;
     updates.push(`certification = $${paramCount}`);
     params.push(certification);
   }
 
-  if (price) {
+  if (price !== undefined) {
     paramCount++;
     updates.push(`price = $${paramCount}`);
     params.push(price);
@@ -983,9 +1218,18 @@ router.post('/courses/:courseId/lessons', [
   const { title, description, content, durationMinutes } = req.body;
 
   // Check if course exists
-  const course = await getRow('SELECT id FROM courses WHERE id = $1', [courseId]);
+  const course = await getRow('SELECT id, format FROM courses WHERE id = $1', [courseId]);
   if (!course) {
     throw new AppError('Course not found', 404, 'Course Not Found');
+  }
+
+  const lessonCount = await getRow(
+    'SELECT COUNT(*) as count FROM lessons WHERE course_id = $1 AND deleted_at IS NULL',
+    [courseId]
+  );
+
+  if (course.format === 'micro' && parseInt(lessonCount.count, 10) >= MICRO_MAX_LESSONS) {
+    throw new AppError(`Micro courses cannot have more than ${MICRO_MAX_LESSONS} lessons`, 400, 'VALIDATION_ERROR');
   }
 
   // Get next order index
@@ -3874,6 +4118,458 @@ router.get('/discussions/categories/:id/stats', asyncHandler(async (req, res) =>
       avgHoursToLastActivity: stats.avg_hours_to_last_activity ? parseFloat(stats.avg_hours_to_last_activity) : null
     }
   });
+}));
+
+// ===== MINI COURSE MANAGEMENT =====
+
+const miniCourseBodyValidators = [
+  body('title').optional().trim().isLength({ min: 1 }),
+  body('slug').optional().trim().isLength({ min: 1 }),
+  body('description').optional().trim(),
+  body('topic').optional().trim(),
+  body('imageUrl').optional().trim(),
+  body('bundlePrice').optional().isFloat({ min: 0 }),
+  body('issuesCertificate').optional().isBoolean(),
+  body('isPublished').optional().isBoolean(),
+  body('microCourseIds').optional().isArray(),
+  body('microCourseTitles').optional().isArray(),
+];
+
+async function loadMiniCourseResponse(miniCourseId) {
+  const mini = await getRow('SELECT * FROM mini_courses WHERE id = $1 AND deleted_at IS NULL', [miniCourseId]);
+  if (!mini) {
+    throw new AppError('Mini course not found', 404, 'NOT_FOUND');
+  }
+  const microRows = await getMiniCourseMicroRows(miniCourseId, getRows);
+  return mapMiniCourseAdmin(mini, microRows);
+}
+
+async function applyMiniCourseFields(miniId, fields, { isCreate = false } = {}) {
+  const {
+    title,
+    slug: requestedSlug,
+    description,
+    topic,
+    imageUrl,
+    bundlePrice,
+    issuesCertificate,
+    isPublished,
+  } = fields;
+
+  if (isCreate) {
+    if (!title) {
+      throw new AppError('Title is required', 400, 'VALIDATION_ERROR');
+    }
+    let slug;
+    if (requestedSlug) {
+      slug = slugify(requestedSlug);
+      const taken = await getRow(
+        'SELECT id FROM mini_courses WHERE slug = $1 AND deleted_at IS NULL',
+        [slug]
+      );
+      if (taken) {
+        throw new AppError(`Mini course slug already exists: ${slug}`, 409, 'DUPLICATE_SLUG');
+      }
+    } else {
+      slug = await generateUniqueSlug(title, getRow);
+    }
+
+    const result = await query(
+      `INSERT INTO mini_courses (title, slug, description, topic, image_url, bundle_price, issues_certificate, is_published)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       RETURNING *`,
+      [
+        title,
+        slug,
+        description || null,
+        topic || null,
+        imageUrl || null,
+        bundlePrice ?? null,
+        issuesCertificate !== undefined ? issuesCertificate : true,
+        isPublished !== undefined ? isPublished : false,
+      ]
+    );
+    return result.rows[0];
+  }
+
+  const updates = [];
+  const params = [];
+  let paramCount = 0;
+
+  if (title) {
+    paramCount += 1;
+    updates.push(`title = $${paramCount}`);
+    params.push(title);
+    const nextSlug = requestedSlug
+      ? await generateUniqueSlug(requestedSlug, getRow, miniId)
+      : await generateUniqueSlug(title, getRow, miniId);
+    paramCount += 1;
+    updates.push(`slug = $${paramCount}`);
+    params.push(nextSlug);
+  } else if (requestedSlug) {
+    paramCount += 1;
+    updates.push(`slug = $${paramCount}`);
+    params.push(await generateUniqueSlug(requestedSlug, getRow, miniId));
+  }
+
+  if (description !== undefined) {
+    paramCount += 1;
+    updates.push(`description = $${paramCount}`);
+    params.push(description);
+  }
+  if (topic !== undefined) {
+    paramCount += 1;
+    updates.push(`topic = $${paramCount}`);
+    params.push(topic);
+  }
+  if (imageUrl !== undefined) {
+    paramCount += 1;
+    updates.push(`image_url = $${paramCount}`);
+    params.push(imageUrl);
+  }
+  if (bundlePrice !== undefined) {
+    paramCount += 1;
+    updates.push(`bundle_price = $${paramCount}`);
+    params.push(bundlePrice);
+  }
+  if (issuesCertificate !== undefined) {
+    paramCount += 1;
+    updates.push(`issues_certificate = $${paramCount}`);
+    params.push(issuesCertificate);
+  }
+  if (isPublished !== undefined) {
+    paramCount += 1;
+    updates.push(`is_published = $${paramCount}`);
+    params.push(isPublished);
+  }
+
+  if (updates.length > 0) {
+    updates.push('updated_at = CURRENT_TIMESTAMP');
+    paramCount += 1;
+    params.push(miniId);
+    await query(`UPDATE mini_courses SET ${updates.join(', ')} WHERE id = $${paramCount}`, params);
+  }
+
+  return getRow('SELECT * FROM mini_courses WHERE id = $1', [miniId]);
+}
+
+// List mini courses (admin / agent)
+router.get('/mini-courses', asyncHandler(async (req, res) => {
+  const { page = 1, limit = 50, search, topic, isPublished } = req.query;
+  const offset = (parseInt(page, 10) - 1) * parseInt(limit, 10);
+
+  let whereClause = 'WHERE mc.deleted_at IS NULL';
+  const params = [];
+  let paramCount = 0;
+
+  if (search) {
+    paramCount += 1;
+    whereClause += ` AND (mc.title ILIKE $${paramCount} OR mc.description ILIKE $${paramCount} OR mc.slug ILIKE $${paramCount})`;
+    params.push(`%${search}%`);
+  }
+
+  if (topic) {
+    paramCount += 1;
+    whereClause += ` AND mc.topic ILIKE $${paramCount}`;
+    params.push(`%${topic}%`);
+  }
+
+  if (isPublished !== undefined) {
+    paramCount += 1;
+    whereClause += ` AND mc.is_published = $${paramCount}`;
+    params.push(isPublished === 'true');
+  }
+
+  const countResult = await getRow(
+    `SELECT COUNT(*) as total FROM mini_courses mc ${whereClause}`,
+    params
+  );
+
+  const minis = await getRows(
+    `SELECT mc.*,
+            (SELECT COUNT(*) FROM mini_course_micros mcm WHERE mcm.mini_course_id = mc.id) as micro_count
+     FROM mini_courses mc
+     ${whereClause}
+     ORDER BY mc.created_at DESC
+     LIMIT $${paramCount + 1} OFFSET $${paramCount + 2}`,
+    [...params, parseInt(limit, 10), offset]
+  );
+
+  res.json({
+    miniCourses: minis.map((mini) => mapMiniCourseAdmin(mini)),
+    pagination: {
+      page: parseInt(page, 10),
+      limit: parseInt(limit, 10),
+      total: parseInt(countResult.total, 10),
+      pages: Math.ceil(parseInt(countResult.total, 10) / parseInt(limit, 10)),
+    },
+  });
+}));
+
+// Lookup by slug (agent idempotency) — before /:id
+router.get('/mini-courses/by-slug/:slug', asyncHandler(async (req, res) => {
+  const { slug } = req.params;
+  const mini = await getRow(
+    'SELECT * FROM mini_courses WHERE slug = $1 AND deleted_at IS NULL',
+    [slug]
+  );
+
+  if (!mini) {
+    throw new AppError('Mini course not found', 404, 'NOT_FOUND');
+  }
+
+  const microRows = await getMiniCourseMicroRows(mini.id, getRows);
+  res.json({ miniCourse: mapMiniCourseAdmin(mini, microRows) });
+}));
+
+// Create mini course
+router.post('/mini-courses', [
+  body('title').trim().isLength({ min: 1 }),
+  ...miniCourseBodyValidators.slice(1),
+], asyncHandler(async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    throw new AppError('Validation failed', 400, 'VALIDATION_ERROR');
+  }
+
+  const mini = await applyMiniCourseFields(null, req.body, { isCreate: true });
+
+  const resolvedIds = await resolveMicroCourseIds(
+    {
+      microCourseIds: req.body.microCourseIds || [],
+      microCourseTitles: req.body.microCourseTitles || [],
+    },
+    getRow
+  );
+
+  if (resolvedIds.length) {
+    await setMiniCourseMicros(mini.id, resolvedIds, query, getRow, 'replace');
+  }
+
+  res.status(201).json({
+    success: true,
+    miniCourse: await loadMiniCourseResponse(mini.id),
+  });
+}));
+
+// Upsert mini course by slug (agent-friendly)
+router.post('/mini-courses/upsert', miniCourseBodyValidators, asyncHandler(async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    throw new AppError('Validation failed', 400, 'VALIDATION_ERROR');
+  }
+
+  const { slug: requestedSlug, title, microCourseIds, microCourseTitles, microCourseMode = 'replace' } = req.body;
+
+  if (!title && !requestedSlug) {
+    throw new AppError('Title or slug is required', 400, 'VALIDATION_ERROR');
+  }
+
+  const lookupSlug = requestedSlug || slugify(title);
+  let existing = await getRow(
+    'SELECT * FROM mini_courses WHERE slug = $1 AND deleted_at IS NULL',
+    [lookupSlug]
+  );
+
+  if (!existing && title) {
+    existing = await getRow(
+      `SELECT * FROM mini_courses WHERE deleted_at IS NULL AND LOWER(TRIM(title)) = LOWER(TRIM($1)) LIMIT 1`,
+      [title]
+    );
+  }
+
+  const mini = existing
+    ? await applyMiniCourseFields(existing.id, req.body, { isCreate: false })
+    : await applyMiniCourseFields(null, { ...req.body, slug: lookupSlug }, { isCreate: true });
+
+  const resolvedIds = await resolveMicroCourseIds(
+    { microCourseIds: microCourseIds || [], microCourseTitles: microCourseTitles || [] },
+    getRow
+  );
+
+  if (resolvedIds.length) {
+    await setMiniCourseMicros(mini.id, resolvedIds, query, getRow, microCourseMode === 'append' ? 'append' : 'replace');
+  }
+
+  res.status(existing ? 200 : 201).json({
+    success: true,
+    created: !existing,
+    miniCourse: await loadMiniCourseResponse(mini.id),
+  });
+}));
+
+// Get mini course by id or slug
+router.get('/mini-courses/:id', asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const mini = await getRow(
+    `SELECT * FROM mini_courses WHERE (id::text = $1 OR slug = $1) AND deleted_at IS NULL`,
+    [id]
+  );
+
+  if (!mini) {
+    throw new AppError('Mini course not found', 404, 'NOT_FOUND');
+  }
+
+  const microRows = await getMiniCourseMicroRows(mini.id, getRows);
+  res.json({ miniCourse: mapMiniCourseAdmin(mini, microRows) });
+}));
+
+// Update mini course
+router.put('/mini-courses/:id', miniCourseBodyValidators, asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const existing = await getRow(
+    `SELECT * FROM mini_courses WHERE (id::text = $1 OR slug = $1) AND deleted_at IS NULL`,
+    [id]
+  );
+
+  if (!existing) {
+    throw new AppError('Mini course not found', 404, 'NOT_FOUND');
+  }
+
+  await applyMiniCourseFields(existing.id, req.body, { isCreate: false });
+
+  if (req.body.microCourseIds !== undefined || req.body.microCourseTitles !== undefined) {
+    const resolvedIds = await resolveMicroCourseIds(
+      {
+        microCourseIds: req.body.microCourseIds || [],
+        microCourseTitles: req.body.microCourseTitles || [],
+      },
+      getRow
+    );
+    const mode = req.body.microCourseMode === 'append' ? 'append' : 'replace';
+    await setMiniCourseMicros(existing.id, resolvedIds, query, getRow, mode);
+  }
+
+  res.json({
+    success: true,
+    miniCourse: await loadMiniCourseResponse(existing.id),
+  });
+}));
+
+// Append micro courses to a mini course without replacing existing ones
+router.post('/mini-courses/:id/micros', [
+  body('microCourseIds').optional().isArray(),
+  body('microCourseTitles').optional().isArray(),
+], asyncHandler(async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    throw new AppError('Validation failed', 400, 'VALIDATION_ERROR');
+  }
+
+  const { id } = req.params;
+  const existing = await getRow(
+    `SELECT id FROM mini_courses WHERE (id::text = $1 OR slug = $1) AND deleted_at IS NULL`,
+    [id]
+  );
+
+  if (!existing) {
+    throw new AppError('Mini course not found', 404, 'NOT_FOUND');
+  }
+
+  const resolvedIds = await resolveMicroCourseIds(
+    {
+      microCourseIds: req.body.microCourseIds || [],
+      microCourseTitles: req.body.microCourseTitles || [],
+    },
+    getRow
+  );
+
+  if (!resolvedIds.length) {
+    throw new AppError('microCourseIds or microCourseTitles required', 400, 'VALIDATION_ERROR');
+  }
+
+  await setMiniCourseMicros(existing.id, resolvedIds, query, getRow, 'append');
+
+  res.json({
+    success: true,
+    miniCourse: await loadMiniCourseResponse(existing.id),
+  });
+}));
+
+// Replace micro course membership for a mini course
+router.put('/mini-courses/:id/micros', [
+  body('microCourseIds').optional().isArray(),
+  body('microCourseTitles').optional().isArray(),
+], asyncHandler(async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    throw new AppError('Validation failed', 400, 'VALIDATION_ERROR');
+  }
+
+  const { id } = req.params;
+  const existing = await getRow(
+    `SELECT id FROM mini_courses WHERE (id::text = $1 OR slug = $1) AND deleted_at IS NULL`,
+    [id]
+  );
+
+  if (!existing) {
+    throw new AppError('Mini course not found', 404, 'NOT_FOUND');
+  }
+
+  const resolvedIds = await resolveMicroCourseIds(
+    {
+      microCourseIds: req.body.microCourseIds || [],
+      microCourseTitles: req.body.microCourseTitles || [],
+    },
+    getRow
+  );
+
+  await setMiniCourseMicros(existing.id, resolvedIds, query, getRow, 'replace');
+
+  res.json({
+    success: true,
+    miniCourse: await loadMiniCourseResponse(existing.id),
+  });
+}));
+
+// Remove a micro course from a mini course
+router.delete('/mini-courses/:id/micros/:courseId', asyncHandler(async (req, res) => {
+  const { id, courseId } = req.params;
+  const existing = await getRow(
+    `SELECT id FROM mini_courses WHERE (id::text = $1 OR slug = $1) AND deleted_at IS NULL`,
+    [id]
+  );
+
+  if (!existing) {
+    throw new AppError('Mini course not found', 404, 'NOT_FOUND');
+  }
+
+  await query(
+    'DELETE FROM mini_course_micros WHERE mini_course_id = $1 AND course_id = $2',
+    [existing.id, courseId]
+  );
+
+  const remaining = await getRows(
+    'SELECT course_id FROM mini_course_micros WHERE mini_course_id = $1 ORDER BY order_index ASC',
+    [existing.id]
+  );
+
+  for (let i = 0; i < remaining.length; i += 1) {
+    await query(
+      'UPDATE mini_course_micros SET order_index = $1 WHERE mini_course_id = $2 AND course_id = $3',
+      [i + 1, existing.id, remaining[i].course_id]
+    );
+  }
+
+  res.json({
+    success: true,
+    miniCourse: await loadMiniCourseResponse(existing.id),
+  });
+}));
+
+router.delete('/mini-courses/:id', asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const existing = await getRow(
+    `SELECT id FROM mini_courses WHERE (id::text = $1 OR slug = $1) AND deleted_at IS NULL`,
+    [id]
+  );
+
+  if (!existing) {
+    throw new AppError('Mini course not found', 404, 'NOT_FOUND');
+  }
+
+  await query('UPDATE mini_courses SET deleted_at = CURRENT_TIMESTAMP WHERE id = $1', [existing.id]);
+  res.json({ success: true, message: 'Mini course deleted' });
 }));
 
 module.exports = router; 

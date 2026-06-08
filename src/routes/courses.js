@@ -13,6 +13,7 @@ router.get('/browse', asyncHandler(async (req, res) => {
     topic, 
     instructor, 
     level, 
+    format,
     price_min, 
     price_max, 
     sort = 'created_at', 
@@ -41,6 +42,12 @@ router.get('/browse', asyncHandler(async (req, res) => {
   if (level) {
     whereConditions.push(`c.level = $${paramIndex}`);
     params.push(level);
+    paramIndex++;
+  }
+
+  if (format) {
+    whereConditions.push(`c.format = $${paramIndex}`);
+    params.push(format);
     paramIndex++;
   }
 
@@ -78,7 +85,7 @@ router.get('/browse', asyncHandler(async (req, res) => {
   // Get courses
   const coursesQuery = `
     SELECT 
-      c.id, c.title, c.description, c.topic, c.type, c.price, c.image_url,
+      c.id, c.title, c.description, c.topic, c.type, c.format, c.price, c.image_url,
       c.duration, c.rating, c.student_count, c.difficulty, c.objectives, 
       c.prerequisites, c.syllabus, c.tags, c.created_at,
       u.id as instructor_id, u.first_name as instructor_first_name, 
@@ -101,6 +108,7 @@ router.get('/browse', asyncHandler(async (req, res) => {
       description: course.description,
       topic: course.topic,
       type: course.type,
+      format: course.format || 'professional',
       price: course.price,
       imageUrl: course.image_url,
       duration: course.duration,
@@ -152,7 +160,7 @@ const validateEnrollment = [
 
 // Get all courses
 router.get('/', asyncHandler(async (req, res) => {
-  const { topic, type, instructorId, isPublished, limit = 20, offset = 0 } = req.query;
+  const { topic, type, format, instructorId, isPublished, limit = 20, offset = 0 } = req.query;
 
   let whereClause = 'WHERE 1=1';
   let params = [];
@@ -167,6 +175,12 @@ router.get('/', asyncHandler(async (req, res) => {
   if (type) {
     whereClause += ` AND c.type = $${paramIndex}`;
     params.push(type);
+    paramIndex++;
+  }
+
+  if (format) {
+    whereClause += ` AND c.format = $${paramIndex}`;
+    params.push(format);
     paramIndex++;
   }
 
@@ -199,6 +213,7 @@ router.get('/', asyncHandler(async (req, res) => {
       description: c.description,
       topic: c.topic,
       type: c.type,
+      format: c.format || 'professional',
       certification: c.certification,
       price: c.price,
       rating: c.rating,
@@ -330,6 +345,7 @@ router.get('/:id', authenticateToken, asyncHandler(async (req, res) => {
     description: course.description,
     topic: course.topic,
     type: course.type,
+    format: course.format || 'professional',
     certification: course.certification,
     price: course.price,
     rating: course.rating,

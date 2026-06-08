@@ -166,13 +166,21 @@
         
         <h1>CERTIFICATE OF COMPLETION</h1>
         
+        {{#credentialLabel}}
+        <p class="subtitle" style="font-weight: bold; color: #667eea; margin-bottom: 10px;">{{credentialLabel}}</p>
+        {{/credentialLabel}}
+        
         <p class="subtitle">This certifies that</p>
         
         <div class="recipient-name">{{userName}}</div>
         
-        <p class="completion-text">has successfully completed the course</p>
+        <p class="completion-text">{{completionText}}</p>
         
         <div class="course-title">{{courseTitle}}</div>
+        
+        {{#subtitle}}
+        <p class="completion-date">{{subtitle}}</p>
+        {{/subtitle}}
         
         <p class="completion-date">Completed on {{completionDate}}</p>
         

@@ -17,13 +17,13 @@ class CertificateService {
    */
   async checkAndAwardCourseCertificate(userId, courseId) {
     try {
-      // Get course and enrollment info
       const courseInfo = await getRow(
-        `SELECT c.id, c.title, c.certification, u.first_name, u.last_name, u.email,
+        `SELECT c.id, c.title, c.format, c.certification,
+                u.first_name, u.last_name, u.email,
                 e.progress, e.status, e.completed_at
          FROM courses c
          JOIN enrollments e ON c.id = e.course_id
-         JOIN users u ON c.instructor_id = u.id
+         LEFT JOIN users u ON c.instructor_id = u.id
          WHERE c.id = $1 AND e.user_id = $2 AND e.enrollment_type = 'course'`,
         [courseId, userId]
       );
@@ -33,36 +33,131 @@ class CertificateService {
         return null;
       }
 
-      // Check if course offers certification
-      if (!courseInfo.certification) {
-        console.log(`Course ${courseId} does not offer certification`);
-        return null;
-      }
-
-      // Check if user has already been awarded a certificate for this course
-      const existingCertificate = await getRow(
-        'SELECT id FROM certifications WHERE user_id = $1 AND course_id = $2',
-        [userId, courseId]
-      );
-
-      if (existingCertificate) {
-        console.log(`User ${userId} already has certificate for course ${courseId}`);
-        return null;
-      }
-
-      // Check if course is completed (progress = 100)
       if (courseInfo.progress !== 100 || courseInfo.status !== 'completed') {
         console.log(`Course ${courseId} not completed yet for user ${userId} (progress: ${courseInfo.progress})`);
         return null;
       }
 
-      // Award certificate
-      return await this.awardCourseCertificate(userId, courseId, courseInfo);
+      const format = courseInfo.format || 'professional';
 
+      if (format === 'micro') {
+        const awarded = await this.checkAndAwardMicroCertificate(userId, courseId, courseInfo);
+        if (awarded) {
+          await this.checkAndAwardMiniCertificatesForMicro(userId, courseId);
+        }
+        return awarded;
+      }
+
+      if (!courseInfo.certification) {
+        console.log(`Course ${courseId} does not offer certification`);
+        return null;
+      }
+
+      return await this.checkAndAwardProfessionalCertificate(userId, courseId, courseInfo);
     } catch (error) {
       console.error('Error checking course certificate eligibility:', error);
       throw error;
     }
+  }
+
+  async checkAndAwardProfessionalCertificate(userId, courseId, courseInfo) {
+    const existingCertificate = await getRow(
+      `SELECT id FROM certifications
+       WHERE user_id = $1 AND course_id = $2
+         AND (credential_type = 'professional' OR credential_type IS NULL)`,
+      [userId, courseId]
+    );
+
+    if (existingCertificate) {
+      return null;
+    }
+
+    return this.awardCourseCertificate(userId, courseId, courseInfo, {
+      credentialType: 'professional',
+      credentialLabel: 'Professional Course',
+      certificationName: `${courseInfo.title} - Certificate of Completion`,
+      completionText: 'has successfully completed the professional course',
+    });
+  }
+
+  async checkAndAwardMicroCertificate(userId, courseId, courseInfo) {
+    const existingCertificate = await getRow(
+      `SELECT id FROM certifications
+       WHERE user_id = $1 AND course_id = $2 AND credential_type = 'micro'`,
+      [userId, courseId]
+    );
+
+    if (existingCertificate) {
+      return null;
+    }
+
+    return this.awardCourseCertificate(userId, courseId, courseInfo, {
+      credentialType: 'micro',
+      credentialLabel: 'Micro Course',
+      certificationName: `${courseInfo.title} - Certificate of Completion`,
+      completionText: 'has successfully completed the micro course',
+    });
+  }
+
+  async checkAndAwardMiniCertificatesForMicro(userId, courseId) {
+    const minis = await getRows(
+      `SELECT mc.*
+       FROM mini_courses mc
+       JOIN mini_course_micros mcm ON mc.id = mcm.mini_course_id
+       WHERE mcm.course_id = $1 AND mc.deleted_at IS NULL AND mc.issues_certificate = true`,
+      [courseId]
+    );
+
+    for (const mini of minis) {
+      await this.checkAndAwardMiniCertificate(userId, mini.id);
+    }
+  }
+
+  async checkAndAwardMiniCertificate(userId, miniCourseId) {
+    const mini = await getRow(
+      `SELECT * FROM mini_courses WHERE id = $1 AND deleted_at IS NULL`,
+      [miniCourseId]
+    );
+
+    if (!mini || !mini.issues_certificate) {
+      return null;
+    }
+
+    const existingCertificate = await getRow(
+      `SELECT id FROM certifications
+       WHERE user_id = $1 AND mini_course_id = $2 AND credential_type = 'mini'`,
+      [userId, miniCourseId]
+    );
+
+    if (existingCertificate) {
+      return null;
+    }
+
+    const microRows = await getRows(
+      `SELECT c.id
+       FROM mini_course_micros mcm
+       JOIN courses c ON mcm.course_id = c.id
+       WHERE mcm.mini_course_id = $1 AND c.deleted_at IS NULL`,
+      [miniCourseId]
+    );
+
+    if (!microRows.length) {
+      return null;
+    }
+
+    const courseIds = microRows.map((row) => row.id);
+    const completedRows = await getRows(
+      `SELECT course_id FROM enrollments
+       WHERE user_id = $1 AND course_id = ANY($2::uuid[])
+         AND enrollment_type = 'course' AND progress >= 100 AND status = 'completed'`,
+      [userId, courseIds]
+    );
+
+    if (completedRows.length < courseIds.length) {
+      return null;
+    }
+
+    return this.awardMiniCertificate(userId, mini);
   }
 
   /**
@@ -72,9 +167,15 @@ class CertificateService {
    * @param {Object} courseInfo - Course and enrollment info
    * @returns {Promise<Object>} - Certificate info
    */
-  async awardCourseCertificate(userId, courseId, courseInfo) {
+  async awardCourseCertificate(userId, courseId, courseInfo, options = {}) {
+    const {
+      credentialType = 'professional',
+      credentialLabel = 'Professional Course',
+      certificationName = `${courseInfo.title} - Certificate of Completion`,
+      completionText = 'has successfully completed the course',
+    } = options;
+
     try {
-      // Get user info
       const userInfo = await getRow(
         'SELECT first_name, last_name, email FROM users WHERE id = $1',
         [userId]
@@ -85,73 +186,155 @@ class CertificateService {
       }
 
       const userName = `${userInfo.first_name} ${userInfo.last_name}`;
+      const instructorName = courseInfo.first_name && courseInfo.last_name
+        ? `${courseInfo.first_name} ${courseInfo.last_name}`
+        : 'TheMobileProf Academy';
 
-      // Get default template
       const template = await getRow(
         'SELECT * FROM certificate_templates WHERE is_default = true AND is_active = true LIMIT 1'
       );
 
-      // Generate verification code
       const verificationCode = await this.generateVerificationCode();
 
-      // Generate certificate image using template
       const certificateData = {
         userName,
         courseTitle: courseInfo.title,
-        instructorName: `${courseInfo.first_name} ${courseInfo.last_name}`,
+        instructorName,
         completionDate: courseInfo.completed_at || new Date().toISOString(),
         verificationCode,
-        signatures: [] // Add signatures if available from template
+        credentialLabel,
+        completionText,
+        signatures: [],
       };
 
-      // Generate PDF certificate using Puppeteer
       const certificateFile = await certificateGenerator.generateCourseCertificate(certificateData);
 
-      // Save certificate to database with PDF file info
       const certificationRecord = await query(
         `INSERT INTO certifications (
           user_id, course_id, certification_name, issuer, issued_date,
-          certificate_url, verification_code, status, template_id
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+          certificate_url, verification_code, status, template_id, credential_type
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
         RETURNING *`,
         [
           userId,
           courseId,
-          `${courseInfo.title} - Certificate of Completion`,
+          certificationName,
           'TheMobileProf Learning Platform',
-          new Date().toISOString().split('T')[0], // issued_date as DATE
-          certificateFile.certificateUrl, // Store PDF URL
+          new Date().toISOString().split('T')[0],
+          certificateFile.certificateUrl,
           verificationCode,
           'issued',
-          template ? template.id : null
+          template ? template.id : null,
+          credentialType,
         ]
       );
 
       const certificate = certificationRecord.rows[0];
 
-      // Send notification email with certificate download link
       await this.sendCertificateEmail(userInfo.email, {
         userName,
         courseTitle: courseInfo.title,
         certificateId: certificate.id,
         verificationCode,
-        certificateUrl: certificateFile.certificateUrl
+        certificateUrl: certificateFile.certificateUrl,
+        credentialLabel,
       });
 
-      // Create in-app notification
       await notifyCertificateAwarded(userId, courseInfo.title, certificate.id);
 
-      console.log(`Certificate awarded to user ${userId} for course ${courseId}`);
+      console.log(`Certificate (${credentialType}) awarded to user ${userId} for course ${courseId}`);
 
       return {
         certificateId: certificate.id,
         certificateUrl: certificateFile.certificateUrl,
         verificationCode,
-        filePath: certificateFile.filePath
+        filePath: certificateFile.filePath,
+        credentialType,
       };
-
     } catch (error) {
       console.error('Error awarding course certificate:', error);
+      throw error;
+    }
+  }
+
+  async awardMiniCertificate(userId, mini) {
+    try {
+      const userInfo = await getRow(
+        'SELECT first_name, last_name, email FROM users WHERE id = $1',
+        [userId]
+      );
+
+      if (!userInfo) {
+        throw new Error(`User ${userId} not found`);
+      }
+
+      const userName = `${userInfo.first_name} ${userInfo.last_name}`;
+      const template = await getRow(
+        'SELECT * FROM certificate_templates WHERE is_default = true AND is_active = true LIMIT 1'
+      );
+      const verificationCode = await this.generateVerificationCode();
+
+      const microCount = await getRow(
+        'SELECT COUNT(*) as count FROM mini_course_micros WHERE mini_course_id = $1',
+        [mini.id]
+      );
+
+      const certificateData = {
+        userName,
+        courseTitle: mini.title,
+        instructorName: 'TheMobileProf Academy',
+        completionDate: new Date().toISOString(),
+        verificationCode,
+        credentialLabel: 'Mini Course',
+        completionText: 'has successfully completed the mini course',
+        subtitle: microCount ? `${microCount.count} Micro Courses completed` : null,
+        signatures: [],
+      };
+
+      const certificateFile = await certificateGenerator.generateCourseCertificate(certificateData);
+      const certificationName = `${mini.title} - Certificate of Completion`;
+
+      const certificationRecord = await query(
+        `INSERT INTO certifications (
+          user_id, mini_course_id, certification_name, issuer, issued_date,
+          certificate_url, verification_code, status, template_id, credential_type
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        RETURNING *`,
+        [
+          userId,
+          mini.id,
+          certificationName,
+          'TheMobileProf Learning Platform',
+          new Date().toISOString().split('T')[0],
+          certificateFile.certificateUrl,
+          verificationCode,
+          'issued',
+          template ? template.id : null,
+          'mini',
+        ]
+      );
+
+      const certificate = certificationRecord.rows[0];
+
+      await this.sendCertificateEmail(userInfo.email, {
+        userName,
+        courseTitle: mini.title,
+        certificateId: certificate.id,
+        verificationCode,
+        certificateUrl: certificateFile.certificateUrl,
+        credentialLabel: 'Mini Course',
+      });
+
+      await notifyCertificateAwarded(userId, mini.title, certificate.id);
+
+      return {
+        certificateId: certificate.id,
+        certificateUrl: certificateFile.certificateUrl,
+        verificationCode,
+        credentialType: 'mini',
+      };
+    } catch (error) {
+      console.error('Error awarding mini certificate:', error);
       throw error;
     }
   }
@@ -258,8 +441,8 @@ class CertificateService {
       const certificationRecord = await query(
         `INSERT INTO certifications (
           user_id, class_id, certification_name, issuer, issued_date,
-          certificate_url, verification_code, status, template_id
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+          certificate_url, verification_code, status, template_id, credential_type
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
         RETURNING *`,
         [
           userId,
@@ -270,7 +453,8 @@ class CertificateService {
           certificateFile.certificateUrl, // Store PDF URL
           verificationCode,
           'issued',
-          template ? template.id : null
+          template ? template.id : null,
+          'class'
         ]
       );
 
@@ -328,7 +512,11 @@ class CertificateService {
    */
   async sendCertificateEmail(email, data) {
     try {
-      const certificateType = data.type === 'class' ? 'class attendance' : 'course completion';
+      const certificateType = data.type === 'class'
+        ? 'class attendance'
+        : data.credentialLabel
+          ? `${data.credentialLabel.toLowerCase()} completion`
+          : 'course completion';
       const baseUrl = process.env.BASE_URL || 'https://themobileprof.com';
       const certificateDownloadUrl = `${baseUrl}${data.certificateUrl}`;
       const verifyUrl = `${baseUrl}/api/certifications/verify/${data.verificationCode}`;

@@ -63,6 +63,9 @@ class CertificateGenerator {
       completionDate,
       verificationCode,
       issuer = 'TheMobileProf Learning Platform',
+      credentialLabel = null,
+      completionText = 'has successfully completed the course',
+      subtitle = null,
       signatures = []
     } = data;
     
@@ -83,6 +86,9 @@ class CertificateGenerator {
       completionDate: formattedDate,
       verificationCode,
       issuer,
+      credentialLabel,
+      completionText,
+      subtitle,
       signatures: signatures.length > 0 ? signatures : null
     });
     

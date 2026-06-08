@@ -118,11 +118,12 @@ router.get('/verify/:code', asyncHandler(async (req, res) => {
 
   const certification = await getRow(
     `SELECT cert.*, u.first_name, u.last_name,
-            c.title as course_title, cl.title as class_title
+            c.title as course_title, cl.title as class_title, mc.title as mini_course_title
      FROM certifications cert
      JOIN users u ON cert.user_id = u.id
      LEFT JOIN courses c ON cert.course_id = c.id
      LEFT JOIN classes cl ON cert.class_id = cl.id
+     LEFT JOIN mini_courses mc ON cert.mini_course_id = mc.id
      WHERE cert.verification_code = $1`,
     [code]
   );
@@ -149,6 +150,8 @@ router.get('/verify/:code', asyncHandler(async (req, res) => {
       status: certification.status,
       courseTitle: certification.course_title,
       classTitle: certification.class_title,
+      miniCourseTitle: certification.mini_course_title,
+      credentialType: certification.credential_type || (certification.class_id ? 'class' : 'professional'),
       isExpired
     }
   });
@@ -158,10 +161,11 @@ router.get('/verify/:code', asyncHandler(async (req, res) => {
 router.get('/my', authenticateToken, asyncHandler(async (req, res) => {
 	const userId = req.user.id;
 	const certifications = await getRows(
-		`SELECT cert.*, co.title as course_title, cl.title as class_title
+		`SELECT cert.*, co.title as course_title, cl.title as class_title, mc.title as mini_course_title
 		 FROM certifications cert
 		 LEFT JOIN courses co ON cert.course_id = co.id
 		 LEFT JOIN classes cl ON cert.class_id = cl.id
+		 LEFT JOIN mini_courses mc ON cert.mini_course_id = mc.id
 		 WHERE cert.user_id = $1
 		 ORDER BY cert.issued_date DESC`,
 		[userId]
@@ -169,15 +173,21 @@ router.get('/my', authenticateToken, asyncHandler(async (req, res) => {
 	res.json({
 		certifications: certifications.map(c => ({
 			id: c.id,
-			title: c.certification_name,
+			certificationName: c.certification_name,
 			issuer: c.issuer,
-			dateEarned: c.issued_date,
-			validUntil: c.expiry_date,
-			credentialId: c.verification_code,
-			skills: c.skills || null,
+			issuedDate: c.issued_date,
+			expiryDate: c.expiry_date,
+			verificationCode: c.verification_code,
+			status: c.status,
 			certificateUrl: c.certificate_url,
-			course: c.course_id ? { id: c.course_id, title: c.course_title } : null,
-			class: c.class_id ? { id: c.class_id, title: c.class_title } : null
+			credentialType: c.credential_type || (c.class_id ? 'class' : c.mini_course_id ? 'mini' : c.course_id ? 'professional' : 'professional'),
+			courseId: c.course_id,
+			courseTitle: c.course_title,
+			classId: c.class_id,
+			classTitle: c.class_title,
+			miniCourseId: c.mini_course_id,
+			miniCourseTitle: c.mini_course_title,
+			createdAt: c.created_at,
 		}))
 	});
 }));

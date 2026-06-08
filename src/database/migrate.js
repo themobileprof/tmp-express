@@ -833,6 +833,9 @@ const createTables = async () => {
     // Add content review and flag fields (idempotent migrations)
     await addContentReviewAndFlagFields();
 
+    // Course format (micro/professional) and mini course collections
+    await addCourseFormatAndMiniCourses();
+
     // Seed default discussion categories
     await seedDiscussionCategories();
 
@@ -909,6 +912,98 @@ const addContentReviewAndFlagFields = async () => {
   } catch (error) {
     console.error('❌ Failed to add content review fields:', error);
     // Don't fail the migration - these fields may already exist
+  }
+};
+
+// Micro courses, mini course collections, and credential types
+const addCourseFormatAndMiniCourses = async () => {
+  try {
+    console.log('\n📚 Adding course format and mini course tables...');
+
+    await query(`
+      DO $$ BEGIN
+        CREATE TYPE course_format AS ENUM ('micro', 'professional');
+      EXCEPTION
+        WHEN duplicate_object THEN null;
+      END $$;
+    `);
+
+    await query(`
+      DO $$ BEGIN
+        CREATE TYPE credential_type AS ENUM ('professional', 'micro', 'mini', 'class');
+      EXCEPTION
+        WHEN duplicate_object THEN null;
+      END $$;
+    `);
+
+    await query(`
+      ALTER TABLE courses
+      ADD COLUMN IF NOT EXISTS format course_format DEFAULT 'professional';
+    `);
+    console.log('✓ Added format column to courses');
+
+    await query(`
+      CREATE TABLE IF NOT EXISTS mini_courses (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        title VARCHAR(255) NOT NULL,
+        slug VARCHAR(255) UNIQUE NOT NULL,
+        description TEXT,
+        topic VARCHAR(100),
+        image_url TEXT,
+        bundle_price DECIMAL(10,2),
+        issues_certificate BOOLEAN DEFAULT true,
+        is_published BOOLEAN DEFAULT false,
+        deleted_at TIMESTAMP DEFAULT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    console.log('✓ Created mini_courses table');
+
+    await query(`
+      CREATE TABLE IF NOT EXISTS mini_course_micros (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        mini_course_id UUID NOT NULL REFERENCES mini_courses(id) ON DELETE CASCADE,
+        course_id UUID NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+        order_index INTEGER NOT NULL DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(mini_course_id, course_id)
+      );
+    `);
+    console.log('✓ Created mini_course_micros table');
+
+    await query(`
+      ALTER TABLE certifications
+      ADD COLUMN IF NOT EXISTS credential_type credential_type DEFAULT 'professional',
+      ADD COLUMN IF NOT EXISTS mini_course_id UUID REFERENCES mini_courses(id) ON DELETE SET NULL;
+    `);
+
+    await query(`
+      UPDATE certifications
+      SET credential_type = CASE
+        WHEN class_id IS NOT NULL THEN 'class'::credential_type
+        WHEN course_id IS NOT NULL THEN 'professional'::credential_type
+        ELSE credential_type
+      END
+      WHERE credential_type IS NULL OR credential_type = 'professional'::credential_type;
+    `);
+
+    await query(`
+      CREATE INDEX IF NOT EXISTS idx_courses_format ON courses(format) WHERE deleted_at IS NULL;
+    `);
+    await query(`
+      CREATE INDEX IF NOT EXISTS idx_mini_courses_published ON mini_courses(is_published) WHERE deleted_at IS NULL;
+    `);
+    await query(`
+      CREATE INDEX IF NOT EXISTS idx_mini_course_micros_mini ON mini_course_micros(mini_course_id);
+    `);
+    await query(`
+      CREATE INDEX IF NOT EXISTS idx_certifications_credential_type ON certifications(credential_type);
+    `);
+
+    console.log('✅ Course format and mini course tables added successfully!');
+  } catch (error) {
+    console.error('❌ Failed to add course format and mini courses:', error);
   }
 };
 
