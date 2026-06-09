@@ -11,6 +11,7 @@ const {
   MICRO_MAX_LESSONS,
   mapMiniCourseAdmin,
   getMiniCourseMicroRows,
+  getMiniCoursesMicroRowsMap,
   resolveMicroCourseIds,
   setMiniCourseMicros,
 } = require('../utils/miniCourseHelpers');
@@ -415,6 +416,7 @@ const microCourseBodyValidators = [
   body('tags').optional().isArray(),
   body('imageUrl').optional().trim(),
   body('isPublished').optional().isBoolean(),
+  body('isFree').optional().isBoolean(),
   body('instructorId').optional().isUUID(),
 ];
 
@@ -439,7 +441,9 @@ async function applyMicroCourseUpdate(courseId, body) {
     instructor_id: body.instructorId,
   };
 
-  if (body.price !== undefined) {
+  if (body.isFree === true) {
+    fields.price = 0;
+  } else if (body.price !== undefined) {
     fields.price = validateMicroPrice(body.price);
   }
 
@@ -608,6 +612,7 @@ router.post('/courses', [
   body('syllabus').optional({ values: 'falsy' }).trim().isLength({ min: 1 }).withMessage('Syllabus must be a non-empty string if provided'),
   body('tags').optional().isArray().withMessage('Tags must be an array'),
   body('format').optional().isIn(['micro', 'professional']).withMessage('Format must be micro or professional'),
+  body('isFree').optional().isBoolean(),
   body('instructorId').optional().custom((value) => {
     if (value === '' || value === null || value === undefined) {
       return true; // Allow empty/null values
@@ -632,7 +637,8 @@ router.post('/courses', [
     throw validationError;
   }
 
-  const { title, description, topic, type, certification, price, duration, difficulty, objectives, prerequisites, syllabus, tags, instructorId, imageUrl, format = 'professional' } = req.body;
+  const { title, description, topic, type, certification, price: rawPrice, duration, difficulty, objectives, prerequisites, syllabus, tags, instructorId, imageUrl, format = 'professional', isFree } = req.body;
+  const price = isFree === true ? 0 : rawPrice;
 
   if (format === 'micro' && price > 20) {
     throw new AppError('Micro courses should be priced at $20 or less', 400, 'VALIDATION_ERROR');
@@ -678,6 +684,7 @@ router.put('/courses/:id', [
   body('tags').optional().isArray(),
   body('isPublished').optional().isBoolean(),
   body('format').optional().isIn(['micro', 'professional']),
+  body('isFree').optional().isBoolean(),
   body('instructorId').optional().custom((value) => {
     if (value === '' || value === null || value === undefined) {
       return true; // Allow empty/null values
@@ -698,7 +705,8 @@ router.put('/courses/:id', [
   }
 
   const { id } = req.params;
-  const { title, description, topic, type, certification, price, duration, difficulty, objectives, prerequisites, syllabus, tags, imageUrl, isPublished, instructorId, format } = req.body;
+  const { title, description, topic, type, certification, price: rawPrice, duration, difficulty, objectives, prerequisites, syllabus, tags, imageUrl, isPublished, instructorId, format, isFree } = req.body;
+  const price = isFree === true ? 0 : rawPrice;
 
   // Check if course exists
   const existingCourse = await getRow('SELECT id FROM courses WHERE id = $1', [id]);
@@ -4297,8 +4305,10 @@ router.get('/mini-courses', asyncHandler(async (req, res) => {
     [...params, parseInt(limit, 10), offset]
   );
 
+  const microMap = await getMiniCoursesMicroRowsMap(minis.map((mini) => mini.id), getRows);
+
   res.json({
-    miniCourses: minis.map((mini) => mapMiniCourseAdmin(mini)),
+    miniCourses: minis.map((mini) => mapMiniCourseAdmin(mini, microMap[mini.id] || [])),
     pagination: {
       page: parseInt(page, 10),
       limit: parseInt(limit, 10),

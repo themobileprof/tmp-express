@@ -1,5 +1,6 @@
 const express = require('express');
 const { getRow, getRows } = require('../database/config');
+const { getMiniCoursesMicroRowsMap, mapMicroCourseRow } = require('../utils/miniCourseHelpers');
 const { asyncHandler, AppError } = require('../middleware/errorHandler');
 const { authenticateToken } = require('../middleware/auth');
 
@@ -94,19 +95,25 @@ router.get('/', asyncHandler(async (req, res) => {
     [...params, parseInt(limit, 10), parseInt(offset, 10)]
   );
 
+  const microMap = await getMiniCoursesMicroRowsMap(minis.map((mini) => mini.id), getRows);
+
   res.json({
-    miniCourses: minis.map((mini) => ({
-      id: mini.id,
-      title: mini.title,
-      slug: mini.slug,
-      description: mini.description,
-      topic: mini.topic,
-      imageUrl: mini.image_url,
-      bundlePrice: mini.bundle_price != null ? parseFloat(mini.bundle_price) : null,
-      microCount: parseInt(mini.micro_count || 0, 10),
-      isPublished: mini.is_published,
-      createdAt: mini.created_at,
-    })),
+    miniCourses: minis.map((mini) => {
+      const microRows = microMap[mini.id] || [];
+      return {
+        id: mini.id,
+        title: mini.title,
+        slug: mini.slug,
+        description: mini.description,
+        topic: mini.topic,
+        imageUrl: mini.image_url,
+        bundlePrice: mini.bundle_price != null ? parseFloat(mini.bundle_price) : null,
+        microCount: microRows.length || parseInt(mini.micro_count || 0, 10),
+        microCourses: microRows.map(mapMicroCourseRow),
+        isPublished: mini.is_published,
+        createdAt: mini.created_at,
+      };
+    }),
   });
 }));
 

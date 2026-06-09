@@ -65,6 +65,26 @@ async function getMiniCourseMicroRows(miniCourseId, getRows) {
   );
 }
 
+async function getMiniCoursesMicroRowsMap(miniCourseIds, getRows) {
+  if (!miniCourseIds.length) return {};
+
+  const rows = await getRows(
+    `SELECT mcm.mini_course_id, c.id, c.title, c.topic, c.price, c.duration, c.format, c.is_published, mcm.order_index
+     FROM mini_course_micros mcm
+     JOIN courses c ON mcm.course_id = c.id
+     WHERE mcm.mini_course_id = ANY($1::uuid[]) AND c.deleted_at IS NULL
+     ORDER BY mcm.mini_course_id, mcm.order_index ASC`,
+    [miniCourseIds]
+  );
+
+  return rows.reduce((acc, row) => {
+    const miniId = row.mini_course_id;
+    if (!acc[miniId]) acc[miniId] = [];
+    acc[miniId].push(row);
+    return acc;
+  }, {});
+}
+
 async function validateMicroCourseIds(courseIds, getRow) {
   const validated = [];
   for (const courseId of courseIds) {
@@ -145,6 +165,7 @@ module.exports = {
   mapMiniCourseAdmin,
   mapMicroCourseRow,
   getMiniCourseMicroRows,
+  getMiniCoursesMicroRowsMap,
   validateMicroCourseIds,
   resolveMicroCourseIds,
   setMiniCourseMicros,

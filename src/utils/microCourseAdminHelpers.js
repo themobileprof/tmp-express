@@ -77,13 +77,22 @@ function validateMicroPrice(price) {
   return value;
 }
 
+function resolveMicroPrice(body) {
+  if (body.isFree === true) {
+    return 0;
+  }
+  if (body.price !== undefined && body.price !== null) {
+    return validateMicroPrice(body.price);
+  }
+  return MICRO_DEFAULT_PRICE;
+}
+
 function normalizeMicroCreateFields(body) {
   const {
     title,
     description,
     topic,
     type = 'online',
-    price = MICRO_DEFAULT_PRICE,
     duration,
     difficulty,
     objectives,
@@ -113,7 +122,7 @@ function normalizeMicroCreateFields(body) {
     description: description.trim(),
     topic: topic.trim(),
     type,
-    price: validateMicroPrice(price),
+    price: resolveMicroPrice(body),
     duration: duration.trim(),
     difficulty: difficulty || null,
     objectives: objectives || null,
@@ -186,6 +195,7 @@ module.exports = {
   findMicroCourseByTitle,
   loadMicroCourseById,
   validateMicroPrice,
+  resolveMicroPrice,
   normalizeMicroCreateFields,
   listMicroCoursesQuery,
 };
