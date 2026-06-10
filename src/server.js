@@ -31,6 +31,7 @@ const searchRoutes = require('./routes/search');
 const metaRoutes = require('./routes/meta');
 const certificationProgramRoutes = require('./routes/certificationPrograms');
 const miniCourseRoutes = require('./routes/miniCourses');
+const ngoSubmissionRoutes = require('./routes/ngoSubmissions');
 
 const { errorHandler } = require('./middleware/errorHandler');
 const { authenticateToken } = require('./middleware/auth');
@@ -171,6 +172,17 @@ const paymentLimiter = rateLimit({
   max: parseInt(process.env.PAYMENT_RATE_LIMIT_MAX_REQUESTS) || 20, // 20 requests per minute default
   message: {
     error: 'Too many payment requests from this IP, please try again later.'
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Public form submissions (NGO interest, etc.)
+const contactLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 5,
+  message: {
+    error: 'Too many form submissions from this IP. Please try again later or email info@themobileprof.com.'
   },
   standardHeaders: true,
   legacyHeaders: false,
@@ -475,6 +487,7 @@ app.use('/api/discussions', discussionRoutes);
 app.use('/api/certifications', authenticateToken, certificationRoutes);
 app.use('/api/settings', authenticateToken, settingsRoutes);
 app.use('/api/payments', paymentLimiter, paymentRoutes);
+app.use('/api/ngo-submissions', contactLimiter, ngoSubmissionRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/scraping', scrapingRoutes);
 app.use('/api/notifications', notificationRoutes);

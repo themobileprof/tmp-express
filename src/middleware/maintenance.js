@@ -5,8 +5,12 @@ const { asyncHandler } = require('./errorHandler');
 // Allows public endpoints to be blocked when maintenance is enabled
 // Admin routes (/api/admin) are allowed through
 module.exports = asyncHandler(async (req, res, next) => {
-	// Allow health checks and admin routes
-	if (req.path.startsWith('/health') || req.path.startsWith('/api/admin')) {
+	// Allow health checks, admin routes, and public NGO interest form
+	if (
+		req.path.startsWith('/health') ||
+		req.path.startsWith('/api/admin') ||
+		req.path.startsWith('/api/ngo-submissions')
+	) {
 		return next();
 	}
 

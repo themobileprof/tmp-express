@@ -4584,4 +4584,138 @@ router.delete('/mini-courses/:id', asyncHandler(async (req, res) => {
   res.json({ success: true, message: 'Mini course deleted' });
 }));
 
+// ===== NGO INTEREST SUBMISSIONS =====
+const NGO_STATUS_VALUES = ['new', 'reviewed', 'contacted', 'scheduled', 'declined', 'archived'];
+
+router.get('/ngo-submissions', asyncHandler(async (req, res) => {
+  const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+  const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 20));
+  const offset = (page - 1) * limit;
+  const { status, search } = req.query;
+
+  const conditions = [];
+  const params = [];
+  let paramIndex = 0;
+
+  if (status && status !== 'all' && NGO_STATUS_VALUES.includes(status)) {
+    paramIndex++;
+    conditions.push(`status = $${paramIndex}`);
+    params.push(status);
+  }
+
+  if (search && String(search).trim()) {
+    paramIndex++;
+    const term = `%${String(search).trim()}%`;
+    conditions.push(`(
+      organization_name ILIKE $${paramIndex}
+      OR contact_name ILIKE $${paramIndex}
+      OR contact_email ILIKE $${paramIndex}
+      OR country ILIKE $${paramIndex}
+    )`);
+    params.push(term);
+  }
+
+  const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+
+  const countResult = await getRow(
+    `SELECT COUNT(*)::int AS total FROM ngo_interest_submissions ${whereClause}`,
+    params
+  );
+
+  paramIndex++;
+  const limitParam = paramIndex;
+  paramIndex++;
+  const offsetParam = paramIndex;
+
+  const submissions = await getRows(
+    `SELECT
+      id, organization_name, contact_name, contact_email, contact_phone,
+      country, city, website, organization_type, mission_summary,
+      beneficiaries_estimate, training_topics, availability_notes, message,
+      status, admin_notes, reviewed_by, reviewed_at, created_at, updated_at
+    FROM ngo_interest_submissions
+    ${whereClause}
+    ORDER BY created_at DESC
+    LIMIT $${limitParam} OFFSET $${offsetParam}`,
+    [...params, limit, offset]
+  );
+
+  res.json({
+    submissions,
+    pagination: {
+      page,
+      limit,
+      total: countResult.total,
+      pages: Math.ceil(countResult.total / limit) || 1,
+    },
+  });
+}));
+
+router.get('/ngo-submissions/:id', asyncHandler(async (req, res) => {
+  const submission = await getRow(
+    `SELECT * FROM ngo_interest_submissions WHERE id = $1`,
+    [req.params.id]
+  );
+
+  if (!submission) {
+    throw new AppError('Submission not found', 404, 'NOT_FOUND');
+  }
+
+  res.json({ submission });
+}));
+
+router.patch('/ngo-submissions/:id', [
+  body('status').optional().isIn(NGO_STATUS_VALUES),
+  body('adminNotes').optional().trim().isLength({ max: 5000 }),
+], asyncHandler(async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    throw new AppError('Validation failed', 400, 'VALIDATION_ERROR');
+  }
+
+  const existing = await getRow(
+    'SELECT id FROM ngo_interest_submissions WHERE id = $1',
+    [req.params.id]
+  );
+
+  if (!existing) {
+    throw new AppError('Submission not found', 404, 'NOT_FOUND');
+  }
+
+  const updates = [];
+  const params = [];
+  let paramIndex = 0;
+
+  if (req.body.status) {
+    paramIndex++;
+    updates.push(`status = $${paramIndex}`);
+    params.push(req.body.status);
+    paramIndex++;
+    updates.push(`reviewed_by = $${paramIndex}`);
+    params.push(req.user.id);
+    updates.push(`reviewed_at = CURRENT_TIMESTAMP`);
+  }
+
+  if (req.body.adminNotes !== undefined) {
+    paramIndex++;
+    updates.push(`admin_notes = $${paramIndex}`);
+    params.push(req.body.adminNotes);
+  }
+
+  if (!updates.length) {
+    throw new AppError('No fields to update', 400, 'VALIDATION_ERROR');
+  }
+
+  updates.push('updated_at = CURRENT_TIMESTAMP');
+  paramIndex++;
+  params.push(req.params.id);
+
+  const submission = await getRow(
+    `UPDATE ngo_interest_submissions SET ${updates.join(', ')} WHERE id = $${paramIndex} RETURNING *`,
+    params
+  );
+
+  res.json({ success: true, submission });
+}));
+
 module.exports = router; 

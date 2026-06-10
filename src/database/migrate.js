@@ -836,6 +836,8 @@ const createTables = async () => {
     // Course format (micro/professional) and mini course collections
     await addCourseFormatAndMiniCourses();
 
+    await addNgoInterestSubmissions();
+
     // Seed default discussion categories
     await seedDiscussionCategories();
 
@@ -1004,6 +1006,53 @@ const addCourseFormatAndMiniCourses = async () => {
     console.log('✅ Course format and mini course tables added successfully!');
   } catch (error) {
     console.error('❌ Failed to add course format and mini courses:', error);
+  }
+};
+
+const addNgoInterestSubmissions = async () => {
+  try {
+    console.log('\n🤝 Adding NGO interest submissions table...');
+
+    await query(`
+      CREATE TABLE IF NOT EXISTS ngo_interest_submissions (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        organization_name VARCHAR(255) NOT NULL,
+        contact_name VARCHAR(200) NOT NULL,
+        contact_email VARCHAR(255) NOT NULL,
+        contact_phone VARCHAR(50),
+        country VARCHAR(100) NOT NULL,
+        city VARCHAR(100),
+        website TEXT,
+        organization_type VARCHAR(100) NOT NULL,
+        mission_summary TEXT NOT NULL,
+        beneficiaries_estimate INTEGER,
+        training_topics TEXT[] DEFAULT '{}',
+        availability_notes TEXT,
+        message TEXT,
+        status VARCHAR(50) DEFAULT 'new',
+        admin_notes TEXT,
+        reviewed_by UUID REFERENCES users(id) ON DELETE SET NULL,
+        reviewed_at TIMESTAMP,
+        ip_address VARCHAR(45),
+        user_agent TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    await query(`
+      CREATE INDEX IF NOT EXISTS idx_ngo_submissions_status ON ngo_interest_submissions(status);
+    `);
+    await query(`
+      CREATE INDEX IF NOT EXISTS idx_ngo_submissions_email ON ngo_interest_submissions(contact_email);
+    `);
+    await query(`
+      CREATE INDEX IF NOT EXISTS idx_ngo_submissions_created ON ngo_interest_submissions(created_at DESC);
+    `);
+
+    console.log('✅ NGO interest submissions table added successfully!');
+  } catch (error) {
+    console.error('❌ Failed to add NGO interest submissions table:', error);
   }
 };
 
