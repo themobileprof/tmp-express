@@ -611,7 +611,7 @@ router.post('/:id/enroll', authenticateToken, validateEnrollment, asyncHandler(a
       user_id, course_id, enrollment_type, sponsorship_id
     ) VALUES ($1, $2, $3, $4)
     RETURNING *`,
-    [userId, id, 'course', sponsorshipId]
+    [userId, id, 'course', sponsorshipId || null]
   );
 
   const enrollment = result.rows[0];

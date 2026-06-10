@@ -9,6 +9,7 @@ const { notifyPaymentSuccess } = require('../utils/notifications');
 const {
   generateReference,
   formatAmount,
+  parseAmount,
   validatePaymentMethod,
   handleFlutterwaveError,
   getFlutterwaveToken,
@@ -65,8 +66,9 @@ router.post('/initialize', authenticateToken, asyncHandler(async (req, res) => {
     return res.status(409).json({ error: 'Already enrolled in this item' });
   }
 
-  // Handle sponsorship code
-  let finalAmount = formatAmount(item.price);
+  // Handle sponsorship code (parseAmount allows $0 free courses; formatAmount rejects <= 0)
+  const basePrice = parseAmount(item.price);
+  let finalAmount = basePrice > 0 ? formatAmount(basePrice) : 0;
   let sponsorshipDetails = null;
   let discountAmount = 0;
 
