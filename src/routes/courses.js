@@ -2,7 +2,7 @@ const express = require('express');
 const { body, validationResult } = require('express-validator');
 const { query, getRow, getRows } = require('../database/config');
 const { asyncHandler, AppError } = require('../middleware/errorHandler');
-const { authenticateToken, authorizeInstructor, authorizeOwnerOrAdmin } = require('../middleware/auth');
+const { authenticateToken, optionalAuthenticateToken, authorizeInstructor, authorizeOwnerOrAdmin } = require('../middleware/auth');
 const { notifyCourseEnrollment } = require('../utils/notifications');
 
 const router = express.Router();
@@ -279,10 +279,10 @@ router.post('/', authenticateToken, authorizeInstructor, validateCourse, asyncHa
   });
 }));
 
-// Get course by ID
-router.get('/:id', authenticateToken, asyncHandler(async (req, res) => {
+// Get course by ID (public for published courses; optional auth for enrollment data)
+router.get('/:id', optionalAuthenticateToken, asyncHandler(async (req, res) => {
   const { id } = req.params;
-  const userId = req.user.id; // User ID from authentication
+  const userId = req.user?.id;
 
   const course = await getRow(
     `SELECT c.*, u.first_name as instructor_first_name, u.last_name as instructor_last_name,
@@ -297,32 +297,41 @@ router.get('/:id', authenticateToken, asyncHandler(async (req, res) => {
     throw new AppError('Course not found', 404, 'Course Not Found');
   }
 
-  // Get user enrollment and progress
+  if (!course.is_published) {
+    const canViewUnpublished =
+      userId &&
+      (req.user.role === 'admin' || course.instructor_id === userId);
+    if (!canViewUnpublished) {
+      throw new AppError('Course not found', 404, 'Course Not Found');
+    }
+  }
+
+  // Get user enrollment and progress (authenticated users only)
   let enrollment = null;
   let courseProgress = null;
-  
-  // Get enrollment
-  enrollment = await getRow(
-    'SELECT * FROM enrollments WHERE user_id = $1 AND course_id = $2',
-    [userId, id]
-  );
 
-  // Get course progress if enrolled
-  if (enrollment) {
-    courseProgress = await getRow(
-      `SELECT 
-         COUNT(DISTINCT l.id) as total_lessons,
-         COUNT(DISTINCT CASE WHEN lp.is_completed = true THEN l.id END) as completed_lessons,
-         COUNT(DISTINCT t.id) as total_tests,
-         COUNT(DISTINCT CASE WHEN ta.status = 'completed' AND ta.score >= t.passing_score THEN t.id END) as passed_tests
-       FROM courses c
-       LEFT JOIN lessons l ON c.id = l.course_id AND l.is_published = true
-       LEFT JOIN lesson_progress lp ON l.id = lp.lesson_id AND lp.user_id = $1
-       LEFT JOIN tests t ON (t.course_id = c.id OR l.id = t.lesson_id)
-       LEFT JOIN test_attempts ta ON t.id = ta.test_id AND ta.user_id = $1
-       WHERE c.id = $2`,
+  if (userId) {
+    enrollment = await getRow(
+      'SELECT * FROM enrollments WHERE user_id = $1 AND course_id = $2',
       [userId, id]
     );
+
+    if (enrollment) {
+      courseProgress = await getRow(
+        `SELECT 
+           COUNT(DISTINCT l.id) as total_lessons,
+           COUNT(DISTINCT CASE WHEN lp.is_completed = true THEN l.id END) as completed_lessons,
+           COUNT(DISTINCT t.id) as total_tests,
+           COUNT(DISTINCT CASE WHEN ta.status = 'completed' AND ta.score >= t.passing_score THEN t.id END) as passed_tests
+         FROM courses c
+         LEFT JOIN lessons l ON c.id = l.course_id AND l.is_published = true
+         LEFT JOIN lesson_progress lp ON l.id = lp.lesson_id AND lp.user_id = $1
+         LEFT JOIN tests t ON (t.course_id = c.id OR l.id = t.lesson_id)
+         LEFT JOIN test_attempts ta ON t.id = ta.test_id AND ta.user_id = $1
+         WHERE c.id = $2`,
+        [userId, id]
+      );
+    }
   }
 
   // Calculate progress percentage (50% from lessons, 50% from tests)

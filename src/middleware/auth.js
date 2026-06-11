@@ -59,6 +59,38 @@ const authenticateToken = async (req, res, next) => {
   }
 };
 
+const optionalAuthenticateToken = async (req, res, next) => {
+  try {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+
+    if (!token) {
+      return next();
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+    const user = await getRow(
+      'SELECT id, email, first_name, last_name, role, is_active FROM users WHERE id = $1',
+      [decoded.user_id]
+    );
+
+    if (user && user.is_active) {
+      req.user = {
+        id: user.id,
+        email: user.email,
+        firstName: user.first_name,
+        lastName: user.last_name,
+        role: user.role
+      };
+    }
+  } catch (error) {
+    // Invalid or expired token — treat as anonymous for public routes
+  }
+
+  next();
+};
+
 const authorizeRoles = (...roles) => {
   return (req, res, next) => {
     if (!req.user) {
@@ -170,6 +202,7 @@ function requireRole(roles) {
 
 module.exports = {
   authenticateToken,
+  optionalAuthenticateToken,
   authorizeRoles,
   authorizeInstructor,
   authorizeSponsor,

@@ -26,7 +26,7 @@ services:
       PORT: 3000
       DATABASE_URL: postgresql://devuser:devpass@db:5432/themobileprof_dev
       JWT_SECRET: dev-jwt-secret-change-in-production
-      JWT_EXPIRES_IN: 24h
+      JWT_EXPIRES_IN: 90d
       BCRYPT_ROUNDS: 4
       EMAIL_SERVICE_API_KEY: dev-key
       EMAIL_FROM_ADDRESS: dev@example.com

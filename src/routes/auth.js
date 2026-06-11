@@ -9,6 +9,7 @@ const { authenticateToken } = require('../middleware/auth');
 const crypto = require('crypto');
 const { sendEmail } = require('../mailer');
 const { generateCaptcha, validateCaptcha, trackFailedLogin } = require('../middleware/security');
+const { JWT_EXPIRES_IN } = require('../config/jwt');
 
 const router = express.Router();
 
@@ -45,7 +46,7 @@ const generateToken = (userId, email, role) => {
   return jwt.sign(
     { user_id: userId, email, role },
     process.env.JWT_SECRET,
-    { expiresIn: process.env.JWT_EXPIRES_IN || '24h' }
+    { expiresIn: JWT_EXPIRES_IN }
   );
 };
 

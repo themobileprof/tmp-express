@@ -430,10 +430,11 @@ if (process.env.NODE_ENV === 'development') {
       
       // Generate JWT token
       const jwt = require('jsonwebtoken');
+      const { JWT_EXPIRES_IN } = require('./config/jwt');
       const token = jwt.sign(
         { user_id: user.id, email: user.email, role: user.role },
         process.env.JWT_SECRET,
-        { expiresIn: process.env.JWT_EXPIRES_IN || '24h' }
+        { expiresIn: JWT_EXPIRES_IN }
       );
       
       res.json({
@@ -447,7 +448,7 @@ if (process.env.NODE_ENV === 'development') {
           role: user.role
         },
         token: token,
-        expiresIn: process.env.JWT_EXPIRES_IN || '24h',
+        expiresIn: JWT_EXPIRES_IN,
         note: 'This endpoint is for development use only'
       });
       
