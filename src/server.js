@@ -89,7 +89,9 @@ app.use(helmet({
       upgradeInsecureRequests: []
     }
   },
-  crossOriginResourcePolicy: { policy: "cross-origin" }
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+  // API only — does not affect LMS pages; keep permissive if API HTML/Swagger is served
+  crossOriginOpenerPolicy: { policy: 'same-origin-allow-popups' },
 }));
 app.use(cors({
   origin: function (origin, callback) {
