@@ -70,6 +70,25 @@ async function updateCourseProgressFromLesson(lessonId, userId) {
   }
 }
 
+// Lessons with no test are finished by opening them. Passing a test is still
+// required when a lesson has one.
+async function markLessonCompleted(lessonId, userId, timeSpentMinutes = 0) {
+  await query(
+    `INSERT INTO lesson_progress (user_id, lesson_id, is_completed, completed_at, progress_percentage, time_spent_minutes)
+     VALUES ($1, $2, true, CURRENT_TIMESTAMP, 100, $3)
+     ON CONFLICT (user_id, lesson_id)
+     DO UPDATE SET
+       is_completed = true,
+       completed_at = COALESCE(lesson_progress.completed_at, CURRENT_TIMESTAMP),
+       progress_percentage = GREATEST(lesson_progress.progress_percentage, 100),
+       time_spent_minutes = GREATEST(lesson_progress.time_spent_minutes, $3),
+       updated_at = CURRENT_TIMESTAMP`,
+    [userId, lessonId, timeSpentMinutes]
+  );
+
+  await updateCourseProgressFromLesson(lessonId, userId);
+}
+
 // Helper function to check if a lesson is unlocked for a user
 async function isLessonUnlocked(lessonId, userId) {
   try {
@@ -198,15 +217,19 @@ router.get('/:id', authenticateToken, asyncHandler(async (req, res) => {
     const isUnlocked = await isLessonUnlocked(id, userId);
     
     if (!isUnlocked) {
-      // Get previous lesson info for better user experience
       const previousLesson = await getRow(
-        'SELECT id, title FROM lessons WHERE course_id = $1 AND order_index = $2',
+        `SELECT l.id, l.title,
+                EXISTS(SELECT 1 FROM tests t WHERE t.lesson_id = l.id) AS has_test
+         FROM lessons l
+         WHERE l.course_id = $1 AND l.order_index = $2`,
         [lesson.course_id, lesson.order_index - 1]
       );
 
       throw new AppError(
-        previousLesson 
-          ? `Complete the test for "${previousLesson.title}" to unlock this lesson`
+        previousLesson
+          ? (previousLesson.has_test
+              ? `Complete the test for "${previousLesson.title}" to unlock this lesson`
+              : `Finish "${previousLesson.title}" to unlock this lesson`)
           : 'This lesson is not yet available',
         403,
         'Lesson Locked'
@@ -214,17 +237,26 @@ router.get('/:id', authenticateToken, asyncHandler(async (req, res) => {
     }
   }
 
-  // Get lesson progress
-  const progress = await getRow(
-    'SELECT * FROM lesson_progress WHERE user_id = $1 AND lesson_id = $2',
-    [userId, id]
-  );
-
-  // Get associated test info
+  // Get associated test info before progress so a test-less lesson can be completed on view
   const test = await getRow(
     'SELECT id, title, description, duration_minutes, passing_score, max_attempts FROM tests WHERE lesson_id = $1',
     [id]
   );
+
+  // Get lesson progress
+  let progress = await getRow(
+    'SELECT * FROM lesson_progress WHERE user_id = $1 AND lesson_id = $2',
+    [userId, id]
+  );
+
+  // No quiz to pass: opening the lesson is what unlocks the next one
+  if (!isAdmin && !test && !progress?.is_completed) {
+    await markLessonCompleted(id, userId, 0);
+    progress = await getRow(
+      'SELECT * FROM lesson_progress WHERE user_id = $1 AND lesson_id = $2',
+      [userId, id]
+    );
+  }
 
   res.json({
     id: lesson.id,
@@ -388,10 +420,9 @@ router.get('/:id/tests', authenticateToken, asyncHandler(async (req, res) => {
   });
 }));
 
-// Mark lesson as completed for user
-// NOTE: Lessons are automatically marked complete when tests are passed or force-progressed
-// This endpoint only updates progress tracking (time spent, progress percentage)
-// It does NOT mark the lesson as complete - only passing the test does that
+// Mark lesson as completed for user.
+// Lessons with a test stay incomplete until that test is passed.
+// Lessons with no test are completed here so the next lesson can unlock.
 router.post('/:id/complete', authenticateToken, asyncHandler(async (req, res) => {
   const { id } = req.params;
   const userId = req.user.id;
@@ -411,8 +442,21 @@ router.post('/:id/complete', authenticateToken, asyncHandler(async (req, res) =>
     throw new AppError('Lesson not found or you are not enrolled in this course', 404, 'Lesson Not Found');
   }
 
-  // Update lesson progress tracking ONLY (not completion status)
-  // Completion is handled by test passing or force progression
+  const lessonTest = await getRow(
+    'SELECT id FROM tests WHERE lesson_id = $1 LIMIT 1',
+    [id]
+  );
+
+  if (!lessonTest) {
+    await markLessonCompleted(id, userId, timeSpentMinutes);
+    return res.json({
+      message: 'Lesson completed',
+      lessonId: id,
+      completedAt: new Date().toISOString()
+    });
+  }
+
+  // A test still gates completion. Only record time spent.
   await query(
     `INSERT INTO lesson_progress (user_id, lesson_id, progress_percentage, time_spent_minutes)
      VALUES ($1, $2, 100, $3)
