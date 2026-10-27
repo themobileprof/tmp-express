@@ -246,12 +246,15 @@ jobs:
           
           # Start container and capture the container ID
           echo "🐳 Starting container..."
+          # Env comes from --env-file, which Docker stores on the container.
+          # Do not bind-mount .env: this job deletes that file after startup, and the
+          # next Docker restart would recreate the missing path as a directory and
+          # the API would fail to come back.
           CONTAINER_ID=$(docker run -d \
             --name themobileprof-backend \
             --restart unless-stopped \
             --network host \
             -v "$UPLOADS_DIR:/app/uploads" \
-            -v "$(pwd)/.env:/app/.env:ro" \
             --env-file .env \
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest)
           
