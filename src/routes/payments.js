@@ -1,19 +1,19 @@
 const express = require('express');
-const axios = require('axios');
 const { v4: uuidv4 } = require('uuid');
 const { authenticateToken } = require('../middleware/auth');
-const { asyncHandler, AppError } = require('../middleware/errorHandler');
+const { asyncHandler } = require('../middleware/errorHandler');
 const { getRow, query, getRows } = require('../database/config');
-const { getSystemSetting } = require('../utils/systemSettings');
 const { notifyPaymentSuccess } = require('../utils/notifications');
 const {
   generateReference,
   formatAmount,
   parseAmount,
   validatePaymentMethod,
-  getFlutterwaveToken,
   verifyWebhookSignature,
-  baseUrl
+  quoteUsdToNgn,
+  getNgnPerUsd,
+  createDirectCharge,
+  fetchCharge
 } = require('../config/flutterwave');
 
 const router = express.Router();
@@ -123,7 +123,7 @@ router.post('/initialize', authenticateToken, asyncHandler(async (req, res) => {
   }
 
   // Generate unique reference
-  const reference = generateReference('TMP');
+  const reference = generateReference();
 
   // Build redirect URL
   const frontendUrl = process.env.FRONTEND_URL || 'https://lms.themobileprof.com';
@@ -136,13 +136,14 @@ router.post('/initialize', authenticateToken, asyncHandler(async (req, res) => {
     `INSERT INTO payments (user_id, ${paymentType}_id, payment_type, amount, currency, flutterwave_reference, payment_method, metadata)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
     [
-      userId, itemId, paymentType, finalAmount, 'USD', reference, paymentMethod || 'card',
+      userId, itemId, paymentType, finalAmount, 'USD', reference, 'bank_transfer',
       JSON.stringify({
         itemTitle: item.title,
         itemDescription,
         userEmail: req.user.email,
         userName: `${req.user.firstName} ${req.user.lastName}`,
         originalPrice: item.price,
+        originalCurrency: 'USD',
         finalPrice: finalAmount,
         discountAmount,
         sponsorshipCode,
@@ -249,84 +250,72 @@ router.post('/initialize', authenticateToken, asyncHandler(async (req, res) => {
     return;
   }
 
-  console.log('Initializing Flutterwave v3 payment:', { reference, finalAmount, paymentId: payment.id });
+  const quote = await quoteUsdToNgn(finalAmount);
+  console.log('Initializing Flutterwave v4 naira payment:', {
+    reference,
+    sourceAmount: finalAmount,
+    chargeAmount: quote.amount,
+    paymentId: payment.id
+  });
 
-  // Get secret key
-  const accessToken = await getFlutterwaveToken();
-
-  // Get system settings for payment customization
-  const siteDescription = await getSystemSetting('site_description', 'TheMobileProf LMS');
-  const supportEmail = await getSystemSetting('support_email', 'support@themobileprof.com');
-
-  // Initialize payment
-  let response;
-  try {
-    response = await axios.post(
-    `${baseUrl}/payments`,
-    {
-      tx_ref: reference,
-      amount: finalAmount,
-      currency: 'USD',
-      redirect_url: redirectUrl,
-      customer: {
-        email: req.user.email,
-        name: `${req.user.firstName || ''} ${req.user.lastName || ''}`.trim() || 'Customer'
-      },
-      customizations: {
-        title: siteDescription,
-        description: itemDescription,
-        logo: 'https://themobileprof.com/assets/logo.jpg'
-      },
-      // Course prices are USD. Flutterwave rejects bank_transfer/mobile_money
-      // (the accepted names are banktransfer and country-specific mobile-money codes),
-      // and those local methods do not apply to a USD checkout.
-      payment_options: 'card',
-      meta: {
-        payment_id: payment.id,
-        user_id: userId,
-        item_id: itemId,
-        payment_type: paymentType,
-        sponsorship_code: sponsorshipCode
-      }
+  const charge = await createDirectCharge({
+    reference,
+    amount: quote.amount,
+    currency: 'NGN',
+    redirectUrl,
+    customer: {
+      email: req.user.email,
+      name: `${req.user.firstName || ''} ${req.user.lastName || ''}`.trim() || 'Customer'
     },
-    {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        'Content-Type': 'application/json'
-      }
+    meta: {
+      payment_id: String(payment.id),
+      user_id: String(userId),
+      item_id: String(itemId),
+      payment_type: paymentType,
+      source_amount: String(finalAmount),
+      source_currency: 'USD',
+      ...(sponsorshipCode ? { sponsorship_code: sponsorshipCode } : {})
     }
+  });
+
+  const chargeData = charge.data || {};
+  const nextAction = chargeData.next_action || {};
+  const bankTransfer = nextAction.requires_bank_transfer || null;
+  const redirect = nextAction.redirect_url?.url
+    || (typeof chargeData.redirect_url === 'string' ? chargeData.redirect_url : null);
+  const chargedAmount = Number(chargeData.amount) > 0 ? Number(chargeData.amount) : quote.amount;
+  const meta = parsePaymentMetadata(payment.metadata);
+  meta.chargeAmount = chargedAmount;
+  meta.chargeCurrency = 'NGN';
+  meta.fxRateId = quote.rateId;
+  meta.sourceAmount = finalAmount;
+  meta.sourceCurrency = 'USD';
+
+  await query(
+    `UPDATE payments
+     SET status = 'pending', amount = $1, currency = 'NGN', flutterwave_transaction_id = $2, metadata = $3
+     WHERE id = $4`,
+    [chargedAmount, chargeData.id || null, JSON.stringify(meta), payment.id]
   );
-  } catch (error) {
-    const providerMessage = error.response?.data?.message;
-    console.error('Flutterwave initialize failed:', {
-      message: providerMessage || error.message,
-      errors: error.response?.data?.errors
-    });
-    throw new AppError(providerMessage || 'Payment initialization failed', 502, 'PAYMENT_PROVIDER_ERROR');
-  }
 
-  console.log('Flutterwave response:', { status: response.data.status, message: response.data.message });
-
-  if (response.data.status === 'success') {
-    await query('UPDATE payments SET status = $1 WHERE id = $2', ['pending', payment.id]);
-    res.json({
-      success: true,
-      message: 'Payment initialized successfully',
-      data: {
-        payment_id: payment.id,
-        reference,
-        checkout_url: response.data.data.link,
-        original_amount: item.price,
-        final_amount: finalAmount,
-        discount_amount: discountAmount,
-        currency: 'USD',
-        payment_type: paymentType,
-        sponsorship: sponsorshipDetails
-      }
-    });
-  } else {
-    throw new Error(response.data.message || 'Payment initialization failed');
-  }
+  res.json({
+    success: true,
+    message: 'Payment initialized successfully',
+    data: {
+      payment_id: payment.id,
+      reference,
+      checkout_url: redirect,
+      original_amount: item.price,
+      original_currency: 'USD',
+      source_amount: finalAmount,
+      final_amount: chargedAmount,
+      discount_amount: discountAmount,
+      currency: 'NGN',
+      payment_type: paymentType,
+      sponsorship: sponsorshipDetails,
+      bank_transfer: bankTransfer
+    }
+  });
 }));
 
 const parsePaymentMetadata = (metadata) => {
@@ -435,22 +424,17 @@ const notifyEnrollment = async (payment) => {
 };
 
 const fetchFlutterwaveTransaction = async ({ reference, transactionId }) => {
-  const accessToken = await getFlutterwaveToken();
-  const headers = { Authorization: `Bearer ${accessToken}` };
-  const url = transactionId
-    ? `${baseUrl}/transactions/${encodeURIComponent(transactionId)}/verify`
-    : `${baseUrl}/transactions/verify_by_reference?tx_ref=${encodeURIComponent(reference)}`;
-
   try {
-    const response = await axios.get(url, { headers });
-    return response.data;
+    return await fetchCharge({ chargeId: transactionId, reference });
   } catch (error) {
-    const status = error.response?.status;
-    const message = error.response?.data?.message || error.message;
-    console.error('Flutterwave verify failed:', { status, message });
-    if (status === 404) return null;
-    throw new AppError(message || 'Payment verification failed', 502, 'PAYMENT_PROVIDER_ERROR');
+    if (error.statusCode === 404) return null;
+    throw error;
   }
+};
+
+const chargeSucceeded = (status) => {
+  const value = String(status || '').toLowerCase();
+  return value === 'succeeded' || value === 'successful';
 };
 
 const verifiedPaymentResponse = (payment) => ({
@@ -488,7 +472,10 @@ router.get('/verify/:reference', authenticateToken, asyncHandler(async (req, res
     return res.json(verifiedPaymentResponse(payment));
   }
 
-  const flw = await fetchFlutterwaveTransaction({ reference, transactionId });
+  const flw = await fetchFlutterwaveTransaction({
+    reference,
+    transactionId: transactionId || payment.flutterwave_transaction_id
+  });
   const tx = flw?.data;
   if (!tx || flw.status !== 'success') {
     return res.status(409).json({
@@ -515,7 +502,7 @@ router.get('/verify/:reference', authenticateToken, asyncHandler(async (req, res
     return res.status(400).json({ success: false, message: 'Payment amount mismatch', code: 'VERIFICATION_FAILED' });
   }
 
-  if (tx.status !== 'successful') {
+  if (!chargeSucceeded(tx.status)) {
     if (tx.status === 'failed' || tx.status === 'cancelled') {
       await query(
         'UPDATE payments SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND status <> $3',
@@ -546,8 +533,8 @@ router.get('/verify/:reference', authenticateToken, asyncHandler(async (req, res
 
 // POST /api/payments/webhook
 router.post('/webhook', asyncHandler(async (req, res) => {
-  const signature = req.headers['verif-hash'];
-  if (!verifyWebhookSignature(signature)) {
+  const signature = req.headers['flutterwave-signature'] || req.headers['verif-hash'];
+  if (!verifyWebhookSignature(req.rawBody, signature)) {
     return res.status(401).json({ error: 'Invalid webhook signature' });
   }
 
@@ -572,7 +559,7 @@ router.post('/webhook', asyncHandler(async (req, res) => {
     return res.status(404).json({ error: 'Payment not found' });
   }
 
-  if (status === 'successful' && payment.status !== 'successful') {
+  if (chargeSucceeded(status) && payment.status !== 'successful') {
     const currency = String(data.currency || payment.currency || '').toUpperCase();
     const expectedCurrency = String(payment.currency || 'USD').toUpperCase();
     if ((data.amount != null && !amountsMatch(payment.amount, data.amount)) || (data.currency && currency !== expectedCurrency)) {
@@ -594,6 +581,19 @@ router.post('/webhook', asyncHandler(async (req, res) => {
   }
 
   res.json({ status: 'success' });
+}));
+
+// GET /api/payments/fx
+router.get('/fx', asyncHandler(async (req, res) => {
+  const ngnPerUsd = await getNgnPerUsd();
+  res.json({
+    success: true,
+    data: {
+      source_currency: 'USD',
+      currency: 'NGN',
+      ngn_per_usd: ngnPerUsd
+    }
+  });
 }));
 
 // GET /api/payments/user

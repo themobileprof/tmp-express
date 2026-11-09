@@ -1,64 +1,131 @@
 const crypto = require('crypto');
 const axios = require('axios');
 
-// Flutterwave v3 configuration
+const TOKEN_URL = 'https://idp.flutterwave.com/realms/flutterwave/protocol/openid-connect/token';
+const baseUrl = (process.env.FLUTTERWAVE_BASE_URL || 'https://f4bexperience.flutterwave.com').replace(/\/$/, '');
+
 const flwConfig = {
-  publicKey: process.env.FLUTTERWAVE_PUBLIC_KEY,
-  secretKey: process.env.FLUTTERWAVE_SECRET_KEY,
-  secretHash: process.env.FLUTTERWAVE_SECRET_HASH, // For webhook verification
-  version: 'v3'
+  clientId: process.env.FLUTTERWAVE_CLIENT_ID,
+  clientSecret: process.env.FLUTTERWAVE_CLIENT_SECRET,
+  secretHash: process.env.FLUTTERWAVE_SECRET_HASH,
+  version: 'v4'
 };
 
-// Validate configuration
-if (!flwConfig.publicKey || !flwConfig.secretKey) {
-  console.error('⚠️ Missing Flutterwave v3 credentials (FLUTTERWAVE_PUBLIC_KEY, FLUTTERWAVE_SECRET_KEY)');
-  throw new Error('Flutterwave v3 credentials required');
+let cachedToken = { value: null, expiresAt: 0 };
+let fxCache = { ngnPerUsd: null, at: 0 };
+
+class FlutterwaveError extends Error {
+  constructor(message, statusCode = 502) {
+    super(message);
+    this.statusCode = statusCode;
+    this.error = 'PAYMENT_PROVIDER_ERROR';
+  }
 }
 
-const baseUrl = 'https://api.flutterwave.com/v3'
-
-// Get Flutterwave v3 secret key (no OAuth in v3)
-const getFlutterwaveToken = async () => {
-  return flwConfig.secretKey;
+const providerMessage = (error) => {
+  const data = error.response?.data;
+  const validation = data?.error?.validation_errors?.[0];
+  return validation?.message || data?.error?.message || data?.message || error.message || 'Payment request failed';
 };
 
-// Flutterwave sends the dashboard secret hash in the verif-hash header.
-const verifyWebhookSignature = (signature) => {
-  try {
-    if (!flwConfig.secretHash || !signature) {
-      return false;
-    }
+const getFlutterwaveToken = async () => {
+  if (cachedToken.value && Date.now() < cachedToken.expiresAt) {
+    return cachedToken.value;
+  }
+  if (!flwConfig.clientId || !flwConfig.clientSecret) {
+    throw new FlutterwaveError('Flutterwave v4 credentials are not configured', 500);
+  }
 
-    const expected = Buffer.from(String(flwConfig.secretHash));
-    const received = Buffer.from(String(signature));
-    if (expected.length !== received.length) {
-      return false;
+  try {
+    const body = new URLSearchParams({
+      client_id: flwConfig.clientId,
+      client_secret: flwConfig.clientSecret,
+      grant_type: 'client_credentials'
+    });
+    const response = await axios.post(TOKEN_URL, body.toString(), {
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+    });
+    const token = response.data?.access_token;
+    const expiresIn = Number(response.data?.expires_in) || 600;
+    if (!token) {
+      throw new FlutterwaveError('Flutterwave did not return an access token');
     }
-    return crypto.timingSafeEqual(expected, received);
+    cachedToken = {
+      value: token,
+      expiresAt: Date.now() + Math.max(30, expiresIn - 60) * 1000
+    };
+    return token;
+  } catch (error) {
+    if (error instanceof FlutterwaveError) throw error;
+    console.error('Flutterwave auth failed:', providerMessage(error));
+    throw new FlutterwaveError(providerMessage(error));
+  }
+};
+
+const flwHeaders = (token, idempotencyKey) => ({
+  Authorization: `Bearer ${token}`,
+  'Content-Type': 'application/json',
+  Accept: 'application/json',
+  'X-Trace-Id': crypto.randomUUID(),
+  'X-Idempotency-Key': idempotencyKey || crypto.randomUUID()
+});
+
+const flwRequest = async (method, path, body, idempotencyKey) => {
+  const token = await getFlutterwaveToken();
+  try {
+    const response = await axios({
+      method,
+      url: `${baseUrl}${path}`,
+      data: body,
+      headers: flwHeaders(token, idempotencyKey)
+    });
+    if (response.data?.status && response.data.status !== 'success') {
+      throw new FlutterwaveError(response.data.message || 'Payment request failed');
+    }
+    return response.data;
+  } catch (error) {
+    if (error instanceof FlutterwaveError) throw error;
+    console.error('Flutterwave request failed:', { path, message: providerMessage(error) });
+    throw new FlutterwaveError(providerMessage(error));
+  }
+};
+
+const timingSafeStringEqual = (left, right) => {
+  const a = Buffer.from(String(left));
+  const b = Buffer.from(String(right));
+  if (a.length !== b.length) return false;
+  return crypto.timingSafeEqual(a, b);
+};
+
+// v4 signs the raw body with HMAC-SHA256 (base64) in flutterwave-signature.
+// Some dashboard setups still send the secret hash itself.
+const verifyWebhookSignature = (rawBody, signature) => {
+  try {
+    if (!flwConfig.secretHash || !signature) return false;
+    if (timingSafeStringEqual(signature, flwConfig.secretHash)) return true;
+    if (!rawBody) return false;
+    const hmac = crypto.createHmac('sha256', String(flwConfig.secretHash)).update(rawBody).digest('base64');
+    return timingSafeStringEqual(signature, hmac);
   } catch (error) {
     console.error('Webhook signature verification error:', error.message);
     return false;
   }
 };
 
-// Generate unique transaction reference
-const generateReference = (prefix = 'TMP') => {
-  const timestamp = Date.now();
-  const random = Math.random().toString(36).substring(2, 15);
-  const uuid = crypto.randomBytes(4).toString('hex');
-  return `${prefix}_${timestamp}_${random}_${uuid}`.toUpperCase();
+const generateReference = () => {
+  const stamp = Date.now().toString(36);
+  const rand = crypto.randomBytes(8).toString('hex');
+  return `tmp-${stamp}-${rand}`.slice(0, 42);
 };
 
-// Format amount for USD (keep 2 decimal places, no x100 needed)
 const formatAmount = (amount) => {
   const numericAmount = typeof amount === 'string' ? parseFloat(amount) : Number(amount);
   if (isNaN(numericAmount) || numericAmount <= 0) {
     throw new Error('Invalid amount: must be a positive number');
   }
-  return Math.round(numericAmount * 100) / 100; // 2 decimal places
+  return Math.round(numericAmount * 100) / 100;
 };
 
-// Parse amount (ensure valid number)
 const parseAmount = (amount) => {
   const numericAmount = typeof amount === 'string' ? parseFloat(amount) : Number(amount);
   if (isNaN(numericAmount) || numericAmount < 0) {
@@ -67,53 +134,71 @@ const parseAmount = (amount) => {
   return numericAmount;
 };
 
-// Validate payment method
 const validatePaymentMethod = (method) => {
   const validMethods = ['card', 'banktransfer', 'ussd', 'bank_transfer'];
   return validMethods.includes(method);
 };
 
-// Get supported payment methods by country
-const getSupportedPaymentMethods = (country = 'NG') => {
-  const methodsByCountry = {
-    NG: ['card', 'banktransfer', 'ussd'],
-    GH: ['card', 'mobilemoneyghana'],
-    KE: ['card', 'mpesa'],
-    ZA: ['card'],
+// Live USD to NGN quote. The naira figure comes from Flutterwave, not a rate in this file.
+const quoteUsdToNgn = async (usdAmount) => {
+  const amount = formatAmount(usdAmount);
+  const data = await flwRequest('post', '/transfers/rates', {
+    source: { currency: 'NGN' },
+    destination: { currency: 'USD', amount }
+  });
+  const ngn = Number(data?.data?.source?.amount);
+  if (!Number.isFinite(ngn) || ngn <= 0) {
+    throw new FlutterwaveError('Currency quote did not include a naira amount');
+  }
+  return {
+    amount: Math.round(ngn * 100) / 100,
+    rateId: data.data.id || null
   };
-  return methodsByCountry[country] || methodsByCountry['NG'];
 };
 
-// Handle Flutterwave API errors
-const handleFlutterwaveError = (error) => {
-  console.error('Flutterwave API error:', {
-    message: error.message,
-    code: error.response?.data?.code,
-    status: error.response?.status,
-    stack: error.stack
-  });
+const getNgnPerUsd = async () => {
+  if (fxCache.ngnPerUsd && Date.now() - fxCache.at < 10 * 60 * 1000) {
+    return fxCache.ngnPerUsd;
+  }
+  const quote = await quoteUsdToNgn(1);
+  fxCache = { ngnPerUsd: quote.amount, at: Date.now() };
+  return quote.amount;
+};
 
-  const errorMessages = {
-    INVALID_PUBLIC_KEY: 'Payment service configuration error',
-    INVALID_SECRET_KEY: 'Payment service configuration error',
-    INVALID_TX_REF: 'Invalid payment reference',
-    INVALID_AMOUNT: 'Invalid payment amount',
-    INVALID_CURRENCY: 'Invalid currency specified',
-    INVALID_CUSTOMER: 'Invalid customer information',
-    INVALID_PAYMENT_METHOD: 'Unsupported payment method',
-    INSUFFICIENT_FUNDS: 'Insufficient funds for payment',
-    CARD_DECLINED: 'Card was declined by bank',
-    TRANSACTION_FAILED: 'Payment transaction failed',
-    NETWORK_ERROR: 'Network error occurred',
-    TIMEOUT: 'Payment request timed out'
-  };
+const createDirectCharge = async ({ reference, amount, currency, redirectUrl, customer, meta }) => {
+  const name = String(customer.name || 'Customer').trim().split(/\s+/);
+  return flwRequest('post', '/orchestration/direct-charges', {
+    amount,
+    currency,
+    reference,
+    redirect_url: redirectUrl,
+    customer: {
+      email: customer.email,
+      name: {
+        first: name[0] || 'Customer',
+        last: name.slice(1).join(' ') || 'Customer'
+      }
+    },
+    payment_method: {
+      type: 'bank_transfer',
+      bank_transfer: {
+        account_type: 'dynamic',
+        account_expires_in: 3600,
+        account_display_name: 'TheMobileProf'
+      }
+    },
+    meta: meta || {}
+  }, reference);
+};
 
-  const userMessage = errorMessages[error.response?.data?.code] || 'Payment processing error occurred';
-  return {
-    message: userMessage,
-    code: error.response?.data?.code,
-    originalError: error.message
-  };
+const fetchCharge = async ({ chargeId, reference }) => {
+  if (chargeId) {
+    return flwRequest('get', `/charges/${encodeURIComponent(chargeId)}`);
+  }
+  const listed = await flwRequest('get', `/charges?reference=${encodeURIComponent(reference)}`);
+  const rows = Array.isArray(listed?.data) ? listed.data : [];
+  const match = rows.find((row) => row.reference === reference) || null;
+  return match ? { status: 'success', data: match } : null;
 };
 
 module.exports = {
@@ -125,6 +210,8 @@ module.exports = {
   formatAmount,
   parseAmount,
   validatePaymentMethod,
-  getSupportedPaymentMethods,
-  handleFlutterwaveError
-}; 
+  quoteUsdToNgn,
+  getNgnPerUsd,
+  createDirectCharge,
+  fetchCharge
+};
