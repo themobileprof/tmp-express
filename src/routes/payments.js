@@ -2,7 +2,7 @@ const express = require('express');
 const axios = require('axios');
 const { v4: uuidv4 } = require('uuid');
 const { authenticateToken } = require('../middleware/auth');
-const { asyncHandler } = require('../middleware/errorHandler');
+const { asyncHandler, AppError } = require('../middleware/errorHandler');
 const { getRow, query, getRows } = require('../database/config');
 const { getSystemSetting } = require('../utils/systemSettings');
 const { notifyPaymentSuccess } = require('../utils/notifications');
@@ -11,9 +11,8 @@ const {
   formatAmount,
   parseAmount,
   validatePaymentMethod,
-  handleFlutterwaveError,
   getFlutterwaveToken,
-  getSupportedPaymentMethods,
+  verifyWebhookSignature,
   baseUrl
 } = require('../config/flutterwave');
 
@@ -260,7 +259,9 @@ router.post('/initialize', authenticateToken, asyncHandler(async (req, res) => {
   const supportEmail = await getSystemSetting('support_email', 'support@themobileprof.com');
 
   // Initialize payment
-  const response = await axios.post(
+  let response;
+  try {
+    response = await axios.post(
     `${baseUrl}/payments`,
     {
       tx_ref: reference,
@@ -276,7 +277,10 @@ router.post('/initialize', authenticateToken, asyncHandler(async (req, res) => {
         description: itemDescription,
         logo: 'https://themobileprof.com/assets/logo.jpg'
       },
-      payment_options: getSupportedPaymentMethods('NG').join(','),
+      // Course prices are USD. Flutterwave rejects bank_transfer/mobile_money
+      // (the accepted names are banktransfer and country-specific mobile-money codes),
+      // and those local methods do not apply to a USD checkout.
+      payment_options: 'card',
       meta: {
         payment_id: payment.id,
         user_id: userId,
@@ -292,6 +296,14 @@ router.post('/initialize', authenticateToken, asyncHandler(async (req, res) => {
       }
     }
   );
+  } catch (error) {
+    const providerMessage = error.response?.data?.message;
+    console.error('Flutterwave initialize failed:', {
+      message: providerMessage || error.message,
+      errors: error.response?.data?.errors
+    });
+    throw new AppError(providerMessage || 'Payment initialization failed', 502, 'PAYMENT_PROVIDER_ERROR');
+  }
 
   console.log('Flutterwave response:', { status: response.data.status, message: response.data.message });
 
@@ -317,13 +329,149 @@ router.post('/initialize', authenticateToken, asyncHandler(async (req, res) => {
   }
 }));
 
+const parsePaymentMetadata = (metadata) => {
+  if (!metadata) return {};
+  if (typeof metadata === 'string') {
+    try {
+      return JSON.parse(metadata);
+    } catch {
+      return {};
+    }
+  }
+  return metadata;
+};
+
+const amountsMatch = (expected, actual) => {
+  const left = Number(expected);
+  const right = Number(actual);
+  return Number.isFinite(left) && Number.isFinite(right) && Math.abs(left - right) < 0.01;
+};
+
+const enrollForPayment = async (payment) => {
+  const meta = parsePaymentMetadata(payment.metadata);
+  let sponsorshipId = null;
+
+  if (meta.sponsorshipCode) {
+    try {
+      const sponsorship = await getRow(
+        'SELECT id, students_used, max_students FROM sponsorships WHERE discount_code = $1',
+        [meta.sponsorshipCode]
+      );
+      if (sponsorship) {
+        sponsorshipId = sponsorship.id;
+        const existingUsage = await getRow(
+          'SELECT id FROM sponsorship_usage WHERE sponsorship_id = $1 AND student_id = $2',
+          [sponsorship.id, payment.user_id]
+        );
+        if (!existingUsage && sponsorship.students_used < sponsorship.max_students) {
+          await query(
+            `INSERT INTO sponsorship_usage (
+              sponsorship_id, student_id, course_id, original_price,
+              discount_amount, final_price, used_at
+            ) VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP)`,
+            [
+              sponsorship.id,
+              payment.user_id,
+              payment.payment_type === 'course' ? payment.course_id : null,
+              meta.originalPrice ?? payment.amount,
+              meta.discountAmount ?? 0,
+              meta.finalPrice ?? payment.amount
+            ]
+          );
+          await query('UPDATE sponsorships SET students_used = students_used + 1 WHERE id = $1', [sponsorship.id]);
+        }
+      }
+    } catch (sponsorshipError) {
+      console.error('Error recording sponsorship usage:', sponsorshipError.message);
+    }
+  }
+
+  if (payment.payment_type === 'course' && payment.course_id) {
+    const inserted = await getRow(
+      `INSERT INTO enrollments (user_id, course_id, enrollment_type, sponsorship_id)
+       SELECT $1, $2, 'course', $3
+       WHERE NOT EXISTS (
+         SELECT 1 FROM enrollments WHERE user_id = $1 AND course_id = $2
+       )
+       RETURNING id`,
+      [payment.user_id, payment.course_id, sponsorshipId]
+    );
+    if (inserted) {
+      await query('UPDATE courses SET student_count = student_count + 1 WHERE id = $1', [payment.course_id]);
+    }
+    return;
+  }
+
+  if (payment.payment_type === 'class' && payment.class_id) {
+    const inserted = await getRow(
+      `INSERT INTO enrollments (user_id, class_id, enrollment_type, sponsorship_id)
+       SELECT $1, $2, 'class', $3
+       WHERE NOT EXISTS (
+         SELECT 1 FROM enrollments WHERE user_id = $1 AND class_id = $2
+       )
+       RETURNING id`,
+      [payment.user_id, payment.class_id, sponsorshipId]
+    );
+    if (inserted) {
+      await query('UPDATE classes SET available_slots = GREATEST(available_slots - 1, 0) WHERE id = $1', [payment.class_id]);
+    }
+  }
+};
+
+const notifyEnrollment = async (payment) => {
+  try {
+    let itemTitle = 'Course';
+    if (payment.payment_type === 'course') {
+      const course = await getRow('SELECT title FROM courses WHERE id = $1', [payment.course_id]);
+      itemTitle = course?.title || 'Course';
+    } else {
+      const classData = await getRow('SELECT title FROM classes WHERE id = $1', [payment.class_id]);
+      itemTitle = classData?.title || 'Class';
+    }
+    await notifyPaymentSuccess(payment.user_id, payment.id, payment.amount, itemTitle);
+  } catch (error) {
+    console.error('Failed to send payment success notification:', error.message);
+  }
+};
+
+const fetchFlutterwaveTransaction = async ({ reference, transactionId }) => {
+  const accessToken = await getFlutterwaveToken();
+  const headers = { Authorization: `Bearer ${accessToken}` };
+  const url = transactionId
+    ? `${baseUrl}/transactions/${encodeURIComponent(transactionId)}/verify`
+    : `${baseUrl}/transactions/verify_by_reference?tx_ref=${encodeURIComponent(reference)}`;
+
+  try {
+    const response = await axios.get(url, { headers });
+    return response.data;
+  } catch (error) {
+    const status = error.response?.status;
+    const message = error.response?.data?.message || error.message;
+    console.error('Flutterwave verify failed:', { status, message });
+    if (status === 404) return null;
+    throw new AppError(message || 'Payment verification failed', 502, 'PAYMENT_PROVIDER_ERROR');
+  }
+};
+
+const verifiedPaymentResponse = (payment) => ({
+  success: true,
+  message: 'Payment verified and enrollment completed',
+  payment: {
+    id: payment.id,
+    amount: payment.amount,
+    status: 'successful',
+    transactionId: payment.flutterwave_transaction_id || null
+  }
+});
+
 // GET /api/payments/verify/:reference
 router.get('/verify/:reference', authenticateToken, asyncHandler(async (req, res) => {
   const { reference } = req.params;
+  const transactionId = typeof req.query.transaction_id === 'string' ? req.query.transaction_id : undefined;
   const userId = req.user.id;
 
   if (!reference) {
-    return res.status(400).json({ error: 'Invalid Reference', message: 'Payment reference is required' });
+    return res.status(400).json({ success: false, error: 'Invalid Reference', message: 'Payment reference is required' });
   }
 
   const payment = await getRow(
@@ -332,120 +480,117 @@ router.get('/verify/:reference', authenticateToken, asyncHandler(async (req, res
   );
 
   if (!payment) {
-    return res.status(404).json({ error: 'Payment not found' });
+    return res.status(404).json({ success: false, error: 'Payment not found', code: 'PAYMENT_NOT_FOUND' });
   }
 
-  // If payment is already successful (e.g., 100% discount), proceed with enrollment
-  if (payment.status === 'successful') {
-    console.log('Payment already successful, proceeding with enrollment:', { reference, paymentId: payment.id });
-    
-    // Handle sponsorship usage and enrollment (same logic as below)
-    if (payment.metadata?.sponsorshipCode) {
-      try {
-        const sponsorship = await getRow(
-          'SELECT * FROM sponsorships WHERE discount_code = $1',
-          [payment.metadata.sponsorshipCode]
-        );
-        if (sponsorship) {
-          await query(
-            `INSERT INTO sponsorship_usage (
-              sponsorship_id, student_id, course_id, original_price, 
-              discount_amount, final_price, used_at
-            ) VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP)`,
-            [
-              sponsorship.id,
-              userId,
-              payment.payment_type === 'course' ? payment.item_id || payment.course_id : null,
-              payment.metadata.originalPrice,
-              payment.metadata.discountAmount,
-              payment.metadata.finalPrice
-            ]
-          );
-          await query('UPDATE sponsorships SET students_used = students_used + 1 WHERE id = $1', [sponsorship.id]);
-        }
-      } catch (sponsorshipError) {
-        console.error('Error recording sponsorship usage:', sponsorshipError);
-      }
-    }
+  if (Number(payment.amount) === 0 || payment.status === 'successful') {
+    await enrollForPayment(payment);
+    return res.json(verifiedPaymentResponse(payment));
+  }
 
-    if (payment.payment_type === 'course') {
-      await query(
-        `INSERT INTO enrollments (user_id, course_id, enrollment_type, sponsorship_id) VALUES ($1, $2, 'course', $3)`,
-        [userId, payment.course_id || payment.item_id, payment.metadata?.sponsorshipCode ? 
-          (await getRow('SELECT id FROM sponsorships WHERE discount_code = $1', [payment.metadata.sponsorshipCode]))?.id : null]
-      );
-      await query('UPDATE courses SET student_count = student_count + 1 WHERE id = $1', [payment.course_id || payment.item_id]);
-    } else {
-      await query(
-        `INSERT INTO enrollments (user_id, class_id, enrollment_type, sponsorship_id) VALUES ($1, $2, 'class', $3)`,
-        [userId, payment.class_id, payment.metadata?.sponsorshipCode ? 
-          (await getRow('SELECT id FROM sponsorships WHERE discount_code = $1', [payment.metadata.sponsorshipCode]))?.id : null]
-      );
-      await query('UPDATE classes SET available_slots = available_slots - 1 WHERE id = $1', [payment.class_id]);
-    }
-
-    // Send payment success notification
-    try {
-      let itemTitle = '';
-      if (payment.payment_type === 'course') {
-        const course = await getRow('SELECT title FROM courses WHERE id = $1', [payment.course_id]);
-        itemTitle = course?.title || 'Course';
-      } else {
-        const classData = await getRow('SELECT title FROM classes WHERE id = $1', [payment.class_id]);
-        itemTitle = classData?.title || 'Class';
-      }
-      
-      await notifyPaymentSuccess(userId, payment.id, payment.amount, itemTitle);
-    } catch (error) {
-      console.error('Failed to send payment success notification:', error);
-      // Don't fail the payment verification if notification fails
-    }
-
-    res.json({
-      success: true,
-      message: 'Payment verified and enrollment completed',
-      payment: {
-        id: payment.id,
-        amount: payment.amount,
-        status: 'successful',
-        transactionId: response.data.data.id
-      }
+  const flw = await fetchFlutterwaveTransaction({ reference, transactionId });
+  const tx = flw?.data;
+  if (!tx || flw.status !== 'success') {
+    return res.status(409).json({
+      success: false,
+      message: 'Payment is still processing',
+      code: 'PENDING'
     });
-  } else {
-    throw new Error('Payment verification failed');
   }
+
+  if (tx.tx_ref && tx.tx_ref !== reference) {
+    return res.status(400).json({ success: false, message: 'Payment reference mismatch', code: 'VERIFICATION_FAILED' });
+  }
+
+  const currency = String(tx.currency || '').toUpperCase();
+  const expectedCurrency = String(payment.currency || 'USD').toUpperCase();
+  if (currency !== expectedCurrency || !amountsMatch(payment.amount, tx.amount)) {
+    console.error('Payment verification amount mismatch:', {
+      reference,
+      expectedAmount: payment.amount,
+      actualAmount: tx.amount,
+      expectedCurrency,
+      actualCurrency: currency
+    });
+    return res.status(400).json({ success: false, message: 'Payment amount mismatch', code: 'VERIFICATION_FAILED' });
+  }
+
+  if (tx.status !== 'successful') {
+    if (tx.status === 'failed' || tx.status === 'cancelled') {
+      await query(
+        'UPDATE payments SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND status <> $3',
+        [tx.status === 'cancelled' ? 'cancelled' : 'failed', payment.id, 'successful']
+      );
+      return res.status(400).json({ success: false, message: 'Payment was not completed', code: 'VERIFICATION_FAILED' });
+    }
+    return res.status(409).json({ success: false, message: 'Payment is still processing', code: 'PENDING' });
+  }
+
+  const transactionRef = String(tx.id);
+  const updated = await getRow(
+    `UPDATE payments
+     SET status = 'successful', flutterwave_transaction_id = $1, updated_at = CURRENT_TIMESTAMP
+     WHERE id = $2 AND status <> 'successful'
+     RETURNING *`,
+    [transactionRef, payment.id]
+  );
+
+  const settled = updated || { ...payment, status: 'successful', flutterwave_transaction_id: transactionRef };
+  await enrollForPayment(settled);
+  if (updated) {
+    await notifyEnrollment(settled);
+  }
+
+  res.json(verifiedPaymentResponse(settled));
 }));
 
 // POST /api/payments/webhook
 router.post('/webhook', asyncHandler(async (req, res) => {
   const signature = req.headers['verif-hash'];
-  if (!verifyWebhookSignature(req.body, signature)) {
+  if (!verifyWebhookSignature(signature)) {
     return res.status(401).json({ error: 'Invalid webhook signature' });
   }
 
-  const { tx_ref, status, transaction_id } = req.body;
-  if (!tx_ref || !status) {
+  const data = req.body?.data && typeof req.body.data === 'object' ? req.body.data : req.body;
+  const txRef = data?.tx_ref;
+  const status = data?.status;
+  const transactionId = data?.id || data?.transaction_id;
+
+  if (!txRef || !status) {
     return res.status(400).json({ error: 'Missing required webhook data' });
   }
 
-  console.log('Webhook received:', { tx_ref, status, transaction_id });
+  console.log('Webhook received:', { txRef, status, transactionId });
 
   const payment = await getRow(
     'SELECT * FROM payments WHERE flutterwave_reference = $1',
-    [tx_ref]
+    [txRef]
   );
 
   if (!payment) {
-    console.log('Payment not found for webhook:', tx_ref);
+    console.log('Payment not found for webhook:', txRef);
     return res.status(404).json({ error: 'Payment not found' });
   }
 
   if (status === 'successful' && payment.status !== 'successful') {
-    await query(
-      'UPDATE payments SET status = $1, flutterwave_transaction_id = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3',
-      ['successful', transaction_id, payment.id]
+    const currency = String(data.currency || payment.currency || '').toUpperCase();
+    const expectedCurrency = String(payment.currency || 'USD').toUpperCase();
+    if ((data.amount != null && !amountsMatch(payment.amount, data.amount)) || (data.currency && currency !== expectedCurrency)) {
+      console.error('Webhook amount mismatch:', { txRef, expected: payment.amount, got: data.amount });
+      return res.status(400).json({ error: 'Amount mismatch' });
+    }
+
+    const updated = await getRow(
+      `UPDATE payments
+       SET status = 'successful', flutterwave_transaction_id = $1, updated_at = CURRENT_TIMESTAMP
+       WHERE id = $2 AND status <> 'successful'
+       RETURNING *`,
+      [transactionId ? String(transactionId) : null, payment.id]
     );
-    console.log('Payment status updated via webhook:', { paymentId: payment.id, status, transaction_id });
+    if (updated) {
+      await enrollForPayment(updated);
+      await notifyEnrollment(updated);
+    }
   }
 
   res.json({ status: 'success' });

@@ -22,30 +22,21 @@ const getFlutterwaveToken = async () => {
   return flwConfig.secretKey;
 };
 
-// Verify webhook signature using SHA512
-const verifyWebhookSignature = (payload, signature) => {
+// Flutterwave sends the dashboard secret hash in the verif-hash header.
+const verifyWebhookSignature = (signature) => {
   try {
-    if (!flwConfig.secretHash) {
-      console.warn('⚠️ FLUTTERWAVE_SECRET_HASH not set. Webhook verification disabled.');
+    if (!flwConfig.secretHash || !signature) {
       return false;
     }
-    if (!signature) {
-      console.warn('Webhook signature missing');
+
+    const expected = Buffer.from(String(flwConfig.secretHash));
+    const received = Buffer.from(String(signature));
+    if (expected.length !== received.length) {
       return false;
     }
-    
-    const hash = crypto
-      .createHmac('sha512', flwConfig.secretHash)
-      .update(JSON.stringify(payload))
-      .digest('hex');
-    
-    const isValid = hash === signature;
-    if (!isValid) {
-      console.error('Webhook signature verification failed:', { expected: hash, received: signature });
-    }
-    return isValid;
+    return crypto.timingSafeEqual(expected, received);
   } catch (error) {
-    console.error('Webhook signature verification error:', error);
+    console.error('Webhook signature verification error:', error.message);
     return false;
   }
 };
@@ -78,17 +69,17 @@ const parseAmount = (amount) => {
 
 // Validate payment method
 const validatePaymentMethod = (method) => {
-  const validMethods = ['card', 'bank_transfer', 'ussd', 'mobile_money', 'mpesa', 'gh_mobile_money'];
+  const validMethods = ['card', 'banktransfer', 'ussd', 'bank_transfer'];
   return validMethods.includes(method);
 };
 
 // Get supported payment methods by country
 const getSupportedPaymentMethods = (country = 'NG') => {
   const methodsByCountry = {
-    NG: ['card', 'bank_transfer', 'ussd', 'mobile_money'],
-    GH: ['card', 'bank_transfer', 'gh_mobile_money'],
-    KE: ['card', 'bank_transfer', 'mpesa'],
-    ZA: ['card', 'bank_transfer'],
+    NG: ['card', 'banktransfer', 'ussd'],
+    GH: ['card', 'mobilemoneyghana'],
+    KE: ['card', 'mpesa'],
+    ZA: ['card'],
   };
   return methodsByCountry[country] || methodsByCountry['NG'];
 };
