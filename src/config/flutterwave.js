@@ -165,39 +165,73 @@ const getNgnPerUsd = async () => {
   return quote.amount;
 };
 
-const createDirectCharge = async ({ reference, amount, currency, redirectUrl, customer, meta }) => {
+const findCustomerId = async (email) => {
+  const listed = await flwRequest('get', `/customers?email=${encodeURIComponent(email)}`);
+  const rows = Array.isArray(listed?.data) ? listed.data : [];
+  return rows.find((row) => row.email === email)?.id || rows[0]?.id || null;
+};
+
+const createDirectCharge = async ({ reference, amount, customer }) => {
   const name = String(customer.name || 'Customer').trim().split(/\s+/);
-  return flwRequest('post', '/orchestration/direct-charges', {
-    amount,
-    currency,
+  const customerBody = {
+    email: customer.email,
+    name: {
+      first: name[0] || 'Customer',
+      last: name.slice(1).join(' ') || 'Customer'
+    }
+  };
+
+  let customerId = null;
+  try {
+    const created = await flwRequest('post', '/customers', customerBody, `cus-${reference}`);
+    customerId = created.data?.id || null;
+  } catch (error) {
+    customerId = await findCustomerId(customer.email);
+    if (!customerId) throw error;
+  }
+
+  const account = await flwRequest('post', '/virtual-accounts', {
     reference,
-    redirect_url: redirectUrl,
-    customer: {
-      email: customer.email,
-      name: {
-        first: name[0] || 'Customer',
-        last: name.slice(1).join(' ') || 'Customer'
-      }
-    },
-    payment_method: {
-      type: 'bank_transfer',
-      bank_transfer: {
-        account_type: 'dynamic',
-        account_expires_in: 3600,
-        account_display_name: 'TheMobileProf'
-      }
-    },
-    meta: meta || {}
+    customer_id: customerId,
+    amount,
+    currency: 'NGN',
+    account_type: 'dynamic',
+    expiry: 3600,
+    narration: 'TheMobileProf'
   }, reference);
+  const data = account.data || {};
+
+  return {
+    status: 'success',
+    data: {
+      id: data.id,
+      amount: Number(data.amount) || amount,
+      currency: data.currency || 'NGN',
+      reference: data.reference || reference,
+      next_action: {
+        type: 'requires_bank_transfer',
+        requires_bank_transfer: {
+          account_number: data.account_number,
+          account_bank_name: data.account_bank_name,
+          account_expiration_datetime: data.account_expiration_datetime,
+          note: data.note || 'Transfer the exact amount to this account.'
+        }
+      }
+    }
+  };
 };
 
 const fetchCharge = async ({ chargeId, reference }) => {
-  if (chargeId) {
+  if (chargeId && String(chargeId).startsWith('chg_')) {
     return flwRequest('get', `/charges/${encodeURIComponent(chargeId)}`);
   }
-  const listed = await flwRequest('get', `/charges?reference=${encodeURIComponent(reference)}`);
+
+  const query = chargeId && String(chargeId).startsWith('van_')
+    ? `virtual_account_id=${encodeURIComponent(chargeId)}`
+    : `reference=${encodeURIComponent(reference)}`;
+  const listed = await flwRequest('get', `/charges?${query}`);
   const rows = Array.isArray(listed?.data) ? listed.data : [];
-  const match = rows.find((row) => row.reference === reference) || null;
+  const match = rows.find((row) => !reference || row.reference === reference) || null;
   return match ? { status: 'success', data: match } : null;
 };
 
