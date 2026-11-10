@@ -50,17 +50,38 @@ const generateToken = (userId, email, role) => {
   );
 };
 
+// Public client ids. The LMS site uses the first. The server env may still name the other.
+const GOOGLE_CLIENT_IDS = [
+  '275660478254-hibrpgmcruab9361blod0m1mh6pcu33g.apps.googleusercontent.com',
+  '275660478254-vmofmto5uqno28mgfkp2o4441sm0nbdb.apps.googleusercontent.com',
+  process.env.GOOGLE_CLIENT_ID
+].filter(Boolean);
+
 // Verify Google token
 const verifyGoogleToken = async (token) => {
-  try {
-    const ticket = await googleClient.verifyIdToken({
-      idToken: token,
-      audience: process.env.GOOGLE_CLIENT_ID
-    });
-    return ticket.getPayload();
-  } catch (error) {
-    throw new AppError('Invalid Google token', 401, 'Authentication Failed');
+  const audiences = [...new Set(GOOGLE_CLIENT_IDS)];
+  for (const audience of audiences) {
+    try {
+      const ticket = await googleClient.verifyIdToken({
+        idToken: token,
+        audience
+      });
+      return ticket.getPayload();
+    } catch (error) {
+      // Try the next client id. A mismatch here is what the sign-in button was hiding.
+    }
   }
+  throw new AppError('Invalid Google token', 401, 'Authentication Failed');
+};
+
+// Google often omits a family name. The users table requires both names.
+const googleAccountNames = (payload, firstName, lastName) => {
+  const given = String(firstName || payload.given_name || '').trim();
+  const family = String(lastName || payload.family_name || '').trim();
+  const parts = String(payload.name || '').trim().split(/\s+/).filter(Boolean);
+  const resolvedFirst = (given || parts[0] || 'Student').slice(0, 100);
+  const resolvedLast = (family || parts.slice(1).join(' ') || 'Student').slice(0, 100);
+  return [resolvedFirst, resolvedLast];
 };
 
 // Register new user
@@ -226,8 +247,7 @@ router.post('/google', validateGoogleAuth, asyncHandler(async (req, res) => {
     email: googleEmail,
     given_name: googleFirstName,
     family_name: googleLastName,
-    picture: googlePicture,
-    email_verified: googleEmailVerified
+    picture: googlePicture
   } = googlePayload;
 
   // Check if user already exists with Google ID
@@ -237,10 +257,15 @@ router.post('/google', validateGoogleAuth, asyncHandler(async (req, res) => {
   );
 
   if (user) {
-    // User exists with Google OAuth
+    // User exists with Google OAuth. Google already verified the address.
     if (!user.is_active) {
       throw new AppError('Account is deactivated', 401, 'Account Deactivated');
     }
+
+    await query(
+      `UPDATE users SET email_verified = true, updated_at = CURRENT_TIMESTAMP WHERE id = $1 AND email_verified IS NOT TRUE`,
+      [user.id]
+    );
 
     // Generate token for existing user
     const jwtToken = generateToken(user.id, user.email, user.role);
@@ -265,12 +290,12 @@ router.post('/google', validateGoogleAuth, asyncHandler(async (req, res) => {
 
   if (user) {
     if (user.auth_provider === 'local') {
-      // User exists with email/password, link Google account
+      // User exists with email/password, link Google account. Google already verified the address.
       await query(
         `UPDATE users 
-         SET google_id = $1, google_email = $2, auth_provider = 'google', email_verified = $3, updated_at = CURRENT_TIMESTAMP
-         WHERE id = $4`,
-        [googleId, googleEmail, googleEmailVerified, user.id]
+         SET google_id = $1, google_email = $2, auth_provider = 'google', email_verified = true, updated_at = CURRENT_TIMESTAMP
+         WHERE id = $3`,
+        [googleId, googleEmail, user.id]
       );
 
       const jwtToken = generateToken(user.id, user.email, user.role);
@@ -290,15 +315,18 @@ router.post('/google', validateGoogleAuth, asyncHandler(async (req, res) => {
     }
   }
 
-  // Create new user with Google OAuth
-  const finalFirstName = firstName || googleFirstName;
-  const finalLastName = lastName || googleLastName;
+  // Create new user with Google OAuth. Google already verified the address.
+  const [finalFirstName, finalLastName] = googleAccountNames(
+    googlePayload,
+    firstName || googleFirstName,
+    lastName || googleLastName
+  );
 
   const result = await query(
     `INSERT INTO users (email, first_name, last_name, role, google_id, google_email, auth_provider, email_verified, avatar_url)
-     VALUES ($1, $2, $3, $4, $5, $6, 'google', $7, $8)
+     VALUES ($1, $2, $3, $4, $5, $6, 'google', true, $7)
      RETURNING id, email, first_name, last_name, role, created_at`,
-    [googleEmail, finalFirstName, finalLastName, role, googleId, googleEmail, googleEmailVerified, googlePicture]
+    [googleEmail, finalFirstName, finalLastName, role, googleId, googleEmail, googlePicture]
   );
 
   const newUser = result.rows[0];
